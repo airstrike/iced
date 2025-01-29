@@ -11,6 +11,9 @@ impl Transformation {
     /// A [`Transformation`] that preserves whatever is transformed.
     pub const IDENTITY: Self = Self(Mat4::IDENTITY);
 
+    /// The epsilon used for floating point comparisons.
+    const EPSILON: f32 = 1e-6;
+
     /// Creates an orthographic projection.
     #[rustfmt::skip]
     pub fn orthographic(width: u32, height: u32) -> Transformation {
@@ -37,8 +40,29 @@ impl Transformation {
     }
 
     /// Returns the inverse of the [`Transformation`].
+    ///
+    /// In debug mode, it will panic if the determinant of the matrix is near zero.
+    /// In release mode, it may return a valid inverse or produce NaNs.
     pub fn inverse(&self) -> Self {
+        let det = self.0.determinant();
+        if cfg!(debug_assertions) {
+            debug_assert!(
+                det.abs() >= Transformation::EPSILON,
+                "attempted to invert a near-singular transform (det={})",
+                det
+            );
+        }
         Transformation(self.0.inverse())
+    }
+
+    /// Returns the inverse of the [`Transformation`] if it exists.
+    pub fn try_inverse(&self) -> Option<Self> {
+        let det = self.0.determinant();
+        if det.abs() < Transformation::EPSILON {
+            None
+        } else {
+            Some(Transformation(self.0.inverse()))
+        }
     }
 
     /// Returns the scale factor of the [`Transformation`].
