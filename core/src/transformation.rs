@@ -31,6 +31,16 @@ impl Transformation {
         Transformation(Mat4::from_scale(Vec3::new(scaling, scaling, 1.0)))
     }
 
+    /// Creates a non-uniform scaling transformation that stretches in either the x or y direction.
+    pub fn stretch(x: f32, y: f32) -> Transformation {
+        Transformation(Mat4::from_scale(Vec3::new(x, y, 1.0)))
+    }
+
+    /// Returns the inverse of the [`Transformation`].
+    pub fn inverse(&self) -> Self {
+        Transformation(self.0.inverse())
+    }
+
     /// Returns the scale factor of the [`Transformation`].
     pub fn scale_factor(&self) -> f32 {
         self.0.x_axis.x
