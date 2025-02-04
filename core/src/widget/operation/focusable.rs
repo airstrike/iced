@@ -26,7 +26,7 @@ pub struct Count {
 }
 
 /// Produces an [`Operation`] that focuses the widget with the given [`Id`].
-pub fn focus<T>(target: Id) -> impl Operation<T> {
+pub fn focus<T>(target: impl Into<Id>) -> impl Operation<T> {
     struct Focus {
         target: Id,
     }
@@ -58,7 +58,9 @@ pub fn focus<T>(target: Id) -> impl Operation<T> {
         }
     }
 
-    Focus { target }
+    Focus {
+        target: target.into(),
+    }
 }
 
 /// Produces an [`Operation`] that generates a [`Count`] and chains it with the
