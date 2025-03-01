@@ -295,6 +295,16 @@ where
     }
 }
 
+impl<T> std::ops::AddAssign<Vector<T>> for Rectangle<T>
+where
+    T: std::ops::AddAssign,
+{
+    fn add_assign(&mut self, translation: Vector<T>) {
+        self.x += translation.x;
+        self.y += translation.y;
+    }
+}
+
 impl<T> std::ops::Sub<Vector<T>> for Rectangle<T>
 where
     T: std::ops::Sub<Output = T>,
