@@ -13,6 +13,12 @@ pub mod widget {
     pub use crate::runtime::task::widget as operate;
 }
 
+pub mod runtime {
+    //! A renderer-agnostic native GUI runtime.
+    pub use crate::runtime::UserInterface;
+    pub use crate::runtime::user_interface;
+}
+
 pub use crate::core::Shell;
 pub use crate::core::clipboard::{self, Clipboard};
 pub use crate::core::image;
