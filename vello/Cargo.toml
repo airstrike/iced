@@ -1,0 +1,44 @@
+[package]
+name = "iced_vello"
+description = "A GPU-accelerated renderer for iced using Vello"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+all-features = true
+
+[features]
+geometry = ["iced_graphics/geometry"]
+image = ["iced_graphics/image"]
+svg = ["iced_graphics/svg"]
+web-colors = ["iced_graphics/web-colors"]
+accesskit = ["dep:accesskit"]
+
+[dependencies]
+iced_debug.workspace = true
+iced_graphics.workspace = true
+
+accesskit = { version = "0.21.0", optional = true }
+bitflags.workspace = true
+bytemuck.workspace = true
+cosmic-text.workspace = true
+futures.workspace = true
+glam.workspace = true
+kurbo.workspace = true
+log.workspace = true
+raw-window-handle.workspace = true
+rustc-hash.workspace = true
+thiserror.workspace = true
+vello.workspace = true
+parley.workspace = true
+wgpu.workspace = true
