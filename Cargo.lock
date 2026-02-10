@@ -1444,6 +1444,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "event_loop"
+version = "0.1.0"
+dependencies = [
+ "iced",
+]
+
+[[package]]
 name = "events"
 version = "0.1.0"
 dependencies = [
