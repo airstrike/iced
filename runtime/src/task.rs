@@ -36,11 +36,19 @@ impl<T> Task<T> {
     }
 
     /// Creates a new [`Task`] that instantly produces the given value.
+    ///
+    /// The value will be available synchronously on the first poll,
+    /// without yielding to the async runtime.
     pub fn done(value: T) -> Self
     where
         T: MaybeSend + 'static,
     {
-        Self::future(future::ready(value))
+        Self {
+            stream: Some(boxed_stream(stream::once(
+                future::ready(Action::Output(value)),
+            ))),
+            units: 1,
+        }
     }
 
     /// Creates a [`Task`] that runs the given [`Future`] to completion and maps its
