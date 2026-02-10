@@ -1204,14 +1204,11 @@ where
     user_interface
 }
 
-fn update<P: Program, E: Executor>(
+fn process_messages<P: Program, E: Executor>(
     program: &mut program::Instance<P>,
     runtime: &mut Runtime<E, Proxy<P::Message>, Action<P::Message>>,
     messages: &mut Vec<P::Message>,
-) -> Vec<Action<P::Message>>
-where
-    P::Theme: theme::Base,
-{
+) -> Vec<Action<P::Message>> {
     use futures::futures;
 
     let mut actions = Vec::new();
@@ -1240,6 +1237,19 @@ where
             }
         }
     }
+
+    actions
+}
+
+fn update<P: Program, E: Executor>(
+    program: &mut program::Instance<P>,
+    runtime: &mut Runtime<E, Proxy<P::Message>, Action<P::Message>>,
+    messages: &mut Vec<P::Message>,
+) -> Vec<Action<P::Message>>
+where
+    P::Theme: theme::Base,
+{
+    let actions = process_messages(program, runtime, messages);
 
     let subscription = runtime.enter(|| program.subscription());
     let recipes = subscription::into_recipes(subscription.map(Action::Output));
