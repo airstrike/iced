@@ -1133,7 +1133,45 @@ async fn run_instance<P>(
                                     .map(|(id, ui)| (id, ui.into_cache()))
                                     .collect();
 
-                            let actions = update(&mut program, &mut runtime, &mut messages);
+                            // Drain all synchronous messages in a tight loop,
+                            // deferring non-output actions and tracking
+                            // subscriptions only once at the end.
+                            let mut deferred = Vec::new();
+
+                            loop {
+                                let actions =
+                                    process_messages(&mut program, &mut runtime, &mut messages);
+
+                                for action in actions {
+                                    match action {
+                                        Action::Output(message) => {
+                                            messages.push(message);
+                                        }
+                                        Action::Exit => {
+                                            let _ = control_sender
+                                                .start_send(Control::Exit);
+
+                                            messages.clear();
+                                        }
+                                        other => {
+                                            deferred.push(other);
+                                        }
+                                    }
+                                }
+
+                                if messages.is_empty() {
+                                    break;
+                                }
+                            }
+
+                            {
+                                let subscription =
+                                    runtime.enter(|| program.subscription());
+                                let recipes = subscription::into_recipes(
+                                    subscription.map(Action::Output),
+                                );
+                                runtime.track(recipes);
+                            }
 
                             user_interfaces = ManuallyDrop::new(build_user_interfaces(
                                 &program,
@@ -1141,7 +1179,7 @@ async fn run_instance<P>(
                                 cached_interfaces,
                             ));
 
-                            for action in actions {
+                            for action in deferred {
                                 run_action(
                                     action,
                                     &program,
