@@ -1,5 +1,5 @@
-use iced::widget::text;
-use iced::{window, Element, Task};
+use iced::widget::space;
+use iced::{Element, Task, window};
 
 use std::time::Instant;
 
@@ -10,12 +10,19 @@ pub fn main() -> iced::Result {
 struct EventLoop {
     count: u64,
     start: Instant,
-    done: bool,
+    phase: Phase,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Phase {
+    Done,
+    Perform,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Message {
-    Tick,
+    DoneTick,
+    PerformTick,
 }
 
 impl EventLoop {
@@ -24,42 +31,52 @@ impl EventLoop {
             Self {
                 count: 0,
                 start: Instant::now(),
-                done: false,
+                phase: Phase::Done,
             },
-            Task::done(Message::Tick),
+            Task::done(Message::DoneTick),
         )
     }
 
-    fn update(&mut self, _message: Message) -> Task<Message> {
-        if self.done {
-            return Task::none();
-        }
-
+    fn update(&mut self, message: Message) -> Task<Message> {
         self.count += 1;
 
         let elapsed = self.start.elapsed();
 
         if elapsed.as_secs_f64() >= 5.0 {
-            self.done = true;
-
             let secs = elapsed.as_secs_f64();
             let rate = self.count as f64 / secs;
+            let label = match message {
+                Message::DoneTick => "Task::done",
+                Message::PerformTick => "Task::perform",
+            };
 
             println!(
-                "\x1b[1m{} event loop iterations/sec\x1b[0m ({} in {:.1}s)",
+                "\x1b[1;36m{} event loop iterations/sec\x1b[0m ({} in {:.1}s) [{}]",
                 format_rate(rate),
                 format_count(self.count),
                 secs,
+                label,
             );
 
-            iced::exit()
+            match self.phase {
+                Phase::Done => {
+                    self.count = 0;
+                    self.start = Instant::now();
+                    self.phase = Phase::Perform;
+                    Task::perform(async { Message::PerformTick }, |m| m)
+                }
+                Phase::Perform => iced::exit(),
+            }
         } else {
-            Task::done(Message::Tick)
+            match message {
+                Message::DoneTick => Task::done(Message::DoneTick),
+                Message::PerformTick => Task::perform(async { Message::PerformTick }, |m| m),
+            }
         }
     }
 
     fn view(&self, _window: window::Id) -> Element<'_, Message> {
-        text("").into()
+        space().into()
     }
 }
 
