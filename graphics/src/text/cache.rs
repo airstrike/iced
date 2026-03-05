@@ -56,7 +56,7 @@ impl Cache {
                 font_system,
                 key.content,
                 &text::to_attributes(key.font, key.letter_spacing, key.font_features),
-                text::to_shaping(key.shaping, key.content),
+                text::to_shaping(key.shaping, key.content, !key.font_features.is_empty()),
                 None,
             );
 
