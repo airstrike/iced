@@ -104,6 +104,7 @@ impl Pipeline {
         wrapping: Wrapping,
         ellipsis: Ellipsis,
         letter_spacing: Em,
+        font_features: &[crate::core::font::Feature],
         pixels: &mut tiny_skia::PixmapMut<'_>,
         clip_mask: Option<&tiny_skia::Mask>,
         transformation: Transformation,
@@ -124,6 +125,7 @@ impl Pipeline {
             ellipsis,
             align_x,
             letter_spacing,
+            font_features,
         };
 
         let (_, entry) = self.cache.get_mut().allocate(font_system, key);
