@@ -5,6 +5,7 @@ use crate::core::text::editor::{
 use crate::core::text::highlighter::{self, Highlighter};
 use crate::core::text::{LineHeight, Wrapping};
 use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
+use crate::core::font;
 use crate::text;
 
 use cosmic_text::Edit as _;
@@ -27,6 +28,7 @@ struct Internal {
     hint_factor: f32,
     version: text::Version,
     letter_spacing: Em,
+    font_features: Vec<font::Feature>,
 }
 
 impl Editor {
@@ -506,6 +508,7 @@ impl editor::Editor for Editor {
         new_size: Pixels,
         new_line_height: LineHeight,
         new_letter_spacing: Em,
+        new_font_features: Vec<font::Feature>,
         new_wrapping: Wrapping,
         new_hint_factor: Option<f32>,
         new_highlighter: &mut impl Highlighter,
@@ -526,23 +529,21 @@ impl editor::Editor for Editor {
                 internal.topmost_line_changed = Some(0);
             }
 
-            if new_font != internal.font || new_letter_spacing != internal.letter_spacing {
-                if new_font != internal.font {
-                    log::trace!("Updating font of `Editor`...");
-                }
-                if new_letter_spacing != internal.letter_spacing {
-                    log::trace!("Updating letter spacing of `Editor`...");
-                }
-
+            if new_font != internal.font
+                || new_letter_spacing != internal.letter_spacing
+                || new_font_features != internal.font_features
+            {
                 for line in buffer.lines.iter_mut() {
                     let _ = line.set_attrs_list(cosmic_text::AttrsList::new(&text::to_attributes(
                         new_font,
                         new_letter_spacing,
+                        &new_font_features,
                     )));
                 }
 
                 internal.font = new_font;
                 internal.letter_spacing = new_letter_spacing;
+                internal.font_features = new_font_features;
                 internal.topmost_line_changed = Some(0);
             }
 
@@ -662,7 +663,7 @@ impl editor::Editor for Editor {
 
         let mut font_system = text::font_system().write().expect("Write font system");
 
-        let attributes = text::to_attributes(font, internal.letter_spacing);
+        let attributes = text::to_attributes(font, internal.letter_spacing, &internal.font_features);
 
         for line in &mut buffer_mut_from_editor(&mut internal.editor).lines
             [current_line..=last_visible_line]
@@ -678,7 +679,7 @@ impl editor::Editor for Editor {
                         &cosmic_text::Attrs {
                             color_opt: format.color.map(text::to_color),
                             ..if let Some(font) = format.font {
-                                text::to_attributes(font, internal.letter_spacing)
+                                text::to_attributes(font, internal.letter_spacing, &internal.font_features)
                             } else {
                                 attributes.clone()
                             }
@@ -728,6 +729,7 @@ impl Default for Internal {
             hint_factor: 1.0,
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
         }
     }
 }

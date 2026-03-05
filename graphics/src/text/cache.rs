@@ -1,4 +1,5 @@
 //! Cache text.
+use crate::core::font;
 use crate::core::{Em, Font, Size};
 use crate::text;
 
@@ -54,7 +55,7 @@ impl Cache {
             buffer.set_text(
                 font_system,
                 key.content,
-                &text::to_attributes(key.font, key.letter_spacing),
+                &text::to_attributes(key.font, key.letter_spacing, key.font_features),
                 text::to_shaping(key.shaping, key.content),
                 None,
             );
@@ -119,6 +120,8 @@ pub struct Key<'a> {
     pub align_x: text::Alignment,
     /// The letter spacing of the text.
     pub letter_spacing: Em,
+    /// The font features of the text.
+    pub font_features: &'a [font::Feature],
     /// The wrapping strategy of the text.
     pub wrapping: text::Wrapping,
     /// The ellipsis strategy of the text.
@@ -126,7 +129,7 @@ pub struct Key<'a> {
 }
 
 impl Key<'_> {
-    fn hash<H: Hasher>(self, mut hasher: H) -> KeyHash {
+    fn hash<H: Hasher>(&self, mut hasher: H) -> KeyHash {
         self.content.hash(&mut hasher);
         self.size.to_bits().hash(&mut hasher);
         self.line_height.to_bits().hash(&mut hasher);
@@ -136,6 +139,7 @@ impl Key<'_> {
         self.shaping.hash(&mut hasher);
         self.align_x.hash(&mut hasher);
         self.letter_spacing.0.to_bits().hash(&mut hasher);
+        self.font_features.hash(&mut hasher);
 
         hasher.finish()
     }

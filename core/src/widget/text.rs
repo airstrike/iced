@@ -21,6 +21,7 @@
 //! }
 //! ```
 use crate::alignment;
+use crate::font;
 use crate::layout;
 use crate::mouse;
 use crate::renderer;
@@ -160,6 +161,18 @@ where
         self
     }
 
+    /// Adds a single font [`Feature`](font::Feature) to the [`Text`].
+    pub fn font_feature(mut self, feature: font::Feature) -> Self {
+        self.format.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`Text`].
+    pub fn font_features(mut self, features: Vec<font::Feature>) -> Self {
+        self.format.font_features = features;
+        self
+    }
+
     /// Sets the style of the [`Text`].
     pub fn style(mut self, style: impl Fn(&Theme) -> Style + 'a) -> Self
     where
@@ -229,7 +242,7 @@ where
             renderer,
             limits,
             &self.fragment,
-            self.format,
+            self.format.clone(),
         )
     }
 
@@ -271,7 +284,7 @@ where
 ///
 /// Check out the methods of the [`Text`] widget
 /// to learn more about each field.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub struct Format<Font> {
     pub width: Length,
@@ -285,6 +298,7 @@ pub struct Format<Font> {
     pub wrapping: Wrapping,
     pub ellipsis: Ellipsis,
     pub letter_spacing: Em,
+    pub font_features: Vec<font::Feature>,
 }
 
 impl<Font> Default for Format<Font> {
@@ -301,6 +315,7 @@ impl<Font> Default for Format<Font> {
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
             letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
         }
     }
 }
@@ -334,6 +349,7 @@ where
             wrapping: format.wrapping,
             ellipsis: format.ellipsis,
             letter_spacing: format.letter_spacing,
+            font_features: format.font_features,
             hint_factor: renderer.scale_factor(),
         });
 

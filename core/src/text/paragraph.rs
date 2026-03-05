@@ -1,5 +1,6 @@
 //! Draw paragraphs.
 use crate::alignment;
+use crate::font;
 use crate::text::{
     Alignment, Difference, Ellipsis, Hit, LineHeight, Shaping, Span, Text, Wrapping,
 };
@@ -52,6 +53,9 @@ pub trait Paragraph: Sized + Default {
 
     /// Returns the letter spacing of the [`Paragraph`].
     fn letter_spacing(&self) -> Em;
+
+    /// Returns the font features of the [`Paragraph`].
+    fn font_features(&self) -> &[font::Feature];
 
     /// Returns the available bounds used to layout the [`Paragraph`].
     fn bounds(&self) -> Size;
@@ -178,6 +182,7 @@ impl<P: Paragraph> Plain<P> {
             wrapping: self.raw.wrapping(),
             ellipsis: self.raw.ellipsis(),
             letter_spacing: self.raw.letter_spacing(),
+            font_features: self.raw.font_features().to_vec(),
             hint_factor: self.raw.hint_factor(),
         }
     }

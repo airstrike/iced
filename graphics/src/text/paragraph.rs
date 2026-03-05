@@ -1,6 +1,7 @@
 //! Draw paragraphs.
 use crate::core;
 use crate::core::alignment;
+use crate::core::font;
 use crate::core::text::{Alignment, Ellipsis, Hit, LineHeight, Shaping, Span, Text, Wrapping};
 use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
 use crate::text;
@@ -25,6 +26,7 @@ struct Internal {
     min_bounds: Size,
     version: text::Version,
     letter_spacing: Em,
+    font_features: Vec<font::Feature>,
     hint: bool,
     hint_factor: f32,
 }
@@ -101,7 +103,7 @@ impl core::text::Paragraph for Paragraph {
         buffer.set_text(
             font_system.raw(),
             text.content,
-            &text::to_attributes(text.font, text.letter_spacing),
+            &text::to_attributes(text.font, text.letter_spacing, &text.font_features),
             text::to_shaping(text.shaping, text.content),
             None,
         );
@@ -122,6 +124,7 @@ impl core::text::Paragraph for Paragraph {
             min_bounds,
             version: font_system.version(),
             letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
         }))
     }
 
@@ -158,9 +161,16 @@ impl core::text::Paragraph for Paragraph {
         buffer.set_rich_text(
             font_system.raw(),
             text.content.iter().enumerate().map(|(i, span)| {
+                let span_features = if span.font_features.is_empty() {
+                    &text.font_features
+                } else {
+                    &span.font_features
+                };
+
                 let attrs = text::to_attributes(
                     span.font.unwrap_or(text.font),
                     span.letter_spacing.unwrap_or(text.letter_spacing),
+                    span_features,
                 );
 
                 let attrs = match (span.size, span.line_height) {
@@ -187,7 +197,7 @@ impl core::text::Paragraph for Paragraph {
 
                 (span.text.as_ref(), attrs.metadata(i))
             }),
-            &text::to_attributes(text.font, text.letter_spacing),
+            &text::to_attributes(text.font, text.letter_spacing, &text.font_features),
             cosmic_text::Shaping::Advanced,
             None,
         );
@@ -208,6 +218,7 @@ impl core::text::Paragraph for Paragraph {
             min_bounds,
             version: font_system.version(),
             letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
         }))
     }
 
@@ -243,6 +254,7 @@ impl core::text::Paragraph for Paragraph {
             || paragraph.wrapping != text.wrapping
             || paragraph.ellipsis != text.ellipsis
             || paragraph.letter_spacing != text.letter_spacing
+            || paragraph.font_features != text.font_features
             || paragraph.align_x != text.align_x
             || paragraph.align_y != text.align_y
             || paragraph.hint.then_some(paragraph.hint_factor)
@@ -296,6 +308,10 @@ impl core::text::Paragraph for Paragraph {
 
     fn letter_spacing(&self) -> Em {
         self.0.letter_spacing
+    }
+
+    fn font_features(&self) -> &[font::Feature] {
+        &self.0.font_features
     }
 
     fn bounds(&self) -> Size {
@@ -488,6 +504,7 @@ impl Default for Internal {
             min_bounds: Size::ZERO,
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
             hint: false,
             hint_factor: 1.0,
         }
