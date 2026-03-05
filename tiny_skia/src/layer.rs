@@ -89,6 +89,7 @@ impl Layer {
             wrapping: text.wrapping,
             ellipsis: text.ellipsis,
             letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
             clip_bounds: clip_bounds * transformation,
         };
 
