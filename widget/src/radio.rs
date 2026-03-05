@@ -145,6 +145,7 @@ where
     shaping: text::Shaping,
     wrapping: text::Wrapping,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Renderer::Font>,
     class: Theme::Class<'a>,
     last_status: Option<Status>,
@@ -187,6 +188,7 @@ where
             shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             font: None,
             class: Theme::default(),
             last_status: None,
@@ -238,6 +240,18 @@ where
     /// Sets the letter spacing of the [`Radio`] button.
     pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
         self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Radio`] button.
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`Radio`] button.
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -320,6 +334,7 @@ where
                         wrapping: self.wrapping,
                         ellipsis: text::Ellipsis::default(),
                         letter_spacing: self.letter_spacing,
+                        font_features: self.font_features.clone(),
                     },
                 )
             },
