@@ -113,6 +113,7 @@ where
     padding: Padding,
     wrapping: Wrapping,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     class: Theme::Class<'a>,
     key_binding: Option<Box<dyn Fn(KeyPress) -> Option<Binding<Message>> + 'a>>,
     on_edit: Option<Box<dyn Fn(Action) -> Message + 'a>>,
@@ -142,6 +143,7 @@ where
             padding: Padding::new(5.0),
             wrapping: Wrapping::default(),
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             class: <Theme as Catalog>::default(),
             key_binding: None,
             on_edit: None,
@@ -242,6 +244,18 @@ where
         self
     }
 
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`TextEditor`].
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`TextEditor`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
     /// Highlights the [`TextEditor`] using the given syntax and theme.
     #[cfg(feature = "highlighter")]
     pub fn highlight(
@@ -282,6 +296,7 @@ where
             padding: self.padding,
             wrapping: self.wrapping,
             letter_spacing: self.letter_spacing,
+            font_features: self.font_features,
             class: self.class,
             key_binding: self.key_binding,
             on_edit: self.on_edit,
@@ -628,6 +643,7 @@ where
             self.text_size.unwrap_or_else(|| renderer.default_size()),
             self.line_height,
             self.letter_spacing,
+            self.font_features.clone(),
             self.wrapping,
             renderer.scale_factor(),
             state.highlighter.borrow_mut().deref_mut(),
@@ -941,6 +957,7 @@ where
                         wrapping: self.wrapping,
                         ellipsis: text::Ellipsis::None,
                         letter_spacing: self.letter_spacing,
+                        font_features: self.font_features.clone(),
                         hint_factor: renderer.scale_factor(),
                     },
                     text_bounds.position(),

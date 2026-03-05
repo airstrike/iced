@@ -108,6 +108,7 @@ where
     size: Option<Pixels>,
     line_height: text::LineHeight,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     alignment: alignment::Horizontal,
     on_input: Option<Box<dyn Fn(String) -> Message + 'a>>,
     on_paste: Option<Box<dyn Fn(String) -> Message + 'a>>,
@@ -140,6 +141,7 @@ where
             size: None,
             line_height: text::LineHeight::default(),
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             alignment: alignment::Horizontal::Left,
             on_input: None,
             on_paste: None,
@@ -252,6 +254,18 @@ where
         self
     }
 
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`TextInput`].
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`TextInput`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
     /// Sets the horizontal alignment of the [`TextInput`].
     pub fn align_x(mut self, alignment: impl Into<alignment::Horizontal>) -> Self {
         self.alignment = alignment.into();
@@ -308,10 +322,11 @@ where
             wrapping: text::Wrapping::None,
             ellipsis: text::Ellipsis::None,
             letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
             hint_factor: renderer.scale_factor(),
         };
 
-        let _ = state.placeholder.update(placeholder_text);
+        let _ = state.placeholder.update(placeholder_text.clone());
 
         let secure_value = self.is_secure.then(|| value.secure());
         let value = secure_value.as_ref().unwrap_or(value);
@@ -336,6 +351,7 @@ where
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
                 letter_spacing: crate::core::Em::default(),
+                font_features: Vec::new(),
                 hint_factor: renderer.scale_factor(),
             };
 
@@ -671,6 +687,7 @@ where
                 self.size,
                 self.line_height,
                 self.letter_spacing,
+                self.font_features.clone(),
             );
         };
 
@@ -1579,6 +1596,7 @@ fn replace_paragraph<Renderer>(
     text_size: Option<Pixels>,
     line_height: text::LineHeight,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
 ) where
     Renderer: text::Renderer,
 {
@@ -1600,6 +1618,7 @@ fn replace_paragraph<Renderer>(
         wrapping: text::Wrapping::None,
         ellipsis: text::Ellipsis::None,
         letter_spacing,
+        font_features,
         hint_factor: renderer.scale_factor(),
     });
 }

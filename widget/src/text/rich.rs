@@ -30,6 +30,7 @@ where
     wrapping: Wrapping,
     ellipsis: Ellipsis,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     class: Theme::Class<'a>,
     hovered_link: Option<usize>,
     on_link_click: Option<Box<dyn Fn(Link) -> Message + 'a>>,
@@ -56,6 +57,7 @@ where
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             class: Theme::default(),
             hovered_link: None,
             on_link_click: None,
@@ -133,6 +135,18 @@ where
     /// Sets the letter spacing of the [`Rich`] text.
     pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
         self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Rich`] text.
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`Rich`] text.
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -250,6 +264,7 @@ where
             self.wrapping,
             self.ellipsis,
             self.letter_spacing,
+            self.font_features.clone(),
         )
     }
 
@@ -460,6 +475,7 @@ fn layout<Link, Renderer>(
     wrapping: Wrapping,
     ellipsis: Ellipsis,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
 ) -> layout::Node
 where
     Link: Clone,
@@ -483,6 +499,7 @@ where
             wrapping,
             ellipsis,
             letter_spacing,
+            font_features: font_features.clone(),
             hint_factor: renderer.scale_factor(),
         };
 
@@ -502,6 +519,7 @@ where
                 wrapping,
                 ellipsis,
                 letter_spacing,
+                font_features: font_features.clone(),
                 hint_factor: renderer.scale_factor(),
             }) {
                 core::text::Difference::None => {}
