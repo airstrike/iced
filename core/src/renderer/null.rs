@@ -137,6 +137,10 @@ impl text::Paragraph for () {
         Em::ZERO
     }
 
+    fn font_features(&self) -> &[crate::font::Feature] {
+        &[]
+    }
+
     fn grapheme_position(&self, _line: usize, _index: usize) -> Option<Point> {
         None
     }
@@ -217,6 +221,7 @@ impl text::Editor for () {
         _new_size: Pixels,
         _new_line_height: text::LineHeight,
         _new_letter_spacing: Em,
+        _new_font_features: Vec<crate::font::Feature>,
         _new_wrapping: text::Wrapping,
         _new_hint_factor: Option<f32>,
         _new_highlighter: &mut impl text::Highlighter,
