@@ -146,6 +146,7 @@ where
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     menu_class: <Theme as menu::Catalog>::Class<'a>,
     menu_height: Length,
 }
@@ -186,6 +187,7 @@ where
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::End,
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             menu_class: <Theme as Catalog>::default_menu(),
             menu_height: Length::Shrink,
         }
@@ -288,6 +290,18 @@ where
     /// Sets the letter spacing of the [`ComboBox`].
     pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
         self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`ComboBox`].
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`ComboBox`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -867,7 +881,8 @@ where
                 .padding(self.padding)
                 .shaping(self.shaping)
                 .ellipsis(self.ellipsis)
-                .letter_spacing(self.letter_spacing);
+                .letter_spacing(self.letter_spacing)
+                .font_features(self.font_features.clone());
 
                 if let Some(font) = self.font {
                     menu = menu.font(font);

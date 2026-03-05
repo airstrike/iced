@@ -1356,6 +1356,7 @@ where
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
                 letter_spacing: crate::core::Em::default(),
+                font_features: Vec::new(),
                 hint_factor: None,
             };
 
@@ -1364,7 +1365,7 @@ where
                     core::Text {
                         content: Renderer::SCROLL_UP_ICON.to_string(),
                         align_y: alignment::Vertical::Top,
-                        ..arrow
+                        ..arrow.clone()
                     },
                     Point::new(bounds.center_x(), bounds.y + Self::PADDING),
                     style.icon,
@@ -1375,7 +1376,7 @@ where
                     core::Text {
                         content: Renderer::SCROLL_DOWN_ICON.to_string(),
                         align_y: alignment::Vertical::Bottom,
-                        ..arrow
+                        ..arrow.clone()
                     },
                     Point::new(
                         bounds.center_x(),
@@ -1391,7 +1392,7 @@ where
                     core::Text {
                         content: Renderer::SCROLL_LEFT_ICON.to_string(),
                         align_x: text::Alignment::Left,
-                        ..arrow
+                        ..arrow.clone()
                     },
                     Point::new(bounds.x + Self::PADDING + 1.0, bounds.center_y() + 1.0),
                     style.icon,

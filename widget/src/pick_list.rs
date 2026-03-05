@@ -166,6 +166,7 @@ where
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Renderer::Font>,
     handle: Handle<Renderer::Font>,
     class: <Theme as Catalog>::Class<'a>,
@@ -201,6 +202,7 @@ where
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::End,
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             font: None,
             handle: Handle::default(),
             class: <Theme as Catalog>::default(),
@@ -261,6 +263,18 @@ where
     /// Sets the letter spacing of the [`PickList`].
     pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
         self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`PickList`].
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`PickList`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -383,13 +397,14 @@ where
             wrapping: text::Wrapping::None,
             ellipsis: self.ellipsis,
             letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
             hint_factor: renderer.scale_factor(),
         };
 
         if let Some(placeholder) = &self.placeholder {
             let _ = state.placeholder.update(Text {
                 content: placeholder,
-                ..option_text
+                ..option_text.clone()
             });
         }
 
@@ -402,7 +417,7 @@ where
 
                     let _ = paragraph.update(Text {
                         content: &label,
-                        ..option_text
+                        ..option_text.clone()
                     });
                 }
 
@@ -660,6 +675,7 @@ where
                     wrapping: text::Wrapping::None,
                     ellipsis: text::Ellipsis::None,
                     letter_spacing: crate::core::Em::default(),
+                    font_features: Vec::new(),
                     hint_factor: None,
                 },
                 Point::new(
@@ -692,6 +708,7 @@ where
                     wrapping: text::Wrapping::None,
                     ellipsis: self.ellipsis,
                     letter_spacing: self.letter_spacing,
+                    font_features: self.font_features.clone(),
                     hint_factor: renderer.scale_factor(),
                 },
                 Point::new(bounds.x + self.padding.left, bounds.center_y()),
@@ -741,7 +758,8 @@ where
             .font(font)
             .ellipsis(self.ellipsis)
             .shaping(self.shaping)
-            .letter_spacing(self.letter_spacing);
+            .letter_spacing(self.letter_spacing)
+            .font_features(self.font_features.clone());
 
             if let Some(text_size) = self.text_size {
                 menu = menu.text_size(text_size);

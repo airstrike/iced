@@ -95,6 +95,7 @@ where
     shaping: text::Shaping,
     wrapping: text::Wrapping,
     letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Renderer::Font>,
     icon: Icon<Renderer::Font>,
     class: Theme::Class<'a>,
@@ -126,6 +127,7 @@ where
             shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
             letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             font: None,
             icon: Icon {
                 font: Renderer::ICON_FONT,
@@ -215,6 +217,18 @@ where
     /// Sets the letter spacing of the [`Checkbox`].
     pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
         self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Checkbox`].
+    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`Checkbox`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -309,6 +323,7 @@ where
                             wrapping: self.wrapping,
                             ellipsis: text::Ellipsis::None,
                             letter_spacing: self.letter_spacing,
+                            font_features: self.font_features.clone(),
                         },
                     )
                 } else {
@@ -435,6 +450,7 @@ where
                         wrapping: text::Wrapping::default(),
                         ellipsis: text::Ellipsis::default(),
                         letter_spacing: crate::core::Em::default(),
+                        font_features: Vec::new(),
                         hint_factor: None,
                     },
                     bounds.center(),
