@@ -8,13 +8,14 @@ pub use highlighter::Highlighter;
 pub use paragraph::Paragraph;
 
 use crate::alignment;
+use crate::font;
 use crate::{Background, Border, Color, Em, Padding, Pixels, Point, Rectangle, Size};
 
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 
 /// A paragraph.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Text<Content = String, Font = crate::Font> {
     /// The content of the paragraph.
     pub content: Content,
@@ -49,6 +50,9 @@ pub struct Text<Content = String, Font = crate::Font> {
     /// The letter spacing of the [`Text`].
     pub letter_spacing: Em,
 
+    /// The OpenType font features of the [`Text`].
+    pub font_features: Vec<font::Feature>,
+
     /// The scale factor that may be used to internally scale the layout
     /// calculation of the [`Paragraph`] and leverage metrics hinting.
     ///
@@ -79,6 +83,7 @@ where
             wrapping: self.wrapping,
             ellipsis: self.ellipsis,
             letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
             hint_factor: self.hint_factor,
         }
     }
@@ -434,6 +439,8 @@ pub struct Span<'a, Link = (), Font = crate::Font> {
     pub strikethrough: bool,
     /// The letter spacing of the [`Span`].
     pub letter_spacing: Option<Em>,
+    /// The OpenType font features of the [`Span`].
+    pub font_features: Vec<font::Feature>,
 }
 
 /// A text highlight.
@@ -584,6 +591,18 @@ impl<'a, Link, Font> Span<'a, Link, Font> {
         self
     }
 
+    /// Adds a single font [`Feature`](font::Feature) to the [`Span`].
+    pub fn font_feature(mut self, feature: font::Feature) -> Self {
+        self.font_features.push(feature);
+        self
+    }
+
+    /// Sets the font features of the [`Span`].
+    pub fn font_features(mut self, features: Vec<font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
     /// Turns the [`Span`] into a static one.
     pub fn to_static(self) -> Span<'static, Link, Font> {
         Span {
@@ -598,6 +617,7 @@ impl<'a, Link, Font> Span<'a, Link, Font> {
             underline: self.underline,
             strikethrough: self.strikethrough,
             letter_spacing: self.letter_spacing,
+            font_features: self.font_features,
         }
     }
 }
@@ -616,6 +636,7 @@ impl<Link, Font> Default for Span<'_, Link, Font> {
             underline: false,
             strikethrough: false,
             letter_spacing: None,
+            font_features: Vec::new(),
         }
     }
 }
@@ -634,6 +655,7 @@ impl<Link, Font: PartialEq> PartialEq for Span<'_, Link, Font> {
             && self.font == other.font
             && self.color == other.color
             && self.letter_spacing == other.letter_spacing
+            && self.font_features == other.font_features
     }
 }
 

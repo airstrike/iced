@@ -65,6 +65,8 @@ pub enum Text {
         ellipsis: Ellipsis,
         /// The letter spacing of the text.
         letter_spacing: Em,
+        /// The font features of the text.
+        font_features: Vec<font::Feature>,
         /// The clip bounds of the text.
         clip_bounds: Rectangle,
     },
@@ -261,13 +263,27 @@ pub fn align(
 }
 
 /// Returns the attributes of the given [`Font`].
-pub fn to_attributes(font: Font, letter_spacing: Em) -> cosmic_text::Attrs<'static> {
-    cosmic_text::Attrs::new()
+pub fn to_attributes(
+    font: Font,
+    letter_spacing: Em,
+    font_features: &[font::Feature],
+) -> cosmic_text::Attrs<'static> {
+    let mut attrs = cosmic_text::Attrs::new()
         .family(to_family(font.family))
         .weight(to_weight(font.weight))
         .stretch(to_stretch(font.stretch))
         .style(to_style(font.style))
-        .letter_spacing(letter_spacing.0)
+        .letter_spacing(letter_spacing.0);
+
+    if !font_features.is_empty() {
+        let mut features = cosmic_text::FontFeatures::new();
+        for f in font_features {
+            let _ = features.set(cosmic_text::FeatureTag::new(&f.tag.0), f.value);
+        }
+        attrs = attrs.font_features(features);
+    }
+
+    attrs
 }
 
 fn to_family(family: font::Family) -> cosmic_text::Family<'static> {

@@ -109,3 +109,40 @@ pub enum Style {
     Italic,
     Oblique,
 }
+
+/// A 4-byte OpenType feature tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Tag(pub [u8; 4]);
+
+impl Tag {
+    /// Creates a new [`Tag`] from a 4-byte array.
+    pub const fn new(tag: &[u8; 4]) -> Self {
+        Self(*tag)
+    }
+}
+
+/// An OpenType font feature setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Feature {
+    /// The feature [`Tag`].
+    pub tag: Tag,
+    /// The value of the feature. `1` enables, `0` disables.
+    pub value: u32,
+}
+
+impl Feature {
+    /// Creates a new [`Feature`] with the given [`Tag`] and value.
+    pub const fn new(tag: Tag, value: u32) -> Self {
+        Self { tag, value }
+    }
+
+    /// Creates a [`Feature`] that enables the given [`Tag`].
+    pub const fn on(tag: Tag) -> Self {
+        Self::new(tag, 1)
+    }
+
+    /// Creates a [`Feature`] that disables the given [`Tag`].
+    pub const fn off(tag: Tag) -> Self {
+        Self::new(tag, 0)
+    }
+}
