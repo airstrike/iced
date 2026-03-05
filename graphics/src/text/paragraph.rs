@@ -104,7 +104,7 @@ impl core::text::Paragraph for Paragraph {
             font_system.raw(),
             text.content,
             &text::to_attributes(text.font, text.letter_spacing, &text.font_features),
-            text::to_shaping(text.shaping, text.content),
+            text::to_shaping(text.shaping, text.content, !text.font_features.is_empty()),
             None,
         );
 
