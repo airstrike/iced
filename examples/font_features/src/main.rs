@@ -33,13 +33,17 @@ const LETTER_SPACING: f32 = -0.02;
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        (
-            Self { loaded: false },
-            fetch_font(
-                "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
-                "InterVariable.ttf",
-            ),
-        )
+        #[cfg(target_arch = "wasm32")]
+        let load_inter = {
+            let inter = include_bytes!(concat!(env!("OUT_DIR"), "/InterVariable.ttf"));
+            iced::font::load(inter.as_slice()).map(|_| Message::FontLoaded)
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let load_inter = fetch_font(
+            "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+            "InterVariable.ttf",
+        );
+        (Self { loaded: false }, load_inter)
     }
 
     fn theme(&self) -> iced::Theme {
@@ -69,7 +73,11 @@ impl App {
             }
             Message::MonoFontLoaded => {}
             Message::Download => {
-                let _ = open::that("https://github.com/rsms/inter/releases/latest");
+                let url = "https://github.com/rsms/inter/releases/latest";
+                #[cfg(not(target_arch = "wasm32"))]
+                { let _ = open::that(url); }
+                #[cfg(target_arch = "wasm32")]
+                { let _ = web_sys::window().and_then(|w| w.open_with_url(url).ok()); }
             }
         }
         Task::none()
@@ -938,40 +946,16 @@ fn feature_listing() -> Element<'static, Message> {
 // ------ Networking ------
 
 async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
-    use http_body_util::{BodyExt, Empty};
-    use hyper::body::Bytes;
-    use hyper_util::client::legacy::Client;
-    use hyper_util::rt::TokioExecutor;
-
-    let client = Client::builder(TokioExecutor::new()).build(hyper_tls::HttpsConnector::new());
-
-    let mut current_url = url.to_string();
-    loop {
-        let request = hyper::Request::get(&current_url)
-            .body(Empty::<Bytes>::new())
-            .map_err(|e| format!("{e}"))?;
-        let response = client.request(request).await.map_err(|e| format!("{e}"))?;
-
-        if response.status().is_redirection() {
-            let location = response
-                .headers()
-                .get("location")
-                .ok_or("redirect without location")?
-                .to_str()
-                .map_err(|e| format!("{e}"))?;
-            current_url = location.to_string();
-            continue;
-        }
-
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .map_err(|e| format!("{e}"))?;
-        return Ok(body.to_bytes().to_vec());
-    }
+    let bytes = reqwest::get(url)
+        .await
+        .map_err(|e| format!("{e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("{e}"))?;
+    Ok(bytes.to_vec())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn fetch_font(url: &'static str, entry_name: &'static str) -> Task<Message> {
     Task::future(fetch_bytes(url)).then(move |result| match result {
         Ok(zip_bytes) => {

@@ -5,12 +5,17 @@ authors = ["Andy Terra <tech@andyterra.com>"]
 edition = "2024"
 publish = false
 
+[build-dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 [dependencies]
 iced.workspace = true
 iced.features = ["tokio"]
-hyper = { version = "1", features = ["http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
-hyper-tls = "0.6"
-http-body-util = "0.1"
+reqwest = { version = "0.12", features = ["rustls-tls"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 open = "5"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window"] }
