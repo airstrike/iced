@@ -193,7 +193,7 @@ bitflags = "2.0"
 bytemuck = { version = "1.0", features = ["derive"] }
 bytes = "1.6"
 cargo-hot = { version = "0.1", package = "cargo-hot-protocol" }
-cosmic-text = "0.18"
+cosmic-text = { version = "0.18", features = ["warn_on_missing_glyphs"] }
 cryoglyph = { git = "https://github.com/iced-rs/cryoglyph.git", rev = "1d68895e9c4c9b73739f826e81c2e3012c155cce" }
 futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
 glam = "0.25"
@@ -265,3 +265,6 @@ useless_conversion = "deny"
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "forbid"
+
+[patch.crates-io]
+cosmic-text = { git = "https://github.com/airstrike/cosmic-text", branch = "featureful-fonts" }
