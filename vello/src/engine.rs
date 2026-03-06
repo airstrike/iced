@@ -12,6 +12,7 @@ use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 
 use vello::kurbo::Affine;
+use vello::wgpu;
 
 pub use vello::Scene;
 

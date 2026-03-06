@@ -1,6 +1,7 @@
 //! Configure a renderer.
 use crate::core::{Font, Pixels};
 use crate::graphics;
+use vello::wgpu;
 
 /// The settings of a [`Renderer`].
 ///

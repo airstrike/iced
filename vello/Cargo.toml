@@ -41,4 +41,3 @@ rustc-hash.workspace = true
 thiserror.workspace = true
 vello.workspace = true
 parley.workspace = true
-wgpu.workspace = true

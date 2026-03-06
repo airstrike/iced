@@ -26,6 +26,7 @@ use crate::graphics::Viewport;
 use crate::text::{Editor, Paragraph};
 
 use iced_debug as debug;
+use vello::wgpu;
 
 /// A Vello-based GPU-accelerated renderer.
 #[derive(Debug)]

@@ -5,6 +5,7 @@ use crate::graphics::compositor::{self, Information, SurfaceError};
 use crate::graphics::{self, Shell, Viewport, error};
 use crate::settings::{self, Settings};
 use crate::{Engine, Renderer};
+use vello::wgpu;
 
 /// A compositor error.
 #[derive(Debug, Clone, thiserror::Error)]
