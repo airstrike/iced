@@ -442,21 +442,21 @@ impl Layer {
                     transformation,
                 } => {
                     // Render the editor using its PlainEditor layout with clipping and scroll
-                    if let Some(editor_strong) = editor.upgrade() {
-                        if let Some(layout) = editor_strong.editor().try_layout() {
-                            // Apply scroll offset to position
-                            let scrolled_position =
-                                Point::new(position.x, position.y - editor_strong.scroll_offset());
+                    if let Some(editor_strong) = editor.upgrade()
+                        && let Some(layout) = editor_strong.editor().try_layout()
+                    {
+                        // Apply scroll offset to position
+                        let scrolled_position =
+                            Point::new(position.x, position.y - editor_strong.scroll_offset());
 
-                            // Render with clipping bounds
-                            self.render_layout_clipped(
-                                layout,
-                                scrolled_position,
-                                color,
-                                clip_bounds,
-                                transformation,
-                            );
-                        }
+                        // Render with clipping bounds
+                        self.render_layout_clipped(
+                            layout,
+                            scrolled_position,
+                            color,
+                            clip_bounds,
+                            transformation,
+                        );
                     }
                 }
             }
@@ -473,7 +473,6 @@ impl Layer {
 
         // Process all pending images and add them to the scene
         for image in image_items {
-
             // Load the image using the engine
             if let Some(image_brush) = engine.load_image(&image.handle) {
                 // Calculate the base transform

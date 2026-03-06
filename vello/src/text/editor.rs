@@ -286,7 +286,7 @@ where
                 .focus()
                 .logical_clusters(&self.editor.layout)[1]
                 .as_ref()
-                .map(|cluster| cluster.text_range())
+                .map(parley::Cluster::text_range)
                 .and_then(|range| (!range.is_empty()).then_some(range))
             {
                 self.editor.buffer.replace_range(range.clone(), "");

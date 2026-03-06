@@ -337,11 +337,11 @@ impl graphics::Compositor for Compositor {
             physical_size.height,
         );
 
-        let mut dummy_encoder = self
-            .device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("dummy_encoder_unused_by_vello"),
-            });
+        let mut dummy_encoder =
+            self.device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("dummy_encoder_unused_by_vello"),
+                });
         renderer.render(
             self.device(),
             self.queue(),

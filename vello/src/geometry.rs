@@ -136,12 +136,10 @@ impl Transform {
 
     fn transform_rectangle(&self, rectangle: Rectangle) -> (Rectangle, Radians) {
         let top_left = self.transform_point(rectangle.position());
-        let top_right = self.transform_point(
-            rectangle.position() + Vector::new(rectangle.width, 0.0),
-        );
-        let bottom_left = self.transform_point(
-            rectangle.position() + Vector::new(0.0, rectangle.height),
-        );
+        let top_right =
+            self.transform_point(rectangle.position() + Vector::new(rectangle.width, 0.0));
+        let bottom_left =
+            self.transform_point(rectangle.position() + Vector::new(0.0, rectangle.height));
         Rectangle::with_vertices(top_left, top_right, bottom_left)
     }
 }
@@ -213,12 +211,11 @@ impl Frame {
                     bez_path.line_to((to.x as f64, to.y as f64));
                 }
                 PathEvent::Quadratic { ctrl, to, .. } => {
-                    bez_path.quad_to(
-                        (ctrl.x as f64, ctrl.y as f64),
-                        (to.x as f64, to.y as f64),
-                    );
+                    bez_path.quad_to((ctrl.x as f64, ctrl.y as f64), (to.x as f64, to.y as f64));
                 }
-                PathEvent::Cubic { ctrl1, ctrl2, to, .. } => {
+                PathEvent::Cubic {
+                    ctrl1, ctrl2, to, ..
+                } => {
                     bez_path.curve_to(
                         (ctrl1.x as f64, ctrl1.y as f64),
                         (ctrl2.x as f64, ctrl2.y as f64),
@@ -272,15 +269,16 @@ impl geometry::frame::Backend for Frame {
 
     #[inline]
     fn translate(&mut self, translation: Vector) {
-        self.transforms.current.0 = self.transforms.current.0.pre_translate(
-            (translation.x as f64, translation.y as f64).into(),
-        );
+        self.transforms.current.0 = self
+            .transforms
+            .current
+            .0
+            .pre_translate((translation.x as f64, translation.y as f64).into());
     }
 
     #[inline]
     fn rotate(&mut self, angle: impl Into<Radians>) {
-        self.transforms.current.0 =
-            self.transforms.current.0.pre_rotate(angle.into().0 as f64);
+        self.transforms.current.0 = self.transforms.current.0.pre_rotate(angle.into().0 as f64);
     }
 
     #[inline]
@@ -292,8 +290,11 @@ impl geometry::frame::Backend for Frame {
     #[inline]
     fn scale_nonuniform(&mut self, scale: impl Into<Vector>) {
         let scale = scale.into();
-        self.transforms.current.0 =
-            self.transforms.current.0.pre_scale_non_uniform(scale.x as f64, scale.y as f64);
+        self.transforms.current.0 = self
+            .transforms
+            .current
+            .0
+            .pre_scale_non_uniform(scale.x as f64, scale.y as f64);
     }
 
     fn draft(&mut self, clip_bounds: Rectangle) -> Self {
@@ -332,7 +333,10 @@ impl geometry::frame::Backend for Frame {
         let brush = self.style_to_brush(self.transforms.current.transform_style(fill.style));
 
         let top_left = self.transforms.current.transform_point(top_left);
-        let size = self.transforms.current.transform_vector(Vector::new(size.width, size.height));
+        let size = self
+            .transforms
+            .current
+            .transform_vector(Vector::new(size.width, size.height));
 
         let rect = kurbo::Rect::new(
             top_left.x as f64,
@@ -385,24 +389,28 @@ impl geometry::frame::Backend for Frame {
 
         // Handle dashed lines using kurbo's built-in support
         if !stroke.line_dash.segments.is_empty() {
-            let dashes: Vec<f64> = stroke.line_dash.segments.iter().map(|&s| s as f64).collect();
+            let dashes: Vec<f64> = stroke
+                .line_dash
+                .segments
+                .iter()
+                .map(|&s| s as f64)
+                .collect();
             kurbo_stroke = kurbo_stroke.with_dashes(stroke.line_dash.offset as f64, dashes);
         }
 
-        self.scene.stroke(&kurbo_stroke, transform, &brush, None, &bez_path);
+        self.scene
+            .stroke(&kurbo_stroke, transform, &brush, None, &bez_path);
     }
 
-    fn stroke_rectangle<'a>(
-        &mut self,
-        top_left: Point,
-        size: Size,
-        stroke: impl Into<Stroke<'a>>,
-    ) {
+    fn stroke_rectangle<'a>(&mut self, top_left: Point, size: Size, stroke: impl Into<Stroke<'a>>) {
         let stroke = stroke.into();
         let brush = self.style_to_brush(self.transforms.current.transform_style(stroke.style));
 
         let top_left = self.transforms.current.transform_point(top_left);
-        let size = self.transforms.current.transform_vector(Vector::new(size.width, size.height));
+        let size = self
+            .transforms
+            .current
+            .transform_vector(Vector::new(size.width, size.height));
 
         let rect = kurbo::Rect::new(
             top_left.x as f64,
@@ -423,7 +431,8 @@ impl geometry::frame::Backend for Frame {
                 LineJoin::Bevel => kurbo::Join::Bevel,
             });
 
-        self.scene.stroke(&kurbo_stroke, Affine::IDENTITY, &brush, None, &rect);
+        self.scene
+            .stroke(&kurbo_stroke, Affine::IDENTITY, &brush, None, &rect);
     }
 
     fn stroke_text<'a>(&mut self, text: impl Into<Text>, stroke: impl Into<Stroke<'a>>) {

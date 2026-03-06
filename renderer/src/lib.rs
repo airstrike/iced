@@ -35,19 +35,31 @@ mod renderer {
     >;
 }
 
-#[cfg(all(feature = "wgpu-bare", not(feature = "tiny-skia"), not(feature = "vello")))]
+#[cfg(all(
+    feature = "wgpu-bare",
+    not(feature = "tiny-skia"),
+    not(feature = "vello")
+))]
 mod renderer {
     pub type Renderer = iced_wgpu::Renderer;
     pub type Compositor = iced_wgpu::window::Compositor;
 }
 
-#[cfg(all(not(feature = "wgpu-bare"), feature = "tiny-skia", not(feature = "vello")))]
+#[cfg(all(
+    not(feature = "wgpu-bare"),
+    feature = "tiny-skia",
+    not(feature = "vello")
+))]
 mod renderer {
     pub type Renderer = iced_tiny_skia::Renderer;
     pub type Compositor = iced_tiny_skia::window::Compositor;
 }
 
-#[cfg(all(feature = "vello", not(feature = "wgpu-bare"), not(feature = "tiny-skia")))]
+#[cfg(all(
+    feature = "vello",
+    not(feature = "wgpu-bare"),
+    not(feature = "tiny-skia")
+))]
 mod renderer {
     pub type Renderer = iced_vello::Renderer;
     pub type Compositor = iced_vello::window::Compositor;
@@ -56,44 +68,29 @@ mod renderer {
 #[cfg(all(feature = "vello", feature = "wgpu-bare", not(feature = "tiny-skia")))]
 mod renderer {
     // Use vello+vello (no actual fallback) to avoid text type incompatibility
-    pub type Renderer = crate::fallback::Renderer<
-        iced_vello::Renderer,
-        iced_vello::Renderer,
-    >;
+    pub type Renderer = crate::fallback::Renderer<iced_vello::Renderer, iced_vello::Renderer>;
 
-    pub type Compositor = crate::fallback::Compositor<
-        iced_vello::window::Compositor,
-        iced_vello::window::Compositor,
-    >;
+    pub type Compositor =
+        crate::fallback::Compositor<iced_vello::window::Compositor, iced_vello::window::Compositor>;
 }
 
 #[cfg(all(feature = "vello", feature = "tiny-skia", not(feature = "wgpu-bare")))]
 mod renderer {
     // Use vello+vello (no actual fallback) to avoid text type incompatibility
-    pub type Renderer = crate::fallback::Renderer<
-        iced_vello::Renderer,
-        iced_vello::Renderer,
-    >;
+    pub type Renderer = crate::fallback::Renderer<iced_vello::Renderer, iced_vello::Renderer>;
 
-    pub type Compositor = crate::fallback::Compositor<
-        iced_vello::window::Compositor,
-        iced_vello::window::Compositor,
-    >;
+    pub type Compositor =
+        crate::fallback::Compositor<iced_vello::window::Compositor, iced_vello::window::Compositor>;
 }
 
 #[cfg(all(feature = "vello", feature = "wgpu-bare", feature = "tiny-skia"))]
 mod renderer {
     // Use vello+vello (no actual fallback) to avoid text type incompatibility
     // Later, someone can implement a CPU-based Vello fallback
-    pub type Renderer = crate::fallback::Renderer<
-        iced_vello::Renderer,
-        iced_vello::Renderer,
-    >;
+    pub type Renderer = crate::fallback::Renderer<iced_vello::Renderer, iced_vello::Renderer>;
 
-    pub type Compositor = crate::fallback::Compositor<
-        iced_vello::window::Compositor,
-        iced_vello::window::Compositor,
-    >;
+    pub type Compositor =
+        crate::fallback::Compositor<iced_vello::window::Compositor, iced_vello::window::Compositor>;
 }
 
 #[cfg(not(any(feature = "wgpu-bare", feature = "tiny-skia", feature = "vello")))]

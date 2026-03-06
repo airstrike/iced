@@ -9,7 +9,9 @@ mod editor;
 pub use context::{font_context, layout_context, load_font};
 pub use editor::{PlainEditor, PlainEditorDriver, Scroll};
 
-use crate::core::text::editor::{Action, Cursor, Edit, Line, LineEnding, Motion, Position, Selection};
+use crate::core::text::editor::{
+    Action, Cursor, Edit, Line, LineEnding, Motion, Position, Selection,
+};
 use crate::core::text::{
     Alignment, Difference, Ellipsis, Highlighter, Hit, LineHeight, Shaping, Span, Wrapping,
     highlighter,
@@ -114,7 +116,7 @@ impl Paragraph {
         // Map iced Font to Parley FontStack
         let font_stack = match &self.font.family {
             crate::core::font::Family::Name(name) => {
-                let name_str: &str = name.as_ref();
+                let name_str: &str = name;
                 FontStack::from(name_str)
             }
             crate::core::font::Family::Serif => FontStack::from("serif"),
@@ -419,7 +421,7 @@ impl Editor {
     fn font_to_stack(font: &Font) -> FontStack<'static> {
         match &font.family {
             crate::core::font::Family::Name(name) => {
-                let name_str: &str = name.as_ref();
+                let name_str: &str = name;
 
                 let cache =
                     FONT_NAME_CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()));
@@ -645,7 +647,9 @@ impl crate::core::text::Editor for Editor {
         }
 
         // Column is the number of chars from line start to cursor
-        let column = text[line_start..cursor_index.min(text.len())].chars().count();
+        let column = text[line_start..cursor_index.min(text.len())]
+            .chars()
+            .count();
 
         let position = Position { line, column };
 
@@ -671,7 +675,9 @@ impl crate::core::text::Editor for Editor {
                 }
             }
 
-            let anchor_column = text[anchor_line_start..anchor_index.min(text.len())].chars().count();
+            let anchor_column = text[anchor_line_start..anchor_index.min(text.len())]
+                .chars()
+                .count();
 
             Some(Position {
                 line: anchor_line,
@@ -679,7 +685,10 @@ impl crate::core::text::Editor for Editor {
             })
         };
 
-        Cursor { position, selection }
+        Cursor {
+            position,
+            selection,
+        }
     }
 
     fn selection(&self) -> Selection {
@@ -747,12 +756,10 @@ impl crate::core::text::Editor for Editor {
                 if c == '\n' {
                     if current_line == pos.line {
                         // Found the line, now find the column
-                        let mut col = 0;
-                        for (j, ch) in text[line_start..i].char_indices() {
+                        for (col, (j, _)) in text[line_start..i].char_indices().enumerate() {
                             if col >= pos.column {
                                 return line_start + j;
                             }
-                            col += 1;
                         }
                         // Column is at or beyond line end
                         return i;
@@ -764,12 +771,10 @@ impl crate::core::text::Editor for Editor {
 
             // Handle last line (no trailing newline)
             if current_line == pos.line {
-                let mut col = 0;
-                for (j, _ch) in text[line_start..].char_indices() {
+                for (col, (j, _)) in text[line_start..].char_indices().enumerate() {
                     if col >= pos.column {
                         return line_start + j;
                     }
-                    col += 1;
                 }
             }
 
@@ -779,7 +784,10 @@ impl crate::core::text::Editor for Editor {
         // Calculate byte indices before borrowing editor mutably
         let text = self.editor.raw_text();
         let focus_byte_index = position_to_byte_index(&cursor.position, text);
-        let anchor_byte_index = cursor.selection.as_ref().map(|sel| position_to_byte_index(sel, text));
+        let anchor_byte_index = cursor
+            .selection
+            .as_ref()
+            .map(|sel| position_to_byte_index(sel, text));
 
         let font_ctx = font_context();
         let layout_ctx = layout_context();
