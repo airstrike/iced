@@ -187,6 +187,7 @@ fn scene<'a, Message: 'a>(n: usize) -> Element<'a, Message, Theme, Renderer> {
                         ellipsis: text::Ellipsis::default(),
                         max_width: f32::INFINITY,
                         letter_spacing: Em::ZERO,
+                        font_features: Vec::new(),
                     });
                 }
             })]

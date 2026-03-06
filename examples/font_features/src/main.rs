@@ -445,12 +445,9 @@ fn paragraphs() -> Element<'static, Message> {
             if *ls != 0.0 {
                 t = t.letter_spacing(*ls);
             }
-            column![
-                text(*name).size(13).style(theme::text::muted),
-                t,
-            ]
-            .spacing(2)
-            .into()
+            column![text(*name).size(13).style(theme::text::muted), t,]
+                .spacing(2)
+                .into()
         }))
         .spacing(20)
         .into()
@@ -626,18 +623,9 @@ fn features() -> Element<'static, Message> {
             rule::horizontal(2).style(theme::rule::black),
             // Column headers
             row![
-                text("Feature")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(220),
-                text("Off")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(Fill),
-                text("On")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(Fill),
+                text("Feature").size(16).style(theme::text::dark).width(220),
+                text("Off").size(16).style(theme::text::dark).width(Fill),
+                text("On").size(16).style(theme::text::dark).width(Fill),
             ]
             .spacing(20),
             // Feature rows (matching rsms.me/inter)
@@ -1010,7 +998,10 @@ mod theme {
     pub mod button {
         use super::*;
 
-        pub fn download(_theme: &iced::Theme, _status: widget::button::Status) -> widget::button::Style {
+        pub fn download(
+            _theme: &iced::Theme,
+            _status: widget::button::Status,
+        ) -> widget::button::Style {
             widget::button::Style {
                 background: Some(color!(0xFFFFFF).into()),
                 border: iced::border::rounded(6.0),

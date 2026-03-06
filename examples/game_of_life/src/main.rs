@@ -564,7 +564,7 @@ mod grid {
                     frame.fill_text(Text {
                         content: format!("({}, {})", cell.j, cell.i),
                         position: text.position - Vector::new(0.0, 16.0),
-                        ..text
+                        ..text.clone()
                     });
                 }
 
