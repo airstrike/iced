@@ -208,7 +208,7 @@ impl Theme {
                     x: anchor.x + box_size.width / 2.0,
                     y: box_size.height,
                 },
-                ..text
+                ..text.clone()
             });
         }
 
@@ -236,7 +236,7 @@ impl Theme {
                     x: anchor.x + box_size.width / 2.0,
                     y: box_size.height + 2.0 * pad,
                 },
-                ..text
+                ..text.clone()
             });
         }
     }
