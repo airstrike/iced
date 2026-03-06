@@ -39,6 +39,8 @@ pub struct Renderer {
     default_font: Font,
     /// Default text size.
     default_text_size: Pixels,
+    /// Scale factor hint.
+    scale_factor: Option<f32>,
 }
 
 impl Renderer {
@@ -49,6 +51,7 @@ impl Renderer {
             layers: layer::Stack::new(),
             default_font,
             default_text_size,
+            scale_factor: None,
         }
     }
 
@@ -146,6 +149,14 @@ impl core::Renderer for Renderer {
     fn fill_quad(&mut self, quad: core::renderer::Quad, background: impl Into<Background>) {
         let (layer, transformation) = self.layers.current_mut();
         layer.draw_quad(quad, background.into(), transformation);
+    }
+
+    fn hint(&mut self, scale_factor: f32) {
+        self.scale_factor = Some(scale_factor);
+    }
+
+    fn scale_factor(&self) -> Option<f32> {
+        Some(self.scale_factor? * self.layers.transformation().scale_factor())
     }
 
     fn reset(&mut self, new_bounds: Rectangle) {

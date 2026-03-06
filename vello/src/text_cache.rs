@@ -114,6 +114,8 @@ impl Cache {
                 align_y: key.align_y,
                 wrapping: key.wrapping,
                 shaping: key.shaping,
+                ellipsis: crate::core::text::Ellipsis::default(),
+                hint_factor: None,
             };
 
             let paragraph = Paragraph::with_text(text);

@@ -11,7 +11,8 @@ pub use editor::{PlainEditor, PlainEditorDriver, Scroll};
 
 use crate::core::text::editor::{Action, Cursor, Edit, Line, LineEnding, Motion, Position, Selection};
 use crate::core::text::{
-    Alignment, Difference, Highlighter, Hit, LineHeight, Shaping, Span, Wrapping, highlighter,
+    Alignment, Difference, Ellipsis, Highlighter, Hit, LineHeight, Shaping, Span, Wrapping,
+    highlighter,
 };
 use crate::core::{Font, Pixels, Point, Rectangle, Size};
 
@@ -47,6 +48,12 @@ pub struct Paragraph {
     wrapping: Wrapping,
     /// Text shaping strategy.
     shaping: Shaping,
+    /// Ellipsis strategy.
+    ellipsis: Ellipsis,
+    /// Whether hinting is enabled.
+    hint: bool,
+    /// The hint factor.
+    hint_factor: f32,
 }
 
 impl std::fmt::Debug for Paragraph {
@@ -75,6 +82,9 @@ impl Paragraph {
             align_y: crate::core::alignment::Vertical::Top,
             wrapping: Wrapping::default(),
             shaping: Shaping::Basic,
+            ellipsis: Ellipsis::default(),
+            hint: false,
+            hint_factor: 1.0,
         }
     }
 
@@ -270,6 +280,14 @@ impl crate::core::text::Paragraph for Paragraph {
         self.shaping
     }
 
+    fn hint_factor(&self) -> Option<f32> {
+        self.hint.then_some(self.hint_factor)
+    }
+
+    fn ellipsis(&self) -> Ellipsis {
+        self.ellipsis
+    }
+
     fn bounds(&self) -> Size {
         self.bounds
     }
@@ -355,6 +373,10 @@ pub struct Editor {
     font: Font,
     /// The bounds (viewport size).
     bounds: Size,
+    /// Whether hinting is enabled.
+    hint: bool,
+    /// The hint factor.
+    hint_factor: f32,
 }
 
 impl std::fmt::Debug for Editor {
@@ -389,6 +411,8 @@ impl Editor {
             editor,
             font: default_font,
             bounds: Size::ZERO,
+            hint: false,
+            hint_factor: 1.0,
         }
     }
 
@@ -921,6 +945,10 @@ impl crate::core::text::Editor for Editor {
         }
     }
 
+    fn hint_factor(&self) -> Option<f32> {
+        self.hint.then_some(self.hint_factor)
+    }
+
     fn update(
         &mut self,
         new_bounds: Size,
@@ -928,6 +956,7 @@ impl crate::core::text::Editor for Editor {
         new_size: Pixels,
         new_line_height: LineHeight,
         _new_wrapping: Wrapping,
+        _new_hint_factor: Option<f32>,
         _new_highlighter: &mut impl Highlighter,
     ) {
         self.bounds = new_bounds;
