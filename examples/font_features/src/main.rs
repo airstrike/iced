@@ -1,6 +1,6 @@
 use iced::font;
 use iced::widget::{
-    Space, column, container, responsive, rich_text, row, rule, scrollable, span, text,
+    Space, button, column, container, responsive, rich_text, row, rule, scrollable, span, text,
 };
 use iced::{Center, Color, Element, Fill, Font, Task, color, padding};
 
@@ -19,13 +19,16 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     FontLoaded,
+    MonoFontLoaded,
+    Download,
 }
 
 struct App {
     loaded: bool,
 }
 
-const FONT_NAME: &str = "Inter Regular";
+const FONT_NAME: &str = "Inter Variable";
+const MONO_FONT: &str = "JetBrains Mono";
 const LETTER_SPACING: f32 = -0.02;
 
 impl App {
@@ -33,8 +36,8 @@ impl App {
         (
             Self { loaded: false },
             fetch_font(
-                "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
-                // "https://raw.githubusercontent.com/google/fonts/main/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf",
+                "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+                "InterVariable.ttf",
             ),
         )
     }
@@ -43,7 +46,7 @@ impl App {
         iced::Theme::custom(
             FONT_NAME.to_string(),
             iced::theme::Palette {
-                background: color!(0x000000),
+                background: color!(0x111111),
                 text: color!(0xFFFFFF),
                 primary: color!(0xFFFFFF),
                 success: color!(0x22c55e),
@@ -55,7 +58,19 @@ impl App {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::FontLoaded => self.loaded = true,
+            Message::FontLoaded => {
+                self.loaded = true;
+                return Task::future(fetch_bytes(
+                    "https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/fonts/variable/JetBrainsMono%5Bwght%5D.ttf",
+                )).then(|result| match result {
+                    Ok(bytes) => iced::font::load(bytes).map(|_| Message::MonoFontLoaded),
+                    Err(_) => Task::none(),
+                });
+            }
+            Message::MonoFontLoaded => {}
+            Message::Download => {
+                let _ = open::that("https://github.com/rsms/inter/releases/latest");
+            }
         }
         Task::none()
     }
@@ -127,16 +142,17 @@ fn sample_text(marked: &str, tag: font::Tag, on: bool) -> Element<'_, Message> {
 
 fn hero() -> Element<'static, Message> {
     container(responsive(|size| {
-        // Scale hero text with window width (~10vw equivalent)
-        let font_size = (size.width * 0.1).clamp(48.0, 140.0);
+        // calc(100vw / 8) = 12.5% of viewport width
+        let font_size = size.width * 0.125;
 
         text("The Inter\ntypeface family")
             .size(font_size)
             .font(inter(font::Weight::Bold))
-            .letter_spacing(LETTER_SPACING)
+            .letter_spacing(-0.03)
+            .line_height(1.0)
             .into()
     }))
-    .padding(padding::all(40).top(80))
+    .padding(padding::all(64).top(80))
     .width(Fill)
     .into()
 }
@@ -144,34 +160,56 @@ fn hero() -> Element<'static, Message> {
 fn description() -> Element<'static, Message> {
     container(
         row![
-            text("The 21st century standard")
-                .size(16)
-                .font(inter(font::Weight::Semibold))
-                .width(240),
+            column![
+                text("The 21st century standard")
+                    .size(16)
+                    .font(inter(font::Weight::Semibold)),
+                button(
+                    text("Download \u{2193}")
+                        .size(16)
+                        .font(inter(font::Weight::Medium))
+                        .letter_spacing(0.02)
+                        .style(theme::text::dark),
+                )
+                .on_press(Message::Download)
+                .padding(padding::vertical(4).left(13).right(13))
+                .style(theme::button::download),
+            ]
+            .spacing(16)
+            .width(240),
             text(
                 "Inter is a workhorse of a typeface carefully crafted & designed \
                  for a wide range of applications, from detailed user interfaces \
                  to marketing & signage. The Inter typeface family features over \
                  2000 glyphs covering 147 languages. Weights range from a \
-                 delicate thin 100 all the way up to a heavy 900.",
+                 delicate thin 100 all the way up to a heavy 900. Each glyph \
+                 has three dedicated designs for weights 100, 400 and 900 to \
+                 ensure excellent quality at any weight. Optical size ranges \
+                 from \u{201C}text\u{201D} to \u{201C}display\u{201D} and there is a true italic variant.\n\n\
+                 Inter is one of the world\u{2019}s most used typefaces with applications \
+                 ranging from computer interfaces, advertising & airports, to NASA \
+                 instrumentation & medical equipment.",
             )
             .size(15)
-            .style(theme::text::muted)
             .width(Fill),
             text(
-                "Many OpenType features are provided as well, including \
+                "The smaller \u{201C}text\u{201D} optical-size designs features a tall \
+                 x-height to aid in legibility of lower-case text, with several \
+                 contrast-enhancing details like ink traps and bridges. The larger \
+                 \u{201C}display\u{201D} optical-size designs offers clean lines, smooth \
+                 curves and delicate details for excellent rhythm of large text.\n\n\
+                 Many OpenType features are provided as well, including \
                  contextual alternates which adjusts punctuation depending \
                  on the shape of surrounding glyphs, slashed zero for when \
-                 you need to disambiguate \"0\" from \"o\", tabular numbers, \
+                 you need to disambiguate \u{201C}0\u{201D} from \u{201C}o\u{201D}, tabular numbers, \
                  and much more.",
             )
             .size(15)
-            .style(theme::text::muted)
             .width(Fill),
         ]
         .spacing(40),
     )
-    .padding(padding::horizontal(40).bottom(80))
+    .padding(padding::horizontal(64).bottom(80))
     .width(Fill)
     .into()
 }
@@ -179,11 +217,11 @@ fn description() -> Element<'static, Message> {
 fn alphabet() -> Element<'static, Message> {
     container(
         column![
-            text("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            text("ABCDEFGHIJKLM\nNOPQRSTUVWXYZ")
                 .size(80)
                 .font(inter(font::Weight::Bold))
                 .letter_spacing(LETTER_SPACING),
-            text("abcdefghijklmnopqrstuvwxyz")
+            text("abcdefghijklm\nnopqrstuvwxyz")
                 .size(80)
                 .font(inter(font::Weight::Bold))
                 .letter_spacing(LETTER_SPACING),
@@ -192,7 +230,7 @@ fn alphabet() -> Element<'static, Message> {
                 .font(inter(font::Weight::Bold))
                 .letter_spacing(LETTER_SPACING),
         ]
-        .padding(padding::all(40).bottom(80)),
+        .padding(padding::all(64).bottom(80)),
     )
     .width(Fill)
     .into()
@@ -200,6 +238,7 @@ fn alphabet() -> Element<'static, Message> {
 
 fn weights() -> Element<'static, Message> {
     // (name, weight, value, sample, italic_sample, letter_spacing)
+    // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override to -0.01em
     const RAMP: &[(&str, font::Weight, u16, &str, &str, f32)] = &[
         (
             "Thin",
@@ -223,7 +262,7 @@ fn weights() -> Element<'static, Message> {
             300,
             "Millimeter waves",
             "Rectangular ellipse",
-            0.0,
+            -0.02,
         ),
         (
             "Regular",
@@ -231,7 +270,7 @@ fn weights() -> Element<'static, Message> {
             400,
             "Assimilation engine",
             "3 hours till midnight",
-            0.0,
+            -0.02,
         ),
         (
             "Medium",
@@ -239,7 +278,7 @@ fn weights() -> Element<'static, Message> {
             500,
             "Botanica Francisco",
             "Artificial Intelligence",
-            0.0,
+            -0.02,
         ),
         (
             "SemiBold",
@@ -247,7 +286,7 @@ fn weights() -> Element<'static, Message> {
             600,
             "Spontaneous apes",
             "Sulfur hexafluoride",
-            0.0,
+            -0.02,
         ),
         (
             "Bold",
@@ -255,7 +294,7 @@ fn weights() -> Element<'static, Message> {
             700,
             "15 Mango Avenue",
             "Hospital helicopter",
-            0.0,
+            -0.02,
         ),
         (
             "ExtraBold",
@@ -263,7 +302,7 @@ fn weights() -> Element<'static, Message> {
             800,
             "Comedy Morning",
             "Encyclopedia Abc",
-            0.0,
+            -0.02,
         ),
         (
             "Black",
@@ -271,13 +310,13 @@ fn weights() -> Element<'static, Message> {
             900,
             "Hamburgefonstiv",
             "United Martians",
-            0.0,
+            -0.02,
         ),
     ];
 
     container(responsive(|size| {
         // Website uses font-size: 10vw for single-line weight samples
-        let font_size = (size.width * 0.10).clamp(40.0, 120.0);
+        let font_size = (size.width * 0.10).max(40.0);
 
         let regular_samples = column(RAMP.iter().map(|(name, weight, value, sample, _, ls)| {
             weight_sample(name, *weight, *value, sample, false, *ls, font_size)
@@ -291,7 +330,7 @@ fn weights() -> Element<'static, Message> {
 
         column![regular_samples, italic_samples].spacing(60).into()
     }))
-    .padding(padding::all(40).bottom(80))
+    .padding(padding::all(64).bottom(80))
     .width(Fill)
     .into()
 }
@@ -338,70 +377,85 @@ fn weight_sample<'a>(
 }
 
 fn paragraphs() -> Element<'static, Message> {
-    const PARAGRAPHS: &[(font::Weight, u16, &str)] = &[
+    // (weight, name, sample, letter_spacing)
+    // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override inline
+    const PARAGRAPHS: &[(font::Weight, &str, &str, f32)] = &[
         (
             font::Weight::Thin,
-            100,
+            "Thin",
             "Chemistry is a physical science under natural sciences that covers the elements that make up matter",
+            -0.005,
         ),
         (
             font::Weight::ExtraLight,
-            200,
+            "ExtraLight",
             "The aspect ratio of an image is the ratio of its width to its height, but you already knew that",
+            -0.007,
         ),
         (
             font::Weight::Light,
-            300,
+            "Light",
             "Unlike a moka express, a napoletana does not use the pressure of steam to force the water through the coffee",
+            -0.02,
         ),
         (
             font::Weight::Normal,
-            400,
+            "Regular",
             "The Berlin key, also known as Schlie\u{00DF}zwangschl\u{00FC}ssel, was not designed to make people laugh",
+            -0.02,
         ),
         (
             font::Weight::Medium,
-            500,
+            "Medium",
             "Stanley Kubrick was an American film director, screenwriter, and producer of many films",
+            -0.02,
         ),
         (
             font::Weight::Semibold,
-            600,
+            "SemiBold",
             "Jet Propulsion Laboratory,\nCalifornia Institute of Technology",
+            -0.02,
         ),
         (
             font::Weight::Bold,
-            700,
+            "Bold",
             "The Sicilian Defense is a chess opening that begins with 1.e4 c5",
+            -0.02,
         ),
         (
             font::Weight::ExtraBold,
-            800,
+            "ExtraBold",
             "Padr\u{00F3}n province of A Coru\u{00F1}a, Galicia, northwestern Spain",
+            -0.02,
         ),
         (
             font::Weight::Black,
-            900,
+            "Black",
             "Woven silk pyjamas exchanged for blue quartz crystals",
+            -0.02,
         ),
     ];
 
     container(responsive(|size| {
         // Website uses font-size: 6vw for multi-line samples
-        let font_size = (size.width * 0.06).clamp(24.0, 72.0);
+        let font_size = (size.width * 0.06).max(24.0);
 
-        column(PARAGRAPHS.iter().map(|(weight, value, sample)| {
+        column(PARAGRAPHS.iter().map(|(weight, name, sample, ls)| {
+            let mut t = text(*sample).size(font_size).font(inter(*weight));
+            if *ls != 0.0 {
+                t = t.letter_spacing(*ls);
+            }
             column![
-                text(value.to_string()).size(13).style(theme::text::muted),
-                text(*sample).size(font_size).font(inter(*weight)),
+                text(*name).size(13).style(theme::text::muted),
+                t,
             ]
-            .spacing(4)
+            .spacing(2)
             .into()
         }))
         .spacing(20)
         .into()
     }))
-    .padding(padding::all(40).bottom(80))
+    .padding(padding::all(64).bottom(80))
     .width(Fill)
     .into()
 }
@@ -527,7 +581,7 @@ spectators, or dedicated by a devout prince.";
         .spacing(16)
         .into()
     }))
-    .padding(padding::all(40).bottom(80))
+    .padding(padding::all(64).bottom(80))
     .width(Fill)
     .into()
 }
@@ -741,7 +795,7 @@ fn features() -> Element<'static, Message> {
             ),
         ]
         .spacing(24)
-        .padding(padding::all(40).bottom(80)),
+        .padding(padding::all(64).bottom(80)),
     )
     .width(Fill)
     .style(theme::container::gold)
@@ -760,7 +814,7 @@ fn feature_row<'a>(
             container(
                 text(tag_label)
                     .size(13)
-                    .font(Font::MONOSPACE)
+                    .font(Font::with_name(MONO_FONT))
                     .style(theme::text::dark),
             )
             .padding([2, 6])
@@ -839,7 +893,7 @@ fn feature_listing() -> Element<'static, Message> {
 
     fn feature_entry<'a>(tag: &'a str, name: &'a str) -> Element<'a, Message> {
         row![
-            container(text(tag).size(13).font(Font::MONOSPACE),)
+            container(text(tag).size(13).font(Font::with_name(MONO_FONT)),)
                 .padding([2, 6])
                 .style(theme::container::listing_tag),
             text(name).size(14),
@@ -871,13 +925,11 @@ fn feature_listing() -> Element<'static, Message> {
 
     container(
         column![
-            text("Listing of all features")
-                .size(16)
-                .style(theme::text::muted),
+            text("Listing of all features").size(16),
             row![col1, col2, col3].spacing(20),
         ]
         .spacing(16)
-        .padding(padding::all(40).bottom(80)),
+        .padding(padding::all(64).bottom(80)),
     )
     .width(Fill)
     .into()
@@ -885,28 +937,51 @@ fn feature_listing() -> Element<'static, Message> {
 
 // ------ Networking ------
 
-async fn fetch_bytes(url: &'static str) -> Result<Vec<u8>, String> {
+async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
     use http_body_util::{BodyExt, Empty};
     use hyper::body::Bytes;
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
 
-    let request = hyper::Request::get(url)
-        .body(Empty::<Bytes>::new())
-        .map_err(|e| format!("{e}"))?;
     let client = Client::builder(TokioExecutor::new()).build(hyper_tls::HttpsConnector::new());
-    let response = client.request(request).await.map_err(|e| format!("{e}"))?;
-    let body = response
-        .into_body()
-        .collect()
-        .await
-        .map_err(|e| format!("{e}"))?;
-    Ok(body.to_bytes().to_vec())
+
+    let mut current_url = url.to_string();
+    loop {
+        let request = hyper::Request::get(&current_url)
+            .body(Empty::<Bytes>::new())
+            .map_err(|e| format!("{e}"))?;
+        let response = client.request(request).await.map_err(|e| format!("{e}"))?;
+
+        if response.status().is_redirection() {
+            let location = response
+                .headers()
+                .get("location")
+                .ok_or("redirect without location")?
+                .to_str()
+                .map_err(|e| format!("{e}"))?;
+            current_url = location.to_string();
+            continue;
+        }
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .map_err(|e| format!("{e}"))?;
+        return Ok(body.to_bytes().to_vec());
+    }
 }
 
-fn fetch_font(url: &'static str) -> Task<Message> {
+fn fetch_font(url: &'static str, entry_name: &'static str) -> Task<Message> {
     Task::future(fetch_bytes(url)).then(move |result| match result {
-        Ok(bytes) => iced::font::load(bytes).map(|_| Message::FontLoaded),
+        Ok(zip_bytes) => {
+            let cursor = std::io::Cursor::new(zip_bytes);
+            let mut archive = zip::ZipArchive::new(cursor).expect("valid zip");
+            let mut file = archive.by_name(entry_name).expect("entry in zip");
+            let mut buf = Vec::with_capacity(file.size() as usize);
+            std::io::Read::read_to_end(&mut file, &mut buf).expect("read entry");
+            iced::font::load(buf).map(|_| Message::FontLoaded)
+        }
         Err(_) => Task::none(),
     })
 }
@@ -928,6 +1003,18 @@ mod theme {
         pub fn dark(_theme: &iced::Theme) -> widget::text::Style {
             widget::text::Style {
                 color: Some(color!(0x000000)),
+            }
+        }
+    }
+
+    pub mod button {
+        use super::*;
+
+        pub fn download(_theme: &iced::Theme, _status: widget::button::Status) -> widget::button::Style {
+            widget::button::Style {
+                background: Some(color!(0xFFFFFF).into()),
+                border: iced::border::rounded(6.0),
+                ..Default::default()
             }
         }
     }
