@@ -273,7 +273,12 @@ pub fn to_attributes(
         .weight(to_weight(font.weight))
         .stretch(to_stretch(font.stretch))
         .style(to_style(font.style))
-        .letter_spacing(letter_spacing.0);
+        .letter_spacing(letter_spacing.0)
+        .optical_size(match font.optical_size {
+            font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
+            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
+            font::OpticalSize::None => cosmic_text::OpticalSize::None,
+        });
 
     if !font_features.is_empty() {
         let mut features = cosmic_text::FontFeatures::new();

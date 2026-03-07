@@ -12,6 +12,8 @@ pub struct Font {
     pub stretch: Stretch,
     /// The [`Style`] of the [`Font`].
     pub style: Style,
+    /// Optical size setting for variable fonts with an `opsz` axis.
+    pub optical_size: OpticalSize,
 }
 
 impl Font {
@@ -21,6 +23,7 @@ impl Font {
         weight: Weight::Normal,
         stretch: Stretch::Normal,
         style: Style::Normal,
+        optical_size: OpticalSize::Auto,
     };
 
     /// A monospaced font with normal [`Weight`].
@@ -108,6 +111,60 @@ pub enum Style {
     Normal,
     Italic,
     Oblique,
+}
+
+/// Optical size setting for variable fonts with an `opsz` axis.
+///
+/// The `Fixed` variant stores the value as `u32` bits internally
+/// so that `OpticalSize` can derive `PartialEq`, `Eq`, and `Hash`,
+/// which is required for `Font` to be usable in match patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum OpticalSize {
+    /// Automatically set `opsz` to match the font size (default).
+    #[default]
+    Auto,
+    /// Set `opsz` to a specific value, independent of font size.
+    /// Stored as `f32::to_bits()`.
+    Fixed(u32),
+    /// Disable optical sizing entirely.
+    None,
+}
+
+impl OpticalSize {
+    /// Creates a [`Fixed`](Self::Fixed) optical size from an `f32` value.
+    pub fn fixed(value: f32) -> Self {
+        Self::Fixed(value.to_bits())
+    }
+
+    /// Returns the `f32` value if this is [`Fixed`](Self::Fixed).
+    pub fn value(self) -> Option<f32> {
+        match self {
+            Self::Fixed(bits) => Some(f32::from_bits(bits)),
+            _ => Option::None,
+        }
+    }
+}
+
+/// Whether optical sizing is enabled for a variable font.
+#[deprecated(note = "use `OpticalSize` instead")]
+#[allow(deprecated)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum OpticalSizing {
+    /// Optical sizing is enabled (default).
+    #[default]
+    On,
+    /// Optical sizing is disabled.
+    Off,
+}
+
+#[allow(deprecated)]
+impl From<OpticalSizing> for OpticalSize {
+    fn from(v: OpticalSizing) -> Self {
+        match v {
+            OpticalSizing::On => Self::Auto,
+            OpticalSizing::Off => Self::None,
+        }
+    }
 }
 
 /// A 4-byte OpenType feature tag.
