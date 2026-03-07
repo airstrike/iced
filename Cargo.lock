@@ -1015,7 +1015,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.18.2"
-source = "git+https://github.com/airstrike/cosmic-text?branch=featureful-fonts#69969225060388c099071aed7267e3d0b3e98e8f"
+source = "git+https://github.com/airstrike/cosmic-text?branch=featureful-fonts#ee57818bbf05e1208f49f2cd35e7fbdf6d543e02"
 dependencies = [
  "bitflags 2.11.0",
  "fontdb",

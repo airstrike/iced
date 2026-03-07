@@ -1,11 +1,11 @@
 //! Draw and edit text.
+use crate::core::font;
 use crate::core::text::editor::{
     self, Action, Cursor, Direction, Edit, Motion, Position, Selection,
 };
 use crate::core::text::highlighter::{self, Highlighter};
 use crate::core::text::{LineHeight, Wrapping};
 use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
-use crate::core::font;
 use crate::text;
 
 use cosmic_text::Edit as _;
@@ -663,7 +663,8 @@ impl editor::Editor for Editor {
 
         let mut font_system = text::font_system().write().expect("Write font system");
 
-        let attributes = text::to_attributes(font, internal.letter_spacing, &internal.font_features);
+        let attributes =
+            text::to_attributes(font, internal.letter_spacing, &internal.font_features);
 
         for line in &mut buffer_mut_from_editor(&mut internal.editor).lines
             [current_line..=last_visible_line]
@@ -679,7 +680,11 @@ impl editor::Editor for Editor {
                         &cosmic_text::Attrs {
                             color_opt: format.color.map(text::to_color),
                             ..if let Some(font) = format.font {
-                                text::to_attributes(font, internal.letter_spacing, &internal.font_features)
+                                text::to_attributes(
+                                    font,
+                                    internal.letter_spacing,
+                                    &internal.font_features,
+                                )
                             } else {
                                 attributes.clone()
                             }

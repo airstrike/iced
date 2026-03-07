@@ -12,6 +12,8 @@ pub struct Font {
     pub stretch: Stretch,
     /// The [`Style`] of the [`Font`].
     pub style: Style,
+    /// Optical size setting for variable fonts with an `opsz` axis.
+    pub optical_size: OpticalSize,
 }
 
 impl Font {
@@ -21,6 +23,7 @@ impl Font {
         weight: Weight::Normal,
         stretch: Stretch::Normal,
         style: Style::Normal,
+        optical_size: OpticalSize::Auto,
     };
 
     /// A monospaced font with normal [`Weight`].
@@ -108,6 +111,61 @@ pub enum Style {
     Normal,
     Italic,
     Oblique,
+}
+
+/// Optical size setting for variable fonts with an `opsz` axis.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum OpticalSize {
+    /// Automatically set `opsz` to match the font size (default).
+    #[default]
+    Auto,
+    /// Set `opsz` to a specific value, independent of font size.
+    Fixed(f32),
+    /// Disable optical sizing entirely.
+    None,
+}
+
+impl PartialEq for OpticalSize {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Auto, Self::Auto) | (Self::None, Self::None) => true,
+            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for OpticalSize {}
+
+impl Hash for OpticalSize {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        if let Self::Fixed(v) = self {
+            v.to_bits().hash(state);
+        }
+    }
+}
+
+/// Whether optical sizing is enabled for a variable font.
+#[deprecated(note = "use `OpticalSize` instead")]
+#[allow(deprecated)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum OpticalSizing {
+    /// Optical sizing is enabled (default).
+    #[default]
+    On,
+    /// Optical sizing is disabled.
+    Off,
+}
+
+#[allow(deprecated)]
+impl From<OpticalSizing> for OpticalSize {
+    fn from(v: OpticalSizing) -> Self {
+        match v {
+            OpticalSizing::On => Self::Auto,
+            OpticalSizing::Off => Self::None,
+        }
+    }
 }
 
 /// A 4-byte OpenType feature tag.

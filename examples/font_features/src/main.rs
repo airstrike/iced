@@ -1,6 +1,7 @@
 use iced::font;
 use iced::widget::{
-    Space, button, column, container, responsive, rich_text, row, rule, scrollable, span, text,
+    Space, button, column, container, responsive, rich_text, right, row, rule, scrollable, slider,
+    span, stack, text,
 };
 use iced::{Center, Color, Element, Fill, Font, Task, color, padding};
 
@@ -21,10 +22,13 @@ enum Message {
     FontLoaded,
     MonoFontLoaded,
     Download,
+    SetOpsz(f32),
 }
 
 struct App {
     loaded: bool,
+    /// Slider value: 13 = none, 14–32 = fixed, 33 = auto
+    opsz_slider: f32,
 }
 
 const FONT_NAME: &str = "Inter Variable";
@@ -43,7 +47,13 @@ impl App {
             "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
             "InterVariable.ttf",
         );
-        (Self { loaded: false }, load_inter)
+        (
+            Self {
+                loaded: false,
+                opsz_slider: 33.0,
+            },
+            load_inter,
+        )
     }
 
     fn theme(&self) -> iced::Theme {
@@ -72,12 +82,17 @@ impl App {
                 });
             }
             Message::MonoFontLoaded => {}
+            Message::SetOpsz(v) => self.opsz_slider = v,
             Message::Download => {
                 let url = "https://github.com/rsms/inter/releases/latest";
                 #[cfg(not(target_arch = "wasm32"))]
-                { let _ = open::that(url); }
+                {
+                    let _ = open::that(url);
+                }
                 #[cfg(target_arch = "wasm32")]
-                { let _ = web_sys::window().and_then(|w| w.open_with_url(url).ok()); }
+                {
+                    let _ = web_sys::window().and_then(|w| w.open_with_url(url).ok());
+                }
             }
         }
         Task::none()
@@ -90,28 +105,77 @@ impl App {
                 .into();
         }
 
-        scrollable(
+        // Slider: 13 = none, 14–32 = fixed(v), 33 = auto
+        let v = self.opsz_slider;
+        let opsz = v; // pass raw value; `to_optical_size` handles mapping
+
+        let slider_label = if v < 14.0 {
+            "none".to_string()
+        } else if v > 32.0 {
+            "auto".to_string()
+        } else {
+            format!("{v:.1}")
+        };
+
+        let opsz_control = row![
+            text("opsz").size(13),
+            slider(13.0..=33.0, v, Message::SetOpsz)
+                .step(0.5)
+                .width(120),
+            container(text(slider_label).size(13)).width(40),
+        ]
+        .spacing(8)
+        .align_y(Center);
+
+        let content = scrollable(
             column![
-                hero(),
-                description(),
-                alphabet(),
-                weights(),
-                paragraphs(),
-                example_text(),
-                features(),
+                hero(opsz),
+                description(opsz),
+                alphabet(opsz),
+                weights(opsz),
+                paragraphs(opsz),
+                example_text(opsz),
+                features(opsz),
                 feature_listing(),
             ]
             .width(Fill),
-        )
+        );
+
+        stack![
+            content,
+            right(opsz_control).padding(padding::all(64).top(80)),
+        ]
         .into()
     }
 }
 
 // ------ Helpers ------
 
+/// Map slider value to `OpticalSize`:
+/// - < 14 → disabled (`OpticalSize::None`)
+/// - 14–32 → fixed (`OpticalSize::Fixed(v)`)
+/// - > 32 → auto (`OpticalSize::Auto`)
+fn to_optical_size(v: f32) -> font::OpticalSize {
+    if v < 14.0 {
+        font::OpticalSize::None
+    } else if v > 32.0 {
+        font::OpticalSize::Auto
+    } else {
+        font::OpticalSize::Fixed(v)
+    }
+}
+
 fn inter(weight: font::Weight) -> Font {
     Font {
         weight,
+        ..Font::with_name(FONT_NAME)
+    }
+}
+
+fn inter_opsz(weight: font::Weight, opsz: f32) -> Font {
+    Font {
+        weight,
+        optical_size: to_optical_size(opsz),
         ..Font::with_name(FONT_NAME)
     }
 }
@@ -148,14 +212,14 @@ fn sample_text(marked: &str, tag: font::Tag, on: bool) -> Element<'_, Message> {
 
 // ------ Sections ------
 
-fn hero() -> Element<'static, Message> {
-    container(responsive(|size| {
+fn hero(opsz: f32) -> Element<'static, Message> {
+    container(responsive(move |size| {
         // calc(100vw / 8) = 12.5% of viewport width
         let font_size = size.width * 0.125;
 
         text("The Inter\ntypeface family")
             .size(font_size)
-            .font(inter(font::Weight::Bold))
+            .font(inter_opsz(font::Weight::Bold, opsz))
             .letter_spacing(-0.03)
             .line_height(1.0)
             .into()
@@ -165,17 +229,17 @@ fn hero() -> Element<'static, Message> {
     .into()
 }
 
-fn description() -> Element<'static, Message> {
+fn description(opsz: f32) -> Element<'static, Message> {
     container(
         row![
             column![
                 text("The 21st century standard")
                     .size(16)
-                    .font(inter(font::Weight::Semibold)),
+                    .font(inter_opsz(font::Weight::Semibold, opsz)),
                 button(
                     text("Download \u{2193}")
                         .size(16)
-                        .font(inter(font::Weight::Medium))
+                        .font(inter_opsz(font::Weight::Medium, opsz))
                         .letter_spacing(0.02)
                         .style(theme::text::dark),
                 )
@@ -199,6 +263,7 @@ fn description() -> Element<'static, Message> {
                  instrumentation & medical equipment.",
             )
             .size(15)
+            .font(inter_opsz(font::Weight::Normal, opsz))
             .width(Fill),
             text(
                 "The smaller \u{201C}text\u{201D} optical-size designs features a tall \
@@ -213,6 +278,7 @@ fn description() -> Element<'static, Message> {
                  and much more.",
             )
             .size(15)
+            .font(inter_opsz(font::Weight::Normal, opsz))
             .width(Fill),
         ]
         .spacing(40),
@@ -222,20 +288,21 @@ fn description() -> Element<'static, Message> {
     .into()
 }
 
-fn alphabet() -> Element<'static, Message> {
+fn alphabet(opsz: f32) -> Element<'static, Message> {
+    let bold = inter_opsz(font::Weight::Bold, opsz);
     container(
         column![
             text("ABCDEFGHIJKLM\nNOPQRSTUVWXYZ")
                 .size(80)
-                .font(inter(font::Weight::Bold))
+                .font(bold)
                 .letter_spacing(LETTER_SPACING),
             text("abcdefghijklm\nnopqrstuvwxyz")
                 .size(80)
-                .font(inter(font::Weight::Bold))
+                .font(bold)
                 .letter_spacing(LETTER_SPACING),
             text("0123456789 &\u{2192}!")
                 .size(80)
-                .font(inter(font::Weight::Bold))
+                .font(bold)
                 .letter_spacing(LETTER_SPACING),
         ]
         .padding(padding::all(64).bottom(80)),
@@ -244,7 +311,7 @@ fn alphabet() -> Element<'static, Message> {
     .into()
 }
 
-fn weights() -> Element<'static, Message> {
+fn weights(opsz: f32) -> Element<'static, Message> {
     // (name, weight, value, sample, italic_sample, letter_spacing)
     // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override to -0.01em
     const RAMP: &[(&str, font::Weight, u16, &str, &str, f32)] = &[
@@ -322,17 +389,17 @@ fn weights() -> Element<'static, Message> {
         ),
     ];
 
-    container(responsive(|size| {
+    container(responsive(move |size| {
         // Website uses font-size: 10vw for single-line weight samples
         let font_size = (size.width * 0.10).max(40.0);
 
         let regular_samples = column(RAMP.iter().map(|(name, weight, value, sample, _, ls)| {
-            weight_sample(name, *weight, *value, sample, false, *ls, font_size)
+            weight_sample(name, *weight, *value, sample, false, *ls, font_size, opsz)
         }))
         .spacing(24);
 
         let italic_samples = column(RAMP.iter().map(|(name, weight, value, _, italic, ls)| {
-            weight_sample(name, *weight, *value, italic, true, *ls, font_size)
+            weight_sample(name, *weight, *value, italic, true, *ls, font_size, opsz)
         }))
         .spacing(24);
 
@@ -351,6 +418,7 @@ fn weight_sample<'a>(
     italic: bool,
     letter_spacing: f32,
     font_size: f32,
+    opsz: f32,
 ) -> Element<'a, Message> {
     let style_label = if italic {
         format!("{name} Italic")
@@ -365,6 +433,7 @@ fn weight_sample<'a>(
         } else {
             font::Style::Normal
         },
+        optical_size: to_optical_size(opsz),
         ..Font::with_name(FONT_NAME)
     };
 
@@ -384,7 +453,7 @@ fn weight_sample<'a>(
     .into()
 }
 
-fn paragraphs() -> Element<'static, Message> {
+fn paragraphs(opsz: f32) -> Element<'static, Message> {
     // (weight, name, sample, letter_spacing)
     // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override inline
     const PARAGRAPHS: &[(font::Weight, &str, &str, f32)] = &[
@@ -444,21 +513,20 @@ fn paragraphs() -> Element<'static, Message> {
         ),
     ];
 
-    container(responsive(|size| {
+    container(responsive(move |size| {
         // Website uses font-size: 6vw for multi-line samples
         let font_size = (size.width * 0.06).max(24.0);
 
         column(PARAGRAPHS.iter().map(|(weight, name, sample, ls)| {
-            let mut t = text(*sample).size(font_size).font(inter(*weight));
+            let mut t = text(*sample)
+                .size(font_size)
+                .font(inter_opsz(*weight, opsz));
             if *ls != 0.0 {
                 t = t.letter_spacing(*ls);
             }
-            column![
-                text(*name).size(13).style(theme::text::muted),
-                t,
-            ]
-            .spacing(2)
-            .into()
+            column![text(*name).size(13).style(theme::text::muted), t,]
+                .spacing(2)
+                .into()
         }))
         .spacing(20)
         .into()
@@ -468,7 +536,7 @@ fn paragraphs() -> Element<'static, Message> {
     .into()
 }
 
-fn example_text() -> Element<'static, Message> {
+fn example_text(opsz: f32) -> Element<'static, Message> {
     const PASSAGE_1: &str = "\
 One of the most famous lighthouses of antiquity, as I have already \
 pointed out, was the pharos of Alexandria, which ancient writers \
@@ -545,6 +613,7 @@ spectators, or dedicated by a devout prince.";
 
     let italic = Font {
         style: font::Style::Italic,
+        optical_size: to_optical_size(opsz),
         ..Font::with_name(FONT_NAME)
     };
 
@@ -594,7 +663,7 @@ spectators, or dedicated by a devout prince.";
     .into()
 }
 
-fn features() -> Element<'static, Message> {
+fn features(opsz: f32) -> Element<'static, Message> {
     container(
         column![
             // Header
@@ -602,7 +671,7 @@ fn features() -> Element<'static, Message> {
                 column![
                     text("Features")
                         .size(32)
-                        .font(inter(font::Weight::Semibold))
+                        .font(inter_opsz(font::Weight::Semibold, opsz))
                         .style(theme::text::dark),
                     text(
                         "Inter comes with many OpenType features which can be \
@@ -618,7 +687,7 @@ fn features() -> Element<'static, Message> {
                 Space::new().width(Fill),
                 text("altG16I")
                     .size(80)
-                    .font(inter(font::Weight::Normal))
+                    .font(inter_opsz(font::Weight::Normal, opsz))
                     .font_feature(font::Feature::on(font::Tag(*b"cv01")))
                     .font_feature(font::Feature::on(font::Tag(*b"cv03")))
                     .font_feature(font::Feature::on(font::Tag(*b"cv04")))
@@ -634,18 +703,9 @@ fn features() -> Element<'static, Message> {
             rule::horizontal(2).style(theme::rule::black),
             // Column headers
             row![
-                text("Feature")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(220),
-                text("Off")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(Fill),
-                text("On")
-                    .size(16)
-                    .style(theme::text::dark)
-                    .width(Fill),
+                text("Feature").size(16).style(theme::text::dark).width(220),
+                text("Off").size(16).style(theme::text::dark).width(Fill),
+                text("On").size(16).style(theme::text::dark).width(Fill),
             ]
             .spacing(20),
             // Feature rows (matching rsms.me/inter)
@@ -912,7 +972,7 @@ fn feature_listing() -> Element<'static, Message> {
     }
 
     // Split features into 3 roughly-equal columns
-    let per_col = (FEATURES.len() + 2) / 3;
+    let per_col = FEATURES.len().div_ceil(3);
     let col1 = column(FEATURES[..per_col].iter().map(|(t, n)| feature_entry(t, n)))
         .spacing(6)
         .width(Fill);
@@ -994,7 +1054,10 @@ mod theme {
     pub mod button {
         use super::*;
 
-        pub fn download(_theme: &iced::Theme, _status: widget::button::Status) -> widget::button::Style {
+        pub fn download(
+            _theme: &iced::Theme,
+            _status: widget::button::Status,
+        ) -> widget::button::Style {
             widget::button::Style {
                 background: Some(color!(0xFFFFFF).into()),
                 border: iced::border::rounded(6.0),
