@@ -751,6 +751,21 @@ impl graphics::text::Renderer for Renderer {
     }
 }
 
+impl core::text::rich_editor::Renderer for Renderer {
+    type RichEditor = graphics::rich::Editor;
+
+    fn fill_rich_editor(
+        &mut self,
+        editor: &Self::RichEditor,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    ) {
+        let (layer, transformation) = self.layers.current_mut();
+        layer.draw_rich_editor(editor, position, color, clip_bounds, transformation);
+    }
+}
+
 #[cfg(feature = "image")]
 impl core::image::Renderer for Renderer {
     type Handle = core::image::Handle;
