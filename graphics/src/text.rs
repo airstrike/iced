@@ -13,6 +13,7 @@ use crate::core::alignment;
 use crate::core::font::{self, Font};
 use crate::core::text::{Alignment, Ellipsis, Shaping, Wrapping};
 use crate::core::{Color, Em, Pixels, Point, Rectangle, Size, Transformation};
+use crate::rich;
 
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -34,6 +35,15 @@ pub enum Text {
     #[allow(missing_docs)]
     Editor {
         editor: editor::Weak,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+        transformation: Transformation,
+    },
+    /// A rich editor.
+    #[allow(missing_docs)]
+    RichEditor {
+        editor: rich::editor::Weak,
         position: Point,
         color: Color,
         clip_bounds: Rectangle,
@@ -92,6 +102,15 @@ impl Text {
                 .intersection(clip_bounds)
                 .map(|bounds| bounds * *transformation),
             Text::Editor {
+                editor,
+                position,
+                clip_bounds,
+                transformation,
+                ..
+            } => Rectangle::new(*position, editor.bounds)
+                .intersection(clip_bounds)
+                .map(|bounds| bounds * *transformation),
+            Text::RichEditor {
                 editor,
                 position,
                 clip_bounds,
@@ -338,7 +357,8 @@ fn to_style(style: font::Style) -> cosmic_text::Style {
     }
 }
 
-fn to_align(alignment: Alignment) -> Option<cosmic_text::Align> {
+/// Converts an [`Alignment`] to a [`cosmic_text::Align`].
+pub fn to_align(alignment: Alignment) -> Option<cosmic_text::Align> {
     match alignment {
         Alignment::Default => None,
         Alignment::Left => Some(cosmic_text::Align::Left),
