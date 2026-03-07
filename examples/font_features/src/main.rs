@@ -1,9 +1,9 @@
 use iced::font;
 use iced::widget::{
     Space, button, column, container, responsive, rich_text, right, row, rule, scrollable, slider,
-    span, stack, text,
+    span, stack, text, toggler,
 };
-use iced::{Center, Color, Element, Fill, Font, Task, color, padding};
+use iced::{Center, Color, Element, Fill, Font, Task, color, gradient, padding};
 
 pub fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
@@ -23,12 +23,14 @@ enum Message {
     MonoFontLoaded,
     Download,
     SetOpsz(f32),
+    ToggleLetterSpacing(bool),
 }
 
 struct App {
     loaded: bool,
     /// Slider value: 13 = none, 14–32 = fixed, 33 = auto
     opsz_slider: f32,
+    letter_spacing: bool,
 }
 
 const FONT_NAME: &str = "Inter Variable";
@@ -41,6 +43,7 @@ impl App {
             Self {
                 loaded: false,
                 opsz_slider: 33.0,
+                letter_spacing: true,
             },
             fetch_font(
                 "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
@@ -76,6 +79,7 @@ impl App {
             }
             Message::MonoFontLoaded => {}
             Message::SetOpsz(v) => self.opsz_slider = v,
+            Message::ToggleLetterSpacing(v) => self.letter_spacing = v,
             Message::Download => {
                 let _ = open::that("https://github.com/rsms/inter/releases/latest");
             }
@@ -92,7 +96,8 @@ impl App {
 
         // Slider: 13 = none, 14–32 = fixed(v), 33 = auto
         let v = self.opsz_slider;
-        let opsz = v; // pass raw value; `to_optical_size` handles mapping
+        let opsz = v;
+        let ls = if self.letter_spacing { 1.0 } else { 0.0 };
 
         let slider_label = if v < 14.0 {
             "none".to_string()
@@ -102,8 +107,13 @@ impl App {
             format!("{v:.1}")
         };
 
-        let opsz_control = row![
-            text("opsz").size(13),
+        let controls = row![
+            text("tracking:").size(13),
+            toggler(self.letter_spacing)
+                .on_toggle(Message::ToggleLetterSpacing)
+                .size(20),
+            Space::new().width(8),
+            text("opsz:").size(13),
             slider(13.0..=33.0, v, Message::SetOpsz)
                 .step(0.5)
                 .width(120),
@@ -114,11 +124,11 @@ impl App {
 
         let content = scrollable(
             column![
-                hero(opsz),
-                description(opsz),
-                alphabet(opsz),
-                weights(opsz),
-                paragraphs(opsz),
+                hero(opsz, ls),
+                description(opsz, ls),
+                alphabet(opsz, ls),
+                weights(opsz, ls),
+                paragraphs(opsz, ls),
                 example_text(opsz),
                 features(opsz),
                 feature_listing(),
@@ -126,11 +136,17 @@ impl App {
             .width(Fill),
         );
 
-        stack![
-            content,
-            right(opsz_control).padding(padding::all(64).top(80)),
-        ]
-        .into()
+        let controls_bar = container(right(controls).padding(padding::horizontal(64)))
+            .width(Fill)
+            .padding(padding::vertical(16))
+            .style(|_theme: &iced::Theme| {
+                gradient::Linear::new(std::f32::consts::PI)
+                    .add_stop(0.0, color!(0x111111).scale_alpha(0.5))
+                    .add_stop(1.0, color!(0x111111).scale_alpha(0.0))
+                    .into()
+            });
+
+        stack![content, controls_bar].into()
     }
 }
 
@@ -197,7 +213,7 @@ fn sample_text(marked: &str, tag: font::Tag, on: bool) -> Element<'_, Message> {
 
 // ------ Sections ------
 
-fn hero(opsz: f32) -> Element<'static, Message> {
+fn hero(opsz: f32, ls: f32) -> Element<'static, Message> {
     container(responsive(move |size| {
         // calc(100vw / 8) = 12.5% of viewport width
         let font_size = size.width * 0.125;
@@ -205,7 +221,7 @@ fn hero(opsz: f32) -> Element<'static, Message> {
         text("The Inter\ntypeface family")
             .size(font_size)
             .font(inter_opsz(font::Weight::Bold, opsz))
-            .letter_spacing(-0.03)
+            .letter_spacing(-0.03 * ls)
             .line_height(1.0)
             .into()
     }))
@@ -214,7 +230,7 @@ fn hero(opsz: f32) -> Element<'static, Message> {
     .into()
 }
 
-fn description(opsz: f32) -> Element<'static, Message> {
+fn description(opsz: f32, ls: f32) -> Element<'static, Message> {
     container(
         row![
             column![
@@ -225,7 +241,7 @@ fn description(opsz: f32) -> Element<'static, Message> {
                     text("Download \u{2193}")
                         .size(16)
                         .font(inter_opsz(font::Weight::Medium, opsz))
-                        .letter_spacing(0.02)
+                        .letter_spacing(0.02 * ls)
                         .style(theme::text::dark),
                 )
                 .on_press(Message::Download)
@@ -273,22 +289,22 @@ fn description(opsz: f32) -> Element<'static, Message> {
     .into()
 }
 
-fn alphabet(opsz: f32) -> Element<'static, Message> {
+fn alphabet(opsz: f32, ls: f32) -> Element<'static, Message> {
     let bold = inter_opsz(font::Weight::Bold, opsz);
     container(
         column![
             text("ABCDEFGHIJKLM\nNOPQRSTUVWXYZ")
                 .size(80)
                 .font(bold)
-                .letter_spacing(LETTER_SPACING),
+                .letter_spacing(LETTER_SPACING * ls),
             text("abcdefghijklm\nnopqrstuvwxyz")
                 .size(80)
                 .font(bold)
-                .letter_spacing(LETTER_SPACING),
+                .letter_spacing(LETTER_SPACING * ls),
             text("0123456789 &\u{2192}!")
                 .size(80)
                 .font(bold)
-                .letter_spacing(LETTER_SPACING),
+                .letter_spacing(LETTER_SPACING * ls),
         ]
         .padding(padding::all(64).bottom(80)),
     )
@@ -296,7 +312,7 @@ fn alphabet(opsz: f32) -> Element<'static, Message> {
     .into()
 }
 
-fn weights(opsz: f32) -> Element<'static, Message> {
+fn weights(opsz: f32, ls: f32) -> Element<'static, Message> {
     // (name, weight, value, sample, italic_sample, letter_spacing)
     // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override to -0.01em
     const RAMP: &[(&str, font::Weight, u16, &str, &str, f32)] = &[
@@ -378,14 +394,36 @@ fn weights(opsz: f32) -> Element<'static, Message> {
         // Website uses font-size: 10vw for single-line weight samples
         let font_size = (size.width * 0.10).max(40.0);
 
-        let regular_samples = column(RAMP.iter().map(|(name, weight, value, sample, _, ls)| {
-            weight_sample(name, *weight, *value, sample, false, *ls, font_size, opsz)
-        }))
+        let regular_samples = column(RAMP.iter().map(
+            |(name, weight, value, sample, _, spacing)| {
+                weight_sample(
+                    name,
+                    *weight,
+                    *value,
+                    sample,
+                    false,
+                    *spacing * ls,
+                    font_size,
+                    opsz,
+                )
+            },
+        ))
         .spacing(24);
 
-        let italic_samples = column(RAMP.iter().map(|(name, weight, value, _, italic, ls)| {
-            weight_sample(name, *weight, *value, italic, true, *ls, font_size, opsz)
-        }))
+        let italic_samples = column(RAMP.iter().map(
+            |(name, weight, value, _, italic, spacing)| {
+                weight_sample(
+                    name,
+                    *weight,
+                    *value,
+                    italic,
+                    true,
+                    *spacing * ls,
+                    font_size,
+                    opsz,
+                )
+            },
+        ))
         .spacing(24);
 
         column![regular_samples, italic_samples].spacing(60).into()
@@ -438,7 +476,7 @@ fn weight_sample<'a>(
     .into()
 }
 
-fn paragraphs(opsz: f32) -> Element<'static, Message> {
+fn paragraphs(opsz: f32, ls: f32) -> Element<'static, Message> {
     // (weight, name, sample, letter_spacing)
     // Base CSS is letter-spacing: -0.02em; Thin/ExtraLight override inline
     const PARAGRAPHS: &[(font::Weight, &str, &str, f32)] = &[
@@ -502,12 +540,13 @@ fn paragraphs(opsz: f32) -> Element<'static, Message> {
         // Website uses font-size: 6vw for multi-line samples
         let font_size = (size.width * 0.06).max(24.0);
 
-        column(PARAGRAPHS.iter().map(|(weight, name, sample, ls)| {
+        column(PARAGRAPHS.iter().map(|(weight, name, sample, spacing)| {
+            let effective_ls = *spacing * ls;
             let mut t = text(*sample)
                 .size(font_size)
                 .font(inter_opsz(*weight, opsz));
-            if *ls != 0.0 {
-                t = t.letter_spacing(*ls);
+            if effective_ls != 0.0 {
+                t = t.letter_spacing(effective_ls);
             }
             column![text(*name).size(13).style(theme::text::muted), t,]
                 .spacing(2)
