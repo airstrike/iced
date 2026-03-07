@@ -161,7 +161,7 @@ fn to_optical_size(v: f32) -> font::OpticalSize {
     } else if v > 32.0 {
         font::OpticalSize::Auto
     } else {
-        font::OpticalSize::Fixed(v)
+        font::OpticalSize::fixed(v)
     }
 }
 

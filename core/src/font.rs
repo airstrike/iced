@@ -114,34 +114,33 @@ pub enum Style {
 }
 
 /// Optical size setting for variable fonts with an `opsz` axis.
-#[derive(Debug, Clone, Copy, Default)]
+///
+/// The `Fixed` variant stores the value as `u32` bits internally
+/// so that `OpticalSize` can derive `PartialEq`, `Eq`, and `Hash`,
+/// which is required for `Font` to be usable in match patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum OpticalSize {
     /// Automatically set `opsz` to match the font size (default).
     #[default]
     Auto,
     /// Set `opsz` to a specific value, independent of font size.
-    Fixed(f32),
+    /// Stored as `f32::to_bits()`.
+    Fixed(u32),
     /// Disable optical sizing entirely.
     None,
 }
 
-impl PartialEq for OpticalSize {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Auto, Self::Auto) | (Self::None, Self::None) => true,
-            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits() == b.to_bits(),
-            _ => false,
-        }
+impl OpticalSize {
+    /// Creates a [`Fixed`](Self::Fixed) optical size from an `f32` value.
+    pub fn fixed(value: f32) -> Self {
+        Self::Fixed(value.to_bits())
     }
-}
 
-impl Eq for OpticalSize {}
-
-impl Hash for OpticalSize {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
-        if let Self::Fixed(v) = self {
-            v.to_bits().hash(state);
+    /// Returns the `f32` value if this is [`Fixed`](Self::Fixed).
+    pub fn value(self) -> Option<f32> {
+        match self {
+            Self::Fixed(bits) => Some(f32::from_bits(bits)),
+            _ => Option::None,
         }
     }
 }

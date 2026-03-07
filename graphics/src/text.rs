@@ -276,7 +276,7 @@ pub fn to_attributes(
         .letter_spacing(letter_spacing.0)
         .optical_size(match font.optical_size {
             font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
-            font::OpticalSize::Fixed(v) => cosmic_text::OpticalSize::Fixed(v),
+            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
             font::OpticalSize::None => cosmic_text::OpticalSize::None,
         });
 
