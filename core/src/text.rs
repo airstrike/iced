@@ -2,10 +2,13 @@
 pub mod editor;
 pub mod highlighter;
 pub mod paragraph;
+pub mod rich_editor;
 
 pub use editor::Editor;
 pub use highlighter::Highlighter;
 pub use paragraph::Paragraph;
+// Don't re-export rich_editor::Editor at the top level to avoid name clash.
+// Users access it via text::rich_editor::Editor.
 
 use crate::alignment;
 use crate::font;

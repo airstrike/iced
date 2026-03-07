@@ -237,6 +237,99 @@ impl text::Editor for () {
     }
 }
 
+impl text::rich_editor::Editor for () {
+    type Font = Font;
+
+    fn with_text(_text: &str) -> Self {}
+
+    fn is_empty(&self) -> bool {
+        true
+    }
+
+    fn cursor(&self) -> text::editor::Cursor {
+        text::editor::Cursor {
+            position: text::editor::Position { line: 0, column: 0 },
+            selection: None,
+        }
+    }
+
+    fn selection(&self) -> text::editor::Selection {
+        text::editor::Selection::Caret(Point::ORIGIN)
+    }
+
+    fn copy(&self) -> Option<String> {
+        None
+    }
+
+    fn line(&self, _index: usize) -> Option<text::editor::Line<'_>> {
+        None
+    }
+
+    fn line_count(&self) -> usize {
+        0
+    }
+
+    fn perform(&mut self, _action: text::editor::Action) {}
+
+    fn move_to(&mut self, _cursor: text::editor::Cursor) {}
+
+    fn bounds(&self) -> Size {
+        Size::ZERO
+    }
+
+    fn hint_factor(&self) -> Option<f32> {
+        None
+    }
+
+    fn min_bounds(&self) -> Size {
+        Size::ZERO
+    }
+
+    fn update(
+        &mut self,
+        _new_bounds: Size,
+        _new_font: Self::Font,
+        _new_size: Pixels,
+        _new_line_height: text::LineHeight,
+        _new_letter_spacing: Em,
+        _new_font_features: Vec<crate::font::Feature>,
+        _new_wrapping: text::Wrapping,
+        _new_hint_factor: Option<f32>,
+    ) {
+    }
+
+    fn set_span_style(
+        &mut self,
+        _line: usize,
+        _range: std::ops::Range<usize>,
+        _style: &text::rich_editor::Style,
+    ) {
+    }
+
+    fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::ParagraphStyle) {}
+
+    fn style_at(&self, _line: usize, _column: usize) -> text::rich_editor::Style {
+        text::rich_editor::Style::default()
+    }
+
+    fn paragraph_style(&self, _line: usize) -> text::rich_editor::ParagraphStyle {
+        text::rich_editor::ParagraphStyle::default()
+    }
+}
+
+impl text::rich_editor::Renderer for () {
+    type RichEditor = ();
+
+    fn fill_rich_editor(
+        &mut self,
+        _editor: &Self::RichEditor,
+        _position: Point,
+        _color: Color,
+        _clip_bounds: Rectangle,
+    ) {
+    }
+}
+
 impl image::Renderer for () {
     type Handle = image::Handle;
 
