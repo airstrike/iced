@@ -223,24 +223,35 @@ impl rich_editor::Editor for Editor {
                         };
 
                         if is_cursor_before_start {
-                            Some((i - 1, layout[i - 1].w))
+                            // Cursor is before this visual line — it's on the
+                            // previous one, at the end.
+                            let prev = &layout[i - 1];
+                            let offset = prev.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0);
+                            Some((i - 1, offset))
                         } else if is_cursor_before_end {
+                            // Use absolute glyph position
                             let offset = line
                                 .glyphs
                                 .iter()
                                 .take_while(|glyph| cursor.index > glyph.start)
-                                .map(|glyph| glyph.w)
-                                .sum();
+                                .last()
+                                .map(|g| g.x + g.w)
+                                .unwrap_or_else(|| line.glyphs.first().map(|g| g.x).unwrap_or(0.0));
 
                             Some((i, offset))
                         } else {
                             None
                         }
                     })
-                    .unwrap_or((
-                        layout.len().saturating_sub(1),
-                        layout.last().map(|line| line.w).unwrap_or(0.0),
-                    ));
+                    .unwrap_or_else(|| {
+                        let last_idx = layout.len().saturating_sub(1);
+                        let offset = layout
+                            .last()
+                            .and_then(|line| line.glyphs.last())
+                            .map(|g| g.x + g.w)
+                            .unwrap_or(0.0);
+                        (last_idx, offset)
+                    });
 
                 Selection::Caret(Point::new(
                     offset / internal.hint_factor,
@@ -864,24 +875,31 @@ fn highlight_line(
         if range.is_empty() {
             (0.0, 0.0)
         } else if range.start == start && range.end == end {
-            (0.0, visual_line.w)
+            // Full line selected — use first glyph's x position
+            let x = visual_line
+                .glyphs
+                .first()
+                .map(|glyph| glyph.x)
+                .unwrap_or(0.0);
+            (x, visual_line.w)
         } else {
+            // Use absolute glyph positions (accounts for text alignment)
             let first_glyph = visual_line
                 .glyphs
                 .iter()
-                .position(|glyph| range.start <= glyph.start)
-                .unwrap_or(0);
+                .find(|glyph| range.start <= glyph.start);
 
-            let mut glyphs = visual_line.glyphs.iter();
+            let x = first_glyph.map(|g| g.x).unwrap_or(0.0);
 
-            let x = glyphs.by_ref().take(first_glyph).map(|glyph| glyph.w).sum();
+            let last_glyph = visual_line
+                .glyphs
+                .iter()
+                .rev()
+                .find(|glyph| range.end > glyph.start);
 
-            let width: f32 = glyphs
-                .take_while(|glyph| range.end > glyph.start)
-                .map(|glyph| glyph.w)
-                .sum();
+            let end_x = last_glyph.map(|g| g.x + g.w).unwrap_or(x);
 
-            (x, width)
+            (x, (end_x - x).max(0.0))
         }
     })
 }
