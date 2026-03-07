@@ -166,6 +166,29 @@ where
     }
 }
 
+impl<A, B> core::text::rich_editor::Renderer for Renderer<A, B>
+where
+    A: core::text::rich_editor::Renderer,
+    B: core::text::rich_editor::Renderer<RichEditor = A::RichEditor>
+        + core::text::Renderer<Font = A::Font, Paragraph = A::Paragraph, Editor = A::Editor>,
+{
+    type RichEditor = A::RichEditor;
+
+    fn fill_rich_editor(
+        &mut self,
+        editor: &Self::RichEditor,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.fill_rich_editor(editor, position, color, clip_bounds)
+        );
+    }
+}
+
 impl<A, B> image::Renderer for Renderer<A, B>
 where
     A: image::Renderer,
