@@ -269,29 +269,44 @@ impl rich_editor::Editor for Editor {
 
     fn cursor(&self) -> Cursor {
         let editor = &self.internal().document;
+        let cursor_pos = editor.cursor();
 
-        let position = {
-            let cursor = editor.cursor();
+        // Use selection_bounds() to get the actual selected range.
+        // This is important for Word/Line selections where the raw
+        // Selection variant stores the click point, not the boundaries.
+        match editor.selection_bounds() {
+            Some((start, end)) => {
+                let start_pos = Position {
+                    line: start.line,
+                    column: start.index,
+                };
+                let end_pos = Position {
+                    line: end.line,
+                    column: end.index,
+                };
 
-            Position {
-                line: cursor.line,
-                column: cursor.index,
+                // Place position at whichever bound the cursor is closest to
+                if cursor_pos.line > end.line
+                    || (cursor_pos.line == end.line && cursor_pos.index >= end.index)
+                {
+                    Cursor {
+                        position: end_pos,
+                        selection: Some(start_pos),
+                    }
+                } else {
+                    Cursor {
+                        position: start_pos,
+                        selection: Some(end_pos),
+                    }
+                }
             }
-        };
-
-        let selection = match editor.selection() {
-            cosmic_text::Selection::None => None,
-            cosmic_text::Selection::Normal(cursor)
-            | cosmic_text::Selection::Line(cursor)
-            | cosmic_text::Selection::Word(cursor) => Some(Position {
-                line: cursor.line,
-                column: cursor.index,
-            }),
-        };
-
-        Cursor {
-            position,
-            selection,
+            None => Cursor {
+                position: Position {
+                    line: cursor_pos.line,
+                    column: cursor_pos.index,
+                },
+                selection: None,
+            },
         }
     }
 
