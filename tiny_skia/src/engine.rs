@@ -355,6 +355,32 @@ impl Engine {
                     transformation,
                 );
             }
+            Text::RichEditor {
+                editor,
+                position,
+                color,
+                clip_bounds: local_clip_bounds,
+                transformation: local_transformation,
+            } => {
+                let transformation = transformation * *local_transformation;
+
+                let Some(clip_bounds) =
+                    clip_bounds.intersection(&(*local_clip_bounds * transformation))
+                else {
+                    return;
+                };
+
+                adjust_clip_mask(clip_mask, clip_bounds);
+
+                self.text_pipeline.draw_rich_editor(
+                    editor,
+                    *position,
+                    *color,
+                    pixels,
+                    Some(clip_mask),
+                    transformation,
+                );
+            }
             Text::Cached {
                 content,
                 bounds,
