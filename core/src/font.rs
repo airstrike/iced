@@ -23,7 +23,11 @@ impl Font {
         weight: Weight::Normal,
         stretch: Stretch::Normal,
         style: Style::Normal,
-        optical_size: OpticalSize::Auto,
+        optical_size: if cfg!(feature = "auto-optical-size") {
+            OpticalSize::Auto
+        } else {
+            OpticalSize::None
+        },
     };
 
     /// A monospaced font with normal [`Weight`].
@@ -207,15 +211,19 @@ pub enum Error {}
 /// The `Fixed` variant stores the value as `u32` bits internally
 /// so that `OpticalSize` can derive `PartialEq`, `Eq`, and `Hash`,
 /// which is required for `Font` to be usable in match patterns.
+///
+/// The default is [`None`](OpticalSize::None) unless the `auto-optical-size`
+/// feature is enabled, in which case it defaults to [`Auto`](OpticalSize::Auto).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum OpticalSize {
-    /// Automatically set `opsz` to match the font size (default).
-    #[default]
+    /// Automatically set `opsz` to match the font size.
+    #[cfg_attr(feature = "auto-optical-size", default)]
     Auto,
     /// Set `opsz` to a specific value, independent of font size.
     /// Stored as `f32::to_bits()`.
     Fixed(u32),
     /// Disable optical sizing entirely.
+    #[cfg_attr(not(feature = "auto-optical-size"), default)]
     None,
 }
 
@@ -230,28 +238,6 @@ impl OpticalSize {
         match self {
             Self::Fixed(bits) => Some(f32::from_bits(bits)),
             _ => Option::None,
-        }
-    }
-}
-
-/// Whether optical sizing is enabled for a variable font.
-#[deprecated(note = "use `OpticalSize` instead")]
-#[allow(deprecated)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum OpticalSizing {
-    /// Optical sizing is enabled (default).
-    #[default]
-    On,
-    /// Optical sizing is disabled.
-    Off,
-}
-
-#[allow(deprecated)]
-impl From<OpticalSizing> for OpticalSize {
-    fn from(v: OpticalSizing) -> Self {
-        match v {
-            OpticalSizing::On => Self::Auto,
-            OpticalSizing::Off => Self::None,
         }
     }
 }
