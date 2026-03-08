@@ -170,6 +170,18 @@ impl From<&[u8; 4]> for Tag {
     }
 }
 
+impl From<Tag> for Feature {
+    fn from(tag: Tag) -> Self {
+        Self::on(tag)
+    }
+}
+
+impl From<&[u8; 4]> for Feature {
+    fn from(tag: &[u8; 4]) -> Self {
+        Self::on(tag)
+    }
+}
+
 /// An OpenType font feature setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Feature {
