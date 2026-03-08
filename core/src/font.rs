@@ -253,6 +253,12 @@ impl Tag {
     }
 }
 
+impl From<[u8; 4]> for Tag {
+    fn from(value: [u8; 4]) -> Self {
+        Self(value)
+    }
+}
+
 impl From<&[u8; 4]> for Tag {
     fn from(tag: &[u8; 4]) -> Self {
         Self(*tag)
