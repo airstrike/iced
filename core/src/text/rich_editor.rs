@@ -103,6 +103,9 @@ pub trait Editor: Sized + Default {
     /// Set paragraph-level defaults + alignment.
     fn set_paragraph_style(&mut self, line: usize, style: &ParagraphStyle);
 
+    /// Set only the alignment on a line without touching character defaults.
+    fn set_alignment(&mut self, line: usize, alignment: crate::text::Alignment);
+
     /// Read character formatting at a position.
     fn style_at(&self, line: usize, column: usize) -> Style;
 

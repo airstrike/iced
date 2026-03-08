@@ -651,6 +651,15 @@ impl rich_editor::Editor for Editor {
         });
     }
 
+    fn set_alignment(&mut self, line: usize, alignment: Alignment) {
+        self.with_internal_mut(|internal| {
+            let buffer = buffer_mut_from_editor(&mut internal.document);
+            if let Some(buffer_line) = buffer.lines.get_mut(line) {
+                let _ = buffer_line.set_align(text::to_align(alignment));
+            }
+        });
+    }
+
     fn style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
