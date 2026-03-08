@@ -312,6 +312,8 @@ impl text::rich_editor::Editor for () {
 
     fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::ParagraphStyle) {}
 
+    fn set_alignment(&mut self, _line: usize, _alignment: text::Alignment) {}
+
     fn style_at(&self, _line: usize, _column: usize) -> text::rich_editor::Style {
         text::rich_editor::Style::default()
     }
