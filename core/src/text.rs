@@ -592,8 +592,8 @@ impl<'a, Link, Font> Span<'a, Link, Font> {
     }
 
     /// Adds a single font [`Feature`](font::Feature) to the [`Span`].
-    pub fn font_feature(mut self, feature: font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 

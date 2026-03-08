@@ -162,8 +162,8 @@ where
     }
 
     /// Adds a single font [`Feature`](font::Feature) to the [`Text`].
-    pub fn font_feature(mut self, feature: font::Feature) -> Self {
-        self.format.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<font::Feature>) -> Self {
+        self.format.font_features.push(feature.into());
         self
     }
 
