@@ -253,6 +253,12 @@ impl Tag {
     }
 }
 
+impl From<&[u8; 4]> for Tag {
+    fn from(tag: &[u8; 4]) -> Self {
+        Self(*tag)
+    }
+}
+
 /// An OpenType font feature setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Feature {
@@ -263,18 +269,21 @@ pub struct Feature {
 }
 
 impl Feature {
-    /// Creates a new [`Feature`] with the given [`Tag`] and value.
-    pub const fn new(tag: Tag, value: u32) -> Self {
-        Self { tag, value }
+    /// Creates a new [`Feature`] with the given tag and value.
+    pub fn new(tag: impl Into<Tag>, value: u32) -> Self {
+        Self {
+            tag: tag.into(),
+            value,
+        }
     }
 
-    /// Creates a [`Feature`] that enables the given [`Tag`].
-    pub const fn on(tag: Tag) -> Self {
+    /// Creates a [`Feature`] that enables the given tag.
+    pub fn on(tag: impl Into<Tag>) -> Self {
         Self::new(tag, 1)
     }
 
-    /// Creates a [`Feature`] that disables the given [`Tag`].
-    pub const fn off(tag: Tag) -> Self {
+    /// Creates a [`Feature`] that disables the given tag.
+    pub fn off(tag: impl Into<Tag>) -> Self {
         Self::new(tag, 0)
     }
 }

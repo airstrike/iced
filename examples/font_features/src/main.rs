@@ -712,15 +712,15 @@ fn features(opsz: f32) -> Element<'static, Message> {
                 text("altG16I")
                     .size(80)
                     .font(inter_opsz(font::Weight::Normal, opsz))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv01")))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv03")))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv04")))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv08")))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv10")))
-                    .font_feature(font::Feature::on(font::Tag(*b"cv11")))
-                    .font_feature(font::Feature::on(font::Tag(*b"ss01")))
-                    .font_feature(font::Feature::on(font::Tag(*b"ss02")))
-                    .font_feature(font::Feature::on(font::Tag(*b"dlig"))),
+                    .font_feature(font::Feature::on(b"cv01"))
+                    .font_feature(font::Feature::on(b"cv03"))
+                    .font_feature(font::Feature::on(b"cv04"))
+                    .font_feature(font::Feature::on(b"cv08"))
+                    .font_feature(font::Feature::on(b"cv10"))
+                    .font_feature(font::Feature::on(b"cv11"))
+                    .font_feature(font::Feature::on(b"ss01"))
+                    .font_feature(font::Feature::on(b"ss02"))
+                    .font_feature(font::Feature::on(b"dlig")),
             ]
             .align_y(Center),
             // Thick divider
