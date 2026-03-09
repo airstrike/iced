@@ -60,6 +60,7 @@ struct Internal {
     version: text::Version,
     letter_spacing: Em,
     font_features: Vec<font::Feature>,
+    font_variations: Vec<font::Variation>,
     line_height_ratio: f32,
     /// Every `&'static str` font name that has entered the editor.
     /// See module-level doc for the full rationale.
@@ -487,6 +488,7 @@ impl rich_editor::Editor for Editor {
         new_line_height: LineHeight,
         new_letter_spacing: Em,
         new_font_features: Vec<font::Feature>,
+        new_font_variations: Vec<font::Variation>,
         new_wrapping: Wrapping,
         new_hint_factor: Option<f32>,
     ) {
@@ -511,6 +513,7 @@ impl rich_editor::Editor for Editor {
             if new_font != internal.font
                 || new_letter_spacing != internal.letter_spacing
                 || new_font_features != internal.font_features
+                || new_font_variations != internal.font_variations
             {
                 internal.font = new_font;
                 if let font::Family::Name(name) = new_font.family {
@@ -518,6 +521,7 @@ impl rich_editor::Editor for Editor {
                 }
                 internal.letter_spacing = new_letter_spacing;
                 internal.font_features = new_font_features;
+                internal.font_variations = new_font_variations;
             }
 
             let metrics = buffer.metrics();
@@ -625,6 +629,7 @@ impl rich_editor::Editor for Editor {
                     internal.font,
                     internal.letter_spacing,
                     &internal.font_features,
+                    &internal.font_variations,
                 );
                 let defaults =
                     style_to_attrs(&style.style, &base_attrs, internal.line_height_ratio);
@@ -739,6 +744,7 @@ impl Default for Internal {
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
+            font_variations: Vec::new(),
             line_height_ratio: 1.3,
             font_names: HashSet::new(),
         }
@@ -831,7 +837,7 @@ fn style_to_attrs<'a>(
 
     if let Some(font) = style.font {
         // Build new attrs from the font, then re-apply non-font style
-        let mut font_attrs = text::to_attributes(font, Em::ZERO, &[]);
+        let mut font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
 
         // Preserve bold/italic/size/color from the style
         if let Some(bold) = style.bold {

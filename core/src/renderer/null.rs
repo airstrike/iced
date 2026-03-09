@@ -297,6 +297,7 @@ impl text::rich_editor::Editor for () {
         _new_line_height: text::LineHeight,
         _new_letter_spacing: Em,
         _new_font_features: Vec<crate::font::Feature>,
+        _new_font_variations: Vec<crate::font::Variation>,
         _new_wrapping: text::Wrapping,
         _new_hint_factor: Option<f32>,
     ) {
