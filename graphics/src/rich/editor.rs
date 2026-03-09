@@ -187,39 +187,20 @@ impl rich_editor::Editor for Editor {
 
         let cursor = match internal.document.selection_bounds() {
             Some((start, end)) => {
-                let line_height = buffer.metrics().line_height;
-                let selected_lines = end.line - start.line + 1;
-
-                let visual_lines_offset = visual_lines_offset(start.line, buffer);
+                let start_cursor = cosmic_text::Cursor::new(start.line, start.index);
+                let end_cursor = cosmic_text::Cursor::new(end.line, end.index);
 
                 let regions = buffer
-                    .lines
-                    .iter()
-                    .skip(start.line)
-                    .take(selected_lines)
-                    .enumerate()
-                    .flat_map(|(i, line)| {
-                        highlight_line(
-                            line,
-                            if i == 0 { start.index } else { 0 },
-                            if i == selected_lines - 1 {
-                                end.index
-                            } else {
-                                line.text().len()
-                            },
-                        )
-                    })
-                    .enumerate()
-                    .filter_map(|(visual_line, (x, width))| {
+                    .layout_runs()
+                    .filter_map(|run| {
+                        let (x, width) = run.highlight(start_cursor, end_cursor)?;
                         if width > 0.0 {
                             Some(
                                 Rectangle {
                                     x,
                                     width,
-                                    y: (visual_line as i32 + visual_lines_offset) as f32
-                                        * line_height
-                                        - buffer.scroll().vertical,
-                                    height: line_height,
+                                    y: run.line_top,
+                                    height: run.line_height,
                                 } * (1.0 / internal.hint_factor),
                             )
                         } else {
@@ -231,67 +212,11 @@ impl rich_editor::Editor for Editor {
                 Selection::Range(regions)
             }
             _ => {
-                let line_height = buffer.metrics().line_height;
-
-                let visual_lines_offset = visual_lines_offset(cursor.line, buffer);
-
-                let line = buffer
-                    .lines
-                    .get(cursor.line)
-                    .expect("Cursor line should be present");
-
-                let layout = line.layout_opt().expect("Line layout should be cached");
-
-                let mut lines = layout.iter().enumerate();
-
-                let (visual_line, offset) = lines
-                    .find_map(|(i, line)| {
-                        let start = line.glyphs.first().map(|glyph| glyph.start).unwrap_or(0);
-                        let end = line.glyphs.last().map(|glyph| glyph.end).unwrap_or(0);
-
-                        let is_cursor_before_start = start > cursor.index;
-
-                        let is_cursor_before_end = match cursor.affinity {
-                            cosmic_text::Affinity::Before => cursor.index <= end,
-                            cosmic_text::Affinity::After => cursor.index < end,
-                        };
-
-                        if is_cursor_before_start {
-                            // Cursor is before this visual line — it's on the
-                            // previous one, at the end.
-                            let prev = &layout[i - 1];
-                            let offset = prev.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0);
-                            Some((i - 1, offset))
-                        } else if is_cursor_before_end {
-                            // Use absolute glyph position
-                            let offset = line
-                                .glyphs
-                                .iter()
-                                .take_while(|glyph| cursor.index > glyph.start)
-                                .last()
-                                .map(|g| g.x + g.w)
-                                .unwrap_or_else(|| line.glyphs.first().map(|g| g.x).unwrap_or(0.0));
-
-                            Some((i, offset))
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        let last_idx = layout.len().saturating_sub(1);
-                        let offset = layout
-                            .last()
-                            .and_then(|line| line.glyphs.last())
-                            .map(|g| g.x + g.w)
-                            .unwrap_or(0.0);
-                        (last_idx, offset)
-                    });
+                let (caret_x, caret_y) = caret_position(cursor, buffer);
 
                 Selection::Caret(Point::new(
-                    offset / internal.hint_factor,
-                    ((visual_lines_offset + visual_line as i32) as f32 * line_height
-                        - buffer.scroll().vertical)
-                        / internal.hint_factor,
+                    caret_x / internal.hint_factor,
+                    caret_y / internal.hint_factor,
                 ))
             }
         };
@@ -966,72 +891,53 @@ fn from_family(
     }
 }
 
-fn highlight_line(
-    line: &cosmic_text::BufferLine,
-    from: usize,
-    to: usize,
-) -> impl Iterator<Item = (f32, f32)> + '_ {
-    let layout = line.layout_opt().map(Vec::as_slice).unwrap_or_default();
-
-    layout.iter().map(move |visual_line| {
-        let start = visual_line
-            .glyphs
-            .first()
-            .map(|glyph| glyph.start)
-            .unwrap_or(0);
-        let end = visual_line
-            .glyphs
-            .last()
-            .map(|glyph| glyph.end)
-            .unwrap_or(0);
-
-        let range = start.max(from)..end.min(to);
-
-        if range.is_empty() {
-            (0.0, 0.0)
-        } else if range.start == start && range.end == end {
-            // Full line selected — use first glyph's x position
-            let x = visual_line
-                .glyphs
-                .first()
-                .map(|glyph| glyph.x)
-                .unwrap_or(0.0);
-            (x, visual_line.w)
-        } else {
-            // Use absolute glyph positions (accounts for text alignment)
-            let first_glyph = visual_line
-                .glyphs
-                .iter()
-                .find(|glyph| range.start <= glyph.start);
-
-            let x = first_glyph.map(|g| g.x).unwrap_or(0.0);
-
-            let last_glyph = visual_line
-                .glyphs
-                .iter()
-                .rev()
-                .find(|glyph| range.end > glyph.start);
-
-            let end_x = last_glyph.map(|g| g.x + g.w).unwrap_or(x);
-
-            (x, (end_x - x).max(0.0))
+/// Find the caret (x, y) position for a cursor using layout runs.
+///
+/// Returns the x offset within the line and the y offset from the top
+/// of the visible area, both in hinted (physical) pixels.
+fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32) {
+    for run in buffer.layout_runs() {
+        if run.line_i != cursor.line {
+            continue;
         }
-    })
-}
 
-fn visual_lines_offset(line: usize, buffer: &cosmic_text::Buffer) -> i32 {
-    let scroll = buffer.scroll();
+        let start = run.glyphs.first().map(|g| g.start).unwrap_or(0);
+        let end = run.glyphs.last().map(|g| g.end).unwrap_or(0);
 
-    let start = scroll.line.min(line);
-    let end = scroll.line.max(line);
+        // Check if cursor falls on this visual line
+        let on_this_line = if start > cursor.index {
+            false
+        } else {
+            match cursor.affinity {
+                cosmic_text::Affinity::Before => cursor.index <= end,
+                cosmic_text::Affinity::After => cursor.index < end,
+            }
+        };
 
-    let visual_lines_offset: usize = buffer.lines[start..]
-        .iter()
-        .take(end - start)
-        .map(|line| line.layout_opt().map(Vec::len).unwrap_or_default())
-        .sum();
+        if on_this_line {
+            let x = run
+                .glyphs
+                .iter()
+                .take_while(|glyph| cursor.index > glyph.start)
+                .last()
+                .map(|g| g.x + g.w)
+                .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(0.0));
 
-    visual_lines_offset as i32 * if scroll.line < line { 1 } else { -1 }
+            return (x, run.line_top);
+        }
+    }
+
+    // Cursor is past the last run — use the end of the last run on the cursor's line
+    let mut last_x = 0.0;
+    let mut last_y = 0.0;
+    for run in buffer.layout_runs() {
+        if run.line_i == cursor.line {
+            last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0);
+            last_y = run.line_top;
+        }
+    }
+
+    (last_x, last_y)
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
