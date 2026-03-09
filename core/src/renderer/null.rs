@@ -141,6 +141,10 @@ impl text::Paragraph for () {
         &[]
     }
 
+    fn font_variations(&self) -> &[crate::font::Variation] {
+        &[]
+    }
+
     fn grapheme_position(&self, _line: usize, _index: usize) -> Option<Point> {
         None
     }

@@ -27,6 +27,7 @@ struct Internal {
     version: text::Version,
     letter_spacing: Em,
     font_features: Vec<font::Feature>,
+    font_variations: Vec<font::Variation>,
     hint: bool,
     hint_factor: f32,
 }
@@ -103,8 +104,17 @@ impl core::text::Paragraph for Paragraph {
         buffer.set_text(
             font_system.raw(),
             text.content,
-            &text::to_attributes(text.font, text.letter_spacing, &text.font_features),
-            text::to_shaping(text.shaping, text.content, !text.font_features.is_empty()),
+            &text::to_attributes(
+                text.font,
+                text.letter_spacing,
+                &text.font_features,
+                &text.font_variations,
+            ),
+            text::to_shaping(
+                text.shaping,
+                text.content,
+                !text.font_features.is_empty() || !text.font_variations.is_empty(),
+            ),
             None,
         );
 
@@ -125,6 +135,7 @@ impl core::text::Paragraph for Paragraph {
             version: font_system.version(),
             letter_spacing: text.letter_spacing,
             font_features: text.font_features,
+            font_variations: text.font_variations,
         }))
     }
 
@@ -167,10 +178,17 @@ impl core::text::Paragraph for Paragraph {
                     &span.font_features
                 };
 
+                let span_variations = if span.font_variations.is_empty() {
+                    &text.font_variations
+                } else {
+                    &span.font_variations
+                };
+
                 let attrs = text::to_attributes(
                     span.font.unwrap_or(text.font),
                     span.letter_spacing.unwrap_or(text.letter_spacing),
                     span_features,
+                    span_variations,
                 );
 
                 let attrs = match (span.size, span.line_height) {
@@ -197,7 +215,12 @@ impl core::text::Paragraph for Paragraph {
 
                 (span.text.as_ref(), attrs.metadata(i))
             }),
-            &text::to_attributes(text.font, text.letter_spacing, &text.font_features),
+            &text::to_attributes(
+                text.font,
+                text.letter_spacing,
+                &text.font_features,
+                &text.font_variations,
+            ),
             cosmic_text::Shaping::Advanced,
             None,
         );
@@ -219,6 +242,7 @@ impl core::text::Paragraph for Paragraph {
             version: font_system.version(),
             letter_spacing: text.letter_spacing,
             font_features: text.font_features,
+            font_variations: text.font_variations,
         }))
     }
 
@@ -255,6 +279,7 @@ impl core::text::Paragraph for Paragraph {
             || paragraph.ellipsis != text.ellipsis
             || paragraph.letter_spacing != text.letter_spacing
             || paragraph.font_features != text.font_features
+            || paragraph.font_variations != text.font_variations
             || paragraph.align_x != text.align_x
             || paragraph.align_y != text.align_y
             || paragraph.hint.then_some(paragraph.hint_factor)
@@ -312,6 +337,10 @@ impl core::text::Paragraph for Paragraph {
 
     fn font_features(&self) -> &[font::Feature] {
         &self.0.font_features
+    }
+
+    fn font_variations(&self) -> &[font::Variation] {
+        &self.0.font_variations
     }
 
     fn bounds(&self) -> Size {
@@ -505,6 +534,7 @@ impl Default for Internal {
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
+            font_variations: Vec::new(),
             hint: false,
             hint_factor: 1.0,
         }

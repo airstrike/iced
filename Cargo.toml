@@ -267,4 +267,4 @@ useless_conversion = "deny"
 broken_intra_doc_links = "forbid"
 
 [patch.crates-io]
-cosmic-text = { git = "https://github.com/airstrike/cosmic-text", branch = "featureful-fonts" }
+cosmic-text = { git = "https://github.com/airstrike/cosmic-text", branch = "dev" }

@@ -325,6 +325,7 @@ where
                             ellipsis: text::Ellipsis::None,
                             letter_spacing: self.letter_spacing,
                             font_features: self.font_features.clone(),
+                            font_variations: Vec::new(),
                         },
                     )
                 } else {
