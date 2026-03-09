@@ -60,7 +60,7 @@ struct Internal {
     version: text::Version,
     letter_spacing: Em,
     font_features: Vec<font::Feature>,
-    base_size: f32,
+    line_height_ratio: f32,
     /// Every `&'static str` font name that has entered the editor.
     /// See module-level doc for the full rationale.
     font_names: HashSet<&'static str>,
@@ -556,8 +556,8 @@ impl rich_editor::Editor for Editor {
                 );
             }
 
-            // Track base_size for formatting reference
-            internal.base_size = new_size.0;
+            // Track line_height_ratio for formatting reference
+            internal.line_height_ratio = new_line_height.0 / new_size.0;
 
             let new_wrap = text::to_wrap(new_wrapping);
 
@@ -591,7 +591,7 @@ impl rich_editor::Editor for Editor {
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
-                let attrs = style_to_attrs(style, &base, internal.base_size);
+                let attrs = style_to_attrs(style, &base, internal.line_height_ratio);
 
                 if buffer_line.text().is_empty() {
                     // Empty lines have no characters to span. Update the
@@ -625,7 +625,7 @@ impl rich_editor::Editor for Editor {
                     internal.letter_spacing,
                     &internal.font_features,
                 );
-                let defaults = style_to_attrs(&style.style, &base_attrs, internal.base_size);
+                let defaults = style_to_attrs(&style.style, &base_attrs, internal.line_height_ratio);
 
                 // Rebuild AttrsList with new defaults, preserving spans
                 let old_spans: Vec<_> = buffer_line
@@ -737,7 +737,7 @@ impl Default for Internal {
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
-            base_size: 16.0,
+            line_height_ratio: 1.3,
             font_names: HashSet::new(),
         }
     }
@@ -787,7 +787,7 @@ impl PartialEq for Weak {
 fn style_to_attrs<'a>(
     style: &Style,
     base: &cosmic_text::Attrs<'a>,
-    base_size: f32,
+    line_height_ratio: f32,
 ) -> cosmic_text::Attrs<'a> {
     let mut attrs = base.clone();
 
@@ -820,7 +820,7 @@ fn style_to_attrs<'a>(
     }
 
     if let Some(size) = style.size {
-        attrs = attrs.metrics(cosmic_text::Metrics::new(size, size * 1.2));
+        attrs = attrs.metrics(cosmic_text::Metrics::new(size, size * line_height_ratio));
     }
 
     if let Some(color) = style.color {
@@ -853,7 +853,7 @@ fn style_to_attrs<'a>(
         }
 
         if let Some(size) = style.size {
-            font_attrs = font_attrs.metrics(cosmic_text::Metrics::new(size, size * 1.2));
+            font_attrs = font_attrs.metrics(cosmic_text::Metrics::new(size, size * line_height_ratio));
         } else if let Some(m) = attrs.metrics_opt {
             let m: cosmic_text::Metrics = m.into();
             font_attrs = font_attrs.metrics(cosmic_text::Metrics::new(m.font_size, m.line_height));
@@ -869,11 +869,6 @@ fn style_to_attrs<'a>(
 
         attrs = font_attrs;
     }
-
-    // If no explicit size override but we have a base_size reference, use it
-    // (this handles the case where the paragraph style needs to set a
-    //  specific font size)
-    let _ = base_size;
 
     attrs
 }
