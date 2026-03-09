@@ -3,6 +3,7 @@ use crate::core::renderer::Quad;
 use crate::core::{self, Background, Color, Point, Rectangle, Svg, Transformation};
 use crate::graphics::damage;
 use crate::graphics::layer;
+use crate::graphics::rich;
 use crate::graphics::text::{Editor, Paragraph, Text};
 use crate::graphics::{self, Image};
 
@@ -68,6 +69,25 @@ impl Layer {
         self.text.push(Item::Live(editor));
     }
 
+    pub fn draw_rich_editor(
+        &mut self,
+        editor: &rich::Editor,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+        transformation: Transformation,
+    ) {
+        let editor = Text::RichEditor {
+            editor: editor.downgrade(),
+            position,
+            color,
+            clip_bounds,
+            transformation,
+        };
+
+        self.text.push(Item::Live(editor));
+    }
+
     pub fn draw_text(
         &mut self,
         text: core::Text,
@@ -90,6 +110,7 @@ impl Layer {
             ellipsis: text.ellipsis,
             letter_spacing: text.letter_spacing,
             font_features: text.font_features,
+            font_variations: text.font_variations,
             clip_bounds: clip_bounds * transformation,
         };
 

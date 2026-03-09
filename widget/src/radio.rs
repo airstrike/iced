@@ -244,8 +244,8 @@ where
     }
 
     /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Radio`] button.
-    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 
@@ -335,6 +335,7 @@ where
                         ellipsis: text::Ellipsis::default(),
                         letter_spacing: self.letter_spacing,
                         font_features: self.font_features.clone(),
+                        font_variations: Vec::new(),
                     },
                 )
             },

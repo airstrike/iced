@@ -221,8 +221,8 @@ where
     }
 
     /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Checkbox`].
-    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 
@@ -324,6 +324,7 @@ where
                             ellipsis: text::Ellipsis::None,
                             letter_spacing: self.letter_spacing,
                             font_features: self.font_features.clone(),
+                            font_variations: Vec::new(),
                         },
                     )
                 } else {
@@ -451,6 +452,7 @@ where
                         ellipsis: text::Ellipsis::default(),
                         letter_spacing: crate::core::Em::default(),
                         font_features: Vec::new(),
+                        font_variations: Vec::new(),
                         hint_factor: None,
                     },
                     bounds.center(),

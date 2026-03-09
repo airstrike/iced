@@ -1,6 +1,7 @@
 use crate::core::alignment;
 use crate::core::text::{Alignment, Ellipsis, Shaping, Wrapping};
 use crate::core::{Color, Em, Font, Pixels, Point, Rectangle, Transformation};
+use crate::graphics::rich;
 use crate::graphics::text::cache::{self, Cache};
 use crate::graphics::text::editor;
 use crate::graphics::text::font_system;
@@ -90,6 +91,33 @@ impl Pipeline {
         );
     }
 
+    pub fn draw_rich_editor(
+        &mut self,
+        editor: &rich::editor::Weak,
+        position: Point,
+        color: Color,
+        pixels: &mut tiny_skia::PixmapMut<'_>,
+        clip_mask: Option<&tiny_skia::Mask>,
+        transformation: Transformation,
+    ) {
+        let Some(editor) = editor.upgrade() else {
+            return;
+        };
+
+        let mut font_system = font_system().write().expect("Write font system");
+
+        draw(
+            font_system.raw(),
+            &mut self.glyph_cache,
+            editor.buffer(),
+            position,
+            color,
+            pixels,
+            clip_mask,
+            transformation,
+        );
+    }
+
     pub fn draw_cached(
         &mut self,
         content: &str,
@@ -105,6 +133,7 @@ impl Pipeline {
         ellipsis: Ellipsis,
         letter_spacing: Em,
         font_features: &[crate::core::font::Feature],
+        font_variations: &[crate::core::font::Variation],
         pixels: &mut tiny_skia::PixmapMut<'_>,
         clip_mask: Option<&tiny_skia::Mask>,
         transformation: Transformation,
@@ -126,6 +155,7 @@ impl Pipeline {
             align_x,
             letter_spacing,
             font_features,
+            font_variations,
         };
 
         let (_, entry) = self.cache.get_mut().allocate(font_system, key);

@@ -15,6 +15,7 @@ workspace = true
 
 [features]
 advanced = []
+auto-optical-size = []
 crisp = []
 image = []
 basic-shaping = []

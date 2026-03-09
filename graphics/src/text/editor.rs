@@ -246,11 +246,14 @@ impl editor::Editor for Editor {
                         layout.last().map(|line| line.w).unwrap_or(0.0),
                     ));
 
-                Selection::Caret(Point::new(
-                    offset / internal.hint_factor,
-                    ((visual_lines_offset + visual_line as i32) as f32 * line_height
-                        - buffer.scroll().vertical)
-                        / internal.hint_factor,
+                Selection::Caret(Rectangle::new(
+                    Point::new(
+                        offset / internal.hint_factor,
+                        ((visual_lines_offset + visual_line as i32) as f32 * line_height
+                            - buffer.scroll().vertical)
+                            / internal.hint_factor,
+                    ),
+                    Size::new(1.0, line_height / internal.hint_factor),
                 ))
             }
         };
@@ -538,6 +541,7 @@ impl editor::Editor for Editor {
                         new_font,
                         new_letter_spacing,
                         &new_font_features,
+                        &[],
                     )));
                 }
 
@@ -664,7 +668,7 @@ impl editor::Editor for Editor {
         let mut font_system = text::font_system().write().expect("Write font system");
 
         let attributes =
-            text::to_attributes(font, internal.letter_spacing, &internal.font_features);
+            text::to_attributes(font, internal.letter_spacing, &internal.font_features, &[]);
 
         for line in &mut buffer_mut_from_editor(&mut internal.editor).lines
             [current_line..=last_visible_line]
@@ -684,6 +688,7 @@ impl editor::Editor for Editor {
                                     font,
                                     internal.letter_spacing,
                                     &internal.font_features,
+                                    &[],
                                 )
                             } else {
                                 attributes.clone()

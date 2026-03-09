@@ -2,10 +2,13 @@
 pub mod editor;
 pub mod highlighter;
 pub mod paragraph;
+pub mod rich_editor;
 
 pub use editor::Editor;
 pub use highlighter::Highlighter;
 pub use paragraph::Paragraph;
+// Don't re-export rich_editor::Editor at the top level to avoid name clash.
+// Users access it via text::rich_editor::Editor.
 
 use crate::alignment;
 use crate::font;
@@ -53,6 +56,9 @@ pub struct Text<Content = String, Font = crate::Font> {
     /// The OpenType font features of the [`Text`].
     pub font_features: Vec<font::Feature>,
 
+    /// The font variation axis settings of the [`Text`].
+    pub font_variations: Vec<font::Variation>,
+
     /// The scale factor that may be used to internally scale the layout
     /// calculation of the [`Paragraph`] and leverage metrics hinting.
     ///
@@ -84,6 +90,7 @@ where
             ellipsis: self.ellipsis,
             letter_spacing: self.letter_spacing,
             font_features: self.font_features.clone(),
+            font_variations: self.font_variations.clone(),
             hint_factor: self.hint_factor,
         }
     }
@@ -441,6 +448,8 @@ pub struct Span<'a, Link = (), Font = crate::Font> {
     pub letter_spacing: Option<Em>,
     /// The OpenType font features of the [`Span`].
     pub font_features: Vec<font::Feature>,
+    /// The font variation axis settings of the [`Span`].
+    pub font_variations: Vec<font::Variation>,
 }
 
 /// A text highlight.
@@ -592,14 +601,26 @@ impl<'a, Link, Font> Span<'a, Link, Font> {
     }
 
     /// Adds a single font [`Feature`](font::Feature) to the [`Span`].
-    pub fn font_feature(mut self, feature: font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 
     /// Sets the font features of the [`Span`].
     pub fn font_features(mut self, features: Vec<font::Feature>) -> Self {
         self.font_features = features;
+        self
+    }
+
+    /// Adds a single font [`Variation`](font::Variation) to the [`Span`].
+    pub fn font_variation(mut self, variation: font::Variation) -> Self {
+        self.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Span`].
+    pub fn font_variations(mut self, variations: Vec<font::Variation>) -> Self {
+        self.font_variations = variations;
         self
     }
 
@@ -618,6 +639,7 @@ impl<'a, Link, Font> Span<'a, Link, Font> {
             strikethrough: self.strikethrough,
             letter_spacing: self.letter_spacing,
             font_features: self.font_features,
+            font_variations: self.font_variations,
         }
     }
 }
@@ -637,6 +659,7 @@ impl<Link, Font> Default for Span<'_, Link, Font> {
             strikethrough: false,
             letter_spacing: None,
             font_features: Vec::new(),
+            font_variations: Vec::new(),
         }
     }
 }
@@ -656,6 +679,7 @@ impl<Link, Font: PartialEq> PartialEq for Span<'_, Link, Font> {
             && self.color == other.color
             && self.letter_spacing == other.letter_spacing
             && self.font_features == other.font_features
+            && self.font_variations == other.font_variations
     }
 }
 

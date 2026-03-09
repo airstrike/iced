@@ -196,7 +196,7 @@ pub enum Direction {
 #[derive(Debug, Clone)]
 pub enum Selection {
     /// Cursor without a selection
-    Caret(Point),
+    Caret(Rectangle),
 
     /// Cursor selecting a range of text
     Range(Vec<Rectangle>),

@@ -31,6 +31,7 @@ where
     ellipsis: Ellipsis,
     letter_spacing: crate::core::Em,
     font_features: Vec<crate::core::font::Feature>,
+    font_variations: Vec<crate::core::font::Variation>,
     class: Theme::Class<'a>,
     hovered_link: Option<usize>,
     on_link_click: Option<Box<dyn Fn(Link) -> Message + 'a>>,
@@ -58,6 +59,7 @@ where
             ellipsis: Ellipsis::default(),
             letter_spacing: crate::core::Em::default(),
             font_features: Vec::new(),
+            font_variations: Vec::new(),
             class: Theme::default(),
             hovered_link: None,
             on_link_click: None,
@@ -139,14 +141,26 @@ where
     }
 
     /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Rich`] text.
-    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 
     /// Sets the font features of the [`Rich`] text.
     pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
         self.font_features = features;
+        self
+    }
+
+    /// Adds a single font [`Variation`](crate::core::font::Variation) to the [`Rich`] text.
+    pub fn font_variation(mut self, variation: crate::core::font::Variation) -> Self {
+        self.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Rich`] text.
+    pub fn font_variations(mut self, variations: Vec<crate::core::font::Variation>) -> Self {
+        self.font_variations = variations;
         self
     }
 
@@ -265,6 +279,7 @@ where
             self.ellipsis,
             self.letter_spacing,
             self.font_features.clone(),
+            self.font_variations.clone(),
         )
     }
 
@@ -476,6 +491,7 @@ fn layout<Link, Renderer>(
     ellipsis: Ellipsis,
     letter_spacing: crate::core::Em,
     font_features: Vec<crate::core::font::Feature>,
+    font_variations: Vec<crate::core::font::Variation>,
 ) -> layout::Node
 where
     Link: Clone,
@@ -500,6 +516,7 @@ where
             ellipsis,
             letter_spacing,
             font_features: font_features.clone(),
+            font_variations: font_variations.clone(),
             hint_factor: renderer.scale_factor(),
         };
 
@@ -520,6 +537,7 @@ where
                 ellipsis,
                 letter_spacing,
                 font_features: font_features.clone(),
+                font_variations: font_variations.clone(),
                 hint_factor: renderer.scale_factor(),
             }) {
                 core::text::Difference::None => {}

@@ -55,8 +55,17 @@ impl Cache {
             buffer.set_text(
                 font_system,
                 key.content,
-                &text::to_attributes(key.font, key.letter_spacing, key.font_features),
-                text::to_shaping(key.shaping, key.content, !key.font_features.is_empty()),
+                &text::to_attributes(
+                    key.font,
+                    key.letter_spacing,
+                    key.font_features,
+                    key.font_variations,
+                ),
+                text::to_shaping(
+                    key.shaping,
+                    key.content,
+                    !key.font_features.is_empty() || !key.font_variations.is_empty(),
+                ),
                 None,
             );
 
@@ -122,6 +131,8 @@ pub struct Key<'a> {
     pub letter_spacing: Em,
     /// The font features of the text.
     pub font_features: &'a [font::Feature],
+    /// The font variations of the text.
+    pub font_variations: &'a [font::Variation],
     /// The wrapping strategy of the text.
     pub wrapping: text::Wrapping,
     /// The ellipsis strategy of the text.
@@ -140,6 +151,7 @@ impl Key<'_> {
         self.align_x.hash(&mut hasher);
         self.letter_spacing.0.to_bits().hash(&mut hasher);
         self.font_features.hash(&mut hasher);
+        self.font_variations.hash(&mut hasher);
 
         hasher.finish()
     }

@@ -1,5 +1,5 @@
 [package]
-name = "font_features"
+name = "typography"
 version = "0.1.0"
 authors = ["Andy Terra <tech@andyterra.com>"]
 edition = "2024"
@@ -9,5 +9,3 @@ publish = false
 iced.workspace = true
 iced.features = ["tokio"]
 reqwest = { version = "0.12", features = ["rustls-tls"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
-open = "5"

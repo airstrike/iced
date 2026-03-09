@@ -13,6 +13,7 @@ use crate::core::alignment;
 use crate::core::font::{self, Font};
 use crate::core::text::{Alignment, Ellipsis, Shaping, Wrapping};
 use crate::core::{Color, Em, Pixels, Point, Rectangle, Size, Transformation};
+use crate::rich;
 
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -34,6 +35,15 @@ pub enum Text {
     #[allow(missing_docs)]
     Editor {
         editor: editor::Weak,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+        transformation: Transformation,
+    },
+    /// A rich editor.
+    #[allow(missing_docs)]
+    RichEditor {
+        editor: rich::editor::Weak,
         position: Point,
         color: Color,
         clip_bounds: Rectangle,
@@ -67,6 +77,8 @@ pub enum Text {
         letter_spacing: Em,
         /// The font features of the text.
         font_features: Vec<font::Feature>,
+        /// The font variations of the text.
+        font_variations: Vec<font::Variation>,
         /// The clip bounds of the text.
         clip_bounds: Rectangle,
     },
@@ -92,6 +104,15 @@ impl Text {
                 .intersection(clip_bounds)
                 .map(|bounds| bounds * *transformation),
             Text::Editor {
+                editor,
+                position,
+                clip_bounds,
+                transformation,
+                ..
+            } => Rectangle::new(*position, editor.bounds)
+                .intersection(clip_bounds)
+                .map(|bounds| bounds * *transformation),
+            Text::RichEditor {
                 editor,
                 position,
                 clip_bounds,
@@ -267,13 +288,19 @@ pub fn to_attributes(
     font: Font,
     letter_spacing: Em,
     font_features: &[font::Feature],
+    font_variations: &[font::Variation],
 ) -> cosmic_text::Attrs<'static> {
     let mut attrs = cosmic_text::Attrs::new()
         .family(to_family(font.family))
         .weight(to_weight(font.weight))
         .stretch(to_stretch(font.stretch))
         .style(to_style(font.style))
-        .letter_spacing(letter_spacing.0);
+        .letter_spacing(letter_spacing.0)
+        .optical_size(match font.optical_size {
+            font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
+            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
+            font::OpticalSize::None => cosmic_text::OpticalSize::None,
+        });
 
     if !font_features.is_empty() {
         let mut features = cosmic_text::FontFeatures::new();
@@ -281,6 +308,14 @@ pub fn to_attributes(
             let _ = features.set(cosmic_text::FeatureTag::new(&f.tag.0), f.value);
         }
         attrs = attrs.font_features(features);
+    }
+
+    if !font_variations.is_empty() {
+        let mut variations = cosmic_text::FontVariations::new();
+        for v in font_variations {
+            let _ = variations.set(cosmic_text::FeatureTag::new(&v.tag.0), v.value());
+        }
+        attrs = attrs.font_variations(variations);
     }
 
     attrs
@@ -333,7 +368,8 @@ fn to_style(style: font::Style) -> cosmic_text::Style {
     }
 }
 
-fn to_align(alignment: Alignment) -> Option<cosmic_text::Align> {
+/// Converts an [`Alignment`] to a [`cosmic_text::Align`].
+pub fn to_align(alignment: Alignment) -> Option<cosmic_text::Align> {
     match alignment {
         Alignment::Default => None,
         Alignment::Left => Some(cosmic_text::Align::Left),

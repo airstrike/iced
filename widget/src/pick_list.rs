@@ -267,8 +267,8 @@ where
     }
 
     /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`PickList`].
-    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 
@@ -398,6 +398,7 @@ where
             ellipsis: self.ellipsis,
             letter_spacing: self.letter_spacing,
             font_features: self.font_features.clone(),
+            font_variations: Vec::new(),
             hint_factor: renderer.scale_factor(),
         };
 
@@ -676,6 +677,7 @@ where
                     ellipsis: text::Ellipsis::None,
                     letter_spacing: crate::core::Em::default(),
                     font_features: Vec::new(),
+                    font_variations: Vec::new(),
                     hint_factor: None,
                 },
                 Point::new(
@@ -709,6 +711,7 @@ where
                     ellipsis: self.ellipsis,
                     letter_spacing: self.letter_spacing,
                     font_features: self.font_features.clone(),
+                    font_variations: Vec::new(),
                     hint_factor: renderer.scale_factor(),
                 },
                 Point::new(bounds.x + self.padding.left, bounds.center_y()),

@@ -261,6 +261,14 @@ where
         }
     }
 
+    /// Sets the horizontal alignment of the [`ComboBox`] input text.
+    pub fn align_x(self, alignment: impl Into<crate::core::alignment::Horizontal>) -> Self {
+        Self {
+            text_input: self.text_input.align_x(alignment),
+            ..self
+        }
+    }
+
     /// Sets the width of the [`ComboBox`].
     pub fn width(self, width: impl Into<Length>) -> Self {
         Self {
@@ -294,8 +302,8 @@ where
     }
 
     /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`ComboBox`].
-    pub fn font_feature(mut self, feature: crate::core::font::Feature) -> Self {
-        self.font_features.push(feature);
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
         self
     }
 

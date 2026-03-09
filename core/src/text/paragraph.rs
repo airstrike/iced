@@ -57,6 +57,9 @@ pub trait Paragraph: Sized + Default {
     /// Returns the font features of the [`Paragraph`].
     fn font_features(&self) -> &[font::Feature];
 
+    /// Returns the font variations of the [`Paragraph`].
+    fn font_variations(&self) -> &[font::Variation];
+
     /// Returns the available bounds used to layout the [`Paragraph`].
     fn bounds(&self) -> Size;
 
@@ -183,6 +186,7 @@ impl<P: Paragraph> Plain<P> {
             ellipsis: self.raw.ellipsis(),
             letter_spacing: self.raw.letter_spacing(),
             font_features: self.raw.font_features().to_vec(),
+            font_variations: self.raw.font_variations().to_vec(),
             hint_factor: self.raw.hint_factor(),
         }
     }
