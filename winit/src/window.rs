@@ -380,6 +380,7 @@ where
                 ellipsis: text::Ellipsis::None,
                 letter_spacing: Em::ZERO,
                 font_features: Vec::new(),
+                font_variations: Vec::new(),
                 hint_factor: renderer.scale_factor(),
             });
 

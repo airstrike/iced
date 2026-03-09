@@ -1015,7 +1015,6 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.18.2"
-source = "git+https://github.com/airstrike/cosmic-text?branch=featureful-fonts#92ea9f223b1d1ccd55dd85aa78e8b62f822142e3"
 dependencies = [
  "bitflags 2.11.0",
  "fontdb",
@@ -6351,6 +6350,14 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "typography"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "reqwest",
+]
 
 [[package]]
 name = "uds_windows"

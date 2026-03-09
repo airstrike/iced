@@ -316,6 +316,7 @@ impl geometry::frame::Backend for Frame {
                 ellipsis: text.ellipsis,
                 letter_spacing: text.letter_spacing,
                 font_features: text.font_features,
+                font_variations: text.font_variations,
                 clip_bounds: self.clip_bounds,
             });
         } else {

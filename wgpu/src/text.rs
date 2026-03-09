@@ -467,6 +467,7 @@ fn prepare(
                 ellipsis,
                 letter_spacing,
                 font_features,
+                font_variations,
                 align_x,
                 ..
             } => {
@@ -487,6 +488,7 @@ fn prepare(
                         ellipsis: *ellipsis,
                         letter_spacing: *letter_spacing,
                         font_features,
+                        font_variations,
                     },
                 );
 

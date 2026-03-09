@@ -67,6 +67,8 @@ pub enum Text {
         letter_spacing: Em,
         /// The font features of the text.
         font_features: Vec<font::Feature>,
+        /// The font variations of the text.
+        font_variations: Vec<font::Variation>,
         /// The clip bounds of the text.
         clip_bounds: Rectangle,
     },
@@ -267,6 +269,7 @@ pub fn to_attributes(
     font: Font,
     letter_spacing: Em,
     font_features: &[font::Feature],
+    font_variations: &[font::Variation],
 ) -> cosmic_text::Attrs<'static> {
     let mut attrs = cosmic_text::Attrs::new()
         .family(to_family(font.family))
@@ -286,6 +289,14 @@ pub fn to_attributes(
             let _ = features.set(cosmic_text::FeatureTag::new(&f.tag.0), f.value);
         }
         attrs = attrs.font_features(features);
+    }
+
+    if !font_variations.is_empty() {
+        let mut variations = cosmic_text::FontVariations::new();
+        for v in font_variations {
+            let _ = variations.set(cosmic_text::FeatureTag::new(&v.tag.0), v.value());
+        }
+        attrs = attrs.font_variations(variations);
     }
 
     attrs

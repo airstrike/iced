@@ -173,6 +173,18 @@ where
         self
     }
 
+    /// Adds a single font [`Variation`](font::Variation) to the [`Text`].
+    pub fn font_variation(mut self, variation: font::Variation) -> Self {
+        self.format.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Text`].
+    pub fn font_variations(mut self, variations: Vec<font::Variation>) -> Self {
+        self.format.font_variations = variations;
+        self
+    }
+
     /// Sets the style of the [`Text`].
     pub fn style(mut self, style: impl Fn(&Theme) -> Style + 'a) -> Self
     where
@@ -299,6 +311,7 @@ pub struct Format<Font> {
     pub ellipsis: Ellipsis,
     pub letter_spacing: Em,
     pub font_features: Vec<font::Feature>,
+    pub font_variations: Vec<font::Variation>,
 }
 
 impl<Font> Default for Format<Font> {
@@ -316,6 +329,7 @@ impl<Font> Default for Format<Font> {
             ellipsis: Ellipsis::default(),
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
+            font_variations: Vec::new(),
         }
     }
 }
@@ -350,6 +364,7 @@ where
             ellipsis: format.ellipsis,
             letter_spacing: format.letter_spacing,
             font_features: format.font_features,
+            font_variations: format.font_variations,
             hint_factor: renderer.scale_factor(),
         });
 

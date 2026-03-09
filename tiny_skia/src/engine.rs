@@ -369,6 +369,7 @@ impl Engine {
                 ellipsis,
                 letter_spacing,
                 font_features,
+                font_variations,
                 clip_bounds: local_clip_bounds,
             } => {
                 let physical_bounds = *local_clip_bounds * transformation;
@@ -399,6 +400,7 @@ impl Engine {
                     *ellipsis,
                     *letter_spacing,
                     font_features,
+                    font_variations,
                     pixels,
                     clip_mask,
                     transformation,

@@ -1357,6 +1357,7 @@ where
                 ellipsis: text::Ellipsis::None,
                 letter_spacing: crate::core::Em::default(),
                 font_features: Vec::new(),
+                font_variations: Vec::new(),
                 hint_factor: None,
             };
 

@@ -210,3 +210,45 @@ impl Feature {
         Self::new(tag, 0)
     }
 }
+
+/// A font variation axis setting for variable fonts.
+///
+/// The value is stored as `u32` bits internally so that
+/// `Variation` can derive `PartialEq`, `Eq`, and `Hash`.
+#[derive(Debug, Clone, Copy)]
+pub struct Variation {
+    /// The variation axis [`Tag`] (e.g. `wdth`, `slnt`, `GRAD`).
+    pub tag: Tag,
+    /// The axis value, stored as `f32::to_bits()`.
+    pub value_bits: u32,
+}
+
+impl Variation {
+    /// Creates a new [`Variation`] with the given [`Tag`] and value.
+    pub fn new(tag: Tag, value: f32) -> Self {
+        Self {
+            tag,
+            value_bits: value.to_bits(),
+        }
+    }
+
+    /// Returns the `f32` value of this variation.
+    pub fn value(self) -> f32 {
+        f32::from_bits(self.value_bits)
+    }
+}
+
+impl PartialEq for Variation {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag == other.tag && self.value_bits == other.value_bits
+    }
+}
+
+impl Eq for Variation {}
+
+impl Hash for Variation {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.tag.hash(state);
+        self.value_bits.hash(state);
+    }
+}
