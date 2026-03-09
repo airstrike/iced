@@ -1341,7 +1341,7 @@ dependencies = [
 [[package]]
 name = "dpi"
 version = "0.1.1"
-source = "git+https://github.com/iced-rs/winit.git?rev=05b8ff17a06562f0a10bb46e6eaacbe2a95cb5ed#05b8ff17a06562f0a10bb46e6eaacbe2a95cb5ed"
+source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#a7a0311552ff495ee8f0df60909dd4e5c6d5763b"
 
 [[package]]
 name = "editor"
@@ -7611,7 +7611,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.8"
-source = "git+https://github.com/iced-rs/winit.git?rev=05b8ff17a06562f0a10bb46e6eaacbe2a95cb5ed#05b8ff17a06562f0a10bb46e6eaacbe2a95cb5ed"
+source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#a7a0311552ff495ee8f0df60909dd4e5c6d5763b"
 dependencies = [
  "ahash",
  "android-activity",
