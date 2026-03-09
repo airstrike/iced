@@ -338,7 +338,7 @@ where
     fn input_method<'b>(
         &self,
         state: &'b State<Highlighter>,
-        renderer: &Renderer,
+        _renderer: &Renderer,
         layout: Layout<'_>,
     ) -> InputMethod<&'b str> {
         let Some(Focus {
@@ -355,16 +355,13 @@ where
         let text_bounds = bounds.shrink(self.padding);
         let translation = text_bounds.position() - Point::ORIGIN;
 
-        let cursor = match internal.editor.selection() {
-            Selection::Caret(position) => position,
-            Selection::Range(ranges) => ranges.first().cloned().unwrap_or_default().position(),
+        let caret = match internal.editor.selection() {
+            Selection::Caret(rect) => rect,
+            Selection::Range(ranges) => ranges.first().cloned().unwrap_or_default(),
         };
 
-        let line_height = self
-            .line_height
-            .to_absolute(self.text_size.unwrap_or_else(|| renderer.default_size()));
-
-        let position = cursor + translation;
+        let position = caret.position() + translation;
+        let line_height = Pixels(caret.height);
 
         InputMethod::Enabled {
             cursor: Rectangle::new(position, Size::new(1.0, f32::from(line_height))),
@@ -979,20 +976,16 @@ where
 
         if let Some(focus) = state.focus.as_ref() {
             match internal.editor.selection() {
-                Selection::Caret(position) if focus.is_cursor_visible() => {
+                Selection::Caret(caret) if focus.is_cursor_visible() => {
                     let cursor = Rectangle::new(
-                        position + translation,
+                        caret.position() + translation,
                         Size::new(
                             if renderer::CRISP {
                                 (1.0 / renderer.scale_factor().unwrap_or(1.0)).max(1.0)
                             } else {
-                                1.0
+                                caret.width
                             },
-                            self.line_height
-                                .to_absolute(
-                                    self.text_size.unwrap_or_else(|| renderer.default_size()),
-                                )
-                                .into(),
+                            caret.height,
                         ),
                     );
 

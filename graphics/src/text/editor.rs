@@ -246,11 +246,14 @@ impl editor::Editor for Editor {
                         layout.last().map(|line| line.w).unwrap_or(0.0),
                     ));
 
-                Selection::Caret(Point::new(
-                    offset / internal.hint_factor,
-                    ((visual_lines_offset + visual_line as i32) as f32 * line_height
-                        - buffer.scroll().vertical)
-                        / internal.hint_factor,
+                Selection::Caret(Rectangle::new(
+                    Point::new(
+                        offset / internal.hint_factor,
+                        ((visual_lines_offset + visual_line as i32) as f32 * line_height
+                            - buffer.scroll().vertical)
+                            / internal.hint_factor,
+                    ),
+                    Size::new(1.0, line_height / internal.hint_factor),
                 ))
             }
         };

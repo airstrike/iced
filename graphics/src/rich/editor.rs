@@ -228,11 +228,12 @@ impl rich_editor::Editor for Editor {
                 Selection::Range(regions)
             }
             _ => {
-                let (caret_x, caret_y) = caret_position(cursor, buffer);
+                let (caret_x, caret_y, caret_h) = caret_position(cursor, buffer);
+                let f = 1.0 / internal.hint_factor;
 
-                Selection::Caret(Point::new(
-                    caret_x / internal.hint_factor,
-                    caret_y / internal.hint_factor,
+                Selection::Caret(Rectangle::new(
+                    Point::new(caret_x * f, caret_y * f),
+                    Size::new(1.0, caret_h * f),
                 ))
             }
         };
@@ -625,7 +626,8 @@ impl rich_editor::Editor for Editor {
                     internal.letter_spacing,
                     &internal.font_features,
                 );
-                let defaults = style_to_attrs(&style.style, &base_attrs, internal.line_height_ratio);
+                let defaults =
+                    style_to_attrs(&style.style, &base_attrs, internal.line_height_ratio);
 
                 // Rebuild AttrsList with new defaults, preserving spans
                 let old_spans: Vec<_> = buffer_line
@@ -853,7 +855,8 @@ fn style_to_attrs<'a>(
         }
 
         if let Some(size) = style.size {
-            font_attrs = font_attrs.metrics(cosmic_text::Metrics::new(size, size * line_height_ratio));
+            font_attrs =
+                font_attrs.metrics(cosmic_text::Metrics::new(size, size * line_height_ratio));
         } else if let Some(m) = attrs.metrics_opt {
             let m: cosmic_text::Metrics = m.into();
             font_attrs = font_attrs.metrics(cosmic_text::Metrics::new(m.font_size, m.line_height));
@@ -922,11 +925,12 @@ fn from_family(
     }
 }
 
-/// Find the caret (x, y) position for a cursor using layout runs.
+/// Find the caret rectangle for a cursor using layout runs.
 ///
-/// Returns the x offset within the line and the y offset from the top
-/// of the visible area, both in hinted (physical) pixels.
-fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32) {
+/// Returns `(x, y, line_height)` in hinted (physical) pixels, where
+/// `line_height` comes from the matching layout run so it reflects
+/// per-line variable heights.
+fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
     for run in buffer.layout_runs() {
         if run.line_i != cursor.line {
             continue;
@@ -954,21 +958,23 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
                 .map(|g| g.x + g.w)
                 .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(0.0));
 
-            return (x, run.line_top);
+            return (x, run.line_top, run.line_height);
         }
     }
 
     // Cursor is past the last run — use the end of the last run on the cursor's line
     let mut last_x = 0.0;
     let mut last_y = 0.0;
+    let mut last_h = buffer.metrics().line_height;
     for run in buffer.layout_runs() {
         if run.line_i == cursor.line {
             last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(0.0);
             last_y = run.line_top;
+            last_h = run.line_height;
         }
     }
 
-    (last_x, last_y)
+    (last_x, last_y, last_h)
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {

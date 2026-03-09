@@ -187,7 +187,7 @@ impl text::Editor for () {
     }
 
     fn selection(&self) -> text::editor::Selection {
-        text::editor::Selection::Caret(Point::ORIGIN)
+        text::editor::Selection::Caret(Rectangle::new(Point::ORIGIN, Size::ZERO))
     }
 
     fn copy(&self) -> Option<String> {
@@ -258,7 +258,7 @@ impl text::rich_editor::Editor for () {
     }
 
     fn selection(&self) -> text::editor::Selection {
-        text::editor::Selection::Caret(Point::ORIGIN)
+        text::editor::Selection::Caret(Rectangle::new(Point::ORIGIN, Size::ZERO))
     }
 
     fn copy(&self) -> Option<String> {
