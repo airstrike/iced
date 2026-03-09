@@ -193,6 +193,22 @@ impl rich_editor::Editor for Editor {
                 let regions = buffer
                     .layout_runs()
                     .filter_map(|run| {
+                        // Empty lines within the selection range still need a
+                        // visible indicator so the highlight looks continuous.
+                        if run.glyphs.is_empty()
+                            && run.line_i >= start_cursor.line
+                            && run.line_i <= end_cursor.line
+                        {
+                            return Some(
+                                Rectangle {
+                                    x: 0.0,
+                                    width: run.line_height * 0.3,
+                                    y: run.line_top,
+                                    height: run.line_height,
+                                } * (1.0 / internal.hint_factor),
+                            );
+                        }
+
                         let (x, width) = run.highlight(start_cursor, end_cursor)?;
                         if width > 0.0 {
                             Some(
@@ -576,9 +592,22 @@ impl rich_editor::Editor for Editor {
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
                 let attrs = style_to_attrs(style, &base, internal.base_size);
-                let mut new_list = buffer_line.attrs_list().clone();
-                new_list.add_span(range, &attrs);
-                let _ = buffer_line.set_attrs_list(new_list);
+
+                if buffer_line.text().is_empty() {
+                    // Empty lines have no characters to span. Update the
+                    // line defaults so the style applies to future input
+                    // and is visible in `style_at` / cursor queries.
+                    let mut new_list = cosmic_text::AttrsList::new(&attrs);
+                    // Re-add any existing spans (shouldn't be any, but be safe)
+                    for (range, span_attrs) in buffer_line.attrs_list().spans() {
+                        new_list.add_span(range.clone(), &span_attrs.as_attrs());
+                    }
+                    let _ = buffer_line.set_attrs_list(new_list);
+                } else {
+                    let mut new_list = buffer_line.attrs_list().clone();
+                    new_list.add_span(range, &attrs);
+                    let _ = buffer_line.set_attrs_list(new_list);
+                }
             }
         });
     }
