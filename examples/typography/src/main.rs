@@ -158,7 +158,14 @@ impl App {
                 .font(roboto(font::Weight::Semibold, to_optical_size(self.opsz))),
             column![
                 text("Registered").size(10).style(theme::text::dim),
-                axis_slider("Weight", "wght", self.wght, 100.0..=1000.0, 1.0, Message::Wght),
+                axis_slider(
+                    "Weight",
+                    "wght",
+                    self.wght,
+                    100.0..=1000.0,
+                    1.0,
+                    Message::Wght
+                ),
                 axis_slider("Width", "wdth", self.wdth, 25.0..=151.0, 0.1, Message::Wdth),
                 opsz_slider(self.opsz),
                 axis_slider("Slant", "slnt", self.slnt, -10.0..=0.0, 0.1, Message::Slnt),
@@ -166,15 +173,78 @@ impl App {
             .spacing(6),
             column![
                 text("Parametric").size(10).style(theme::text::dim),
-                axis_slider("Grade", "GRAD", self.grad, -200.0..=150.0, 1.0, Message::Grad),
-                axis_slider("Counter width", "XTRA", self.xtra, 323.0..=603.0, 1.0, Message::Xtra),
-                axis_slider("Thick strokes", "XOPQ", self.xopq, 27.0..=175.0, 1.0, Message::Xopq),
-                axis_slider("Thin strokes", "YOPQ", self.yopq, 25.0..=135.0, 1.0, Message::Yopq),
-                axis_slider("Lowercase height", "YTLC", self.ytlc, 416.0..=570.0, 1.0, Message::Ytlc),
-                axis_slider("Uppercase height", "YTUC", self.ytuc, 528.0..=760.0, 1.0, Message::Ytuc),
-                axis_slider("Ascender height", "YTAS", self.ytas, 649.0..=854.0, 1.0, Message::Ytas),
-                axis_slider("Descender depth", "YTDE", self.ytde, -305.0..=-98.0, 1.0, Message::Ytde),
-                axis_slider("Figure height", "YTFI", self.ytfi, 560.0..=788.0, 1.0, Message::Ytfi),
+                axis_slider(
+                    "Grade",
+                    "GRAD",
+                    self.grad,
+                    -200.0..=150.0,
+                    1.0,
+                    Message::Grad
+                ),
+                axis_slider(
+                    "Counter width",
+                    "XTRA",
+                    self.xtra,
+                    323.0..=603.0,
+                    1.0,
+                    Message::Xtra
+                ),
+                axis_slider(
+                    "Thick strokes",
+                    "XOPQ",
+                    self.xopq,
+                    27.0..=175.0,
+                    1.0,
+                    Message::Xopq
+                ),
+                axis_slider(
+                    "Thin strokes",
+                    "YOPQ",
+                    self.yopq,
+                    25.0..=135.0,
+                    1.0,
+                    Message::Yopq
+                ),
+                axis_slider(
+                    "Lowercase height",
+                    "YTLC",
+                    self.ytlc,
+                    416.0..=570.0,
+                    1.0,
+                    Message::Ytlc
+                ),
+                axis_slider(
+                    "Uppercase height",
+                    "YTUC",
+                    self.ytuc,
+                    528.0..=760.0,
+                    1.0,
+                    Message::Ytuc
+                ),
+                axis_slider(
+                    "Ascender height",
+                    "YTAS",
+                    self.ytas,
+                    649.0..=854.0,
+                    1.0,
+                    Message::Ytas
+                ),
+                axis_slider(
+                    "Descender depth",
+                    "YTDE",
+                    self.ytde,
+                    -305.0..=-98.0,
+                    1.0,
+                    Message::Ytde
+                ),
+                axis_slider(
+                    "Figure height",
+                    "YTFI",
+                    self.ytfi,
+                    560.0..=788.0,
+                    1.0,
+                    Message::Ytfi
+                ),
             ]
             .spacing(6),
         ]
