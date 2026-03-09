@@ -1,4 +1,34 @@
 //! Rich text editor — adapted from `text/editor.rs` without Highlighter.
+//!
+//! # TODO: Font name lifetime strategy
+//!
+//! iced's `font::Family::Name(&'static str)` requires a `'static` lifetime,
+//! but cosmic-text copies font names into `SmolStr` (via `FamilyOwned`).
+//! When reading attrs back from cosmic-text, we get `Family::Name(&str)`
+//! borrowed from the SmolStr — NOT the original `&'static str`.
+//!
+//! We explored several approaches:
+//!
+//! - **`Cow<'static, str>`**: Zero-cost for the forward path (`Borrowed`),
+//!   allocates once on readback (`Owned`). But `Cow` isn't `Copy`, so `Font`
+//!   and `Family` would lose `Copy`, rippling through all of iced.
+//!
+//! - **`Arc<str>`**: Same Copy problem as `Cow`, and allocates in both
+//!   directions (ref-counted).
+//!
+//! - **Global string interning** (`Mutex<HashSet<&'static str>>`): Keeps
+//!   `&'static str` and `Copy`, but requires locking on every readback.
+//!
+//! - **Local interner in `Internal`** (current approach): A `HashSet<&'static str>`
+//!   on `Internal` populated on the write path (`set_span_style`,
+//!   `set_paragraph_style`, default font). The read path (`style_at`,
+//!   `paragraph_style`) looks up names without mutation or locking. If a name
+//!   is missing, we panic — every font name entering through iced's API is
+//!   `&'static str` and should have been registered.
+//!
+//! The long-term fix is likely changing `Family::Name` to `Cow<'static, str>`
+//! and accepting the loss of `Copy` on `Font`, but that's a large cross-crate
+//! refactor best done in a dedicated PR.
 use crate::core::font;
 use crate::core::text::editor::{
     self, Action, Cursor, Direction, Edit, Motion, Position, Selection,
@@ -11,6 +41,7 @@ use crate::text;
 use cosmic_text::Edit as _;
 
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fmt;
 use std::ops::Range;
 use std::sync::{self, Arc, RwLock};
@@ -30,6 +61,9 @@ struct Internal {
     letter_spacing: Em,
     font_features: Vec<font::Feature>,
     base_size: f32,
+    /// Every `&'static str` font name that has entered the editor.
+    /// See module-level doc for the full rationale.
+    font_names: HashSet<&'static str>,
 }
 
 impl Editor {
@@ -537,6 +571,9 @@ impl rich_editor::Editor for Editor {
                 || new_font_features != internal.font_features
             {
                 internal.font = new_font;
+                if let font::Family::Name(name) = new_font.family {
+                    let _ = internal.font_names.insert(name);
+                }
                 internal.letter_spacing = new_letter_spacing;
                 internal.font_features = new_font_features;
             }
@@ -607,6 +644,9 @@ impl rich_editor::Editor for Editor {
 
     fn set_span_style(&mut self, line: usize, range: Range<usize>, style: &Style) {
         self.with_internal_mut(|internal| {
+            if let Some(font) = style.font {
+                internal.register_font(font);
+            }
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
@@ -620,6 +660,9 @@ impl rich_editor::Editor for Editor {
 
     fn set_paragraph_style(&mut self, line: usize, style: &ParagraphStyle) {
         self.with_internal_mut(|internal| {
+            if let Some(font) = style.style.font {
+                internal.register_font(font);
+            }
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 // Set default attrs for the line
@@ -666,7 +709,14 @@ impl rich_editor::Editor for Editor {
         buffer
             .lines
             .get(line)
-            .map(|bl| attrs_to_style(&bl.attrs_list().get_span(column)))
+            .map(|bl| {
+                let defaults = bl.attrs_list().defaults();
+                attrs_to_style(
+                    &bl.attrs_list().get_span(column),
+                    &defaults,
+                    &internal.font_names,
+                )
+            })
             .unwrap_or_default()
     }
 
@@ -679,7 +729,7 @@ impl rich_editor::Editor for Editor {
             .map(|bl| {
                 let defaults = bl.attrs_list().defaults();
                 ParagraphStyle {
-                    style: attrs_to_style(&defaults),
+                    style: attrs_to_style(&defaults, &defaults, &internal.font_names),
                     alignment: bl.align().map(|a| match a {
                         cosmic_text::Align::Left => Alignment::Left,
                         cosmic_text::Align::Center => Alignment::Center,
@@ -727,6 +777,15 @@ impl Default for Internal {
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
             base_size: 16.0,
+            font_names: HashSet::new(),
+        }
+    }
+}
+
+impl Internal {
+    fn register_font(&mut self, font: Font) {
+        if let font::Family::Name(name) = font.family {
+            let _ = self.font_names.insert(name);
         }
     }
 }
@@ -858,7 +917,21 @@ fn style_to_attrs<'a>(
     attrs
 }
 
-fn attrs_to_style(attrs: &cosmic_text::Attrs<'_>) -> Style {
+fn attrs_to_style(
+    attrs: &cosmic_text::Attrs<'_>,
+    defaults: &cosmic_text::Attrs<'_>,
+    font_names: &HashSet<&'static str>,
+) -> Style {
+    // Only report an explicit font when the span differs from the line defaults.
+    let font = if attrs.family != defaults.family {
+        Some(Font {
+            family: from_family(attrs.family, font_names),
+            ..Font::default()
+        })
+    } else {
+        None
+    };
+
     Style {
         bold: Some(attrs.weight >= cosmic_text::Weight::BOLD),
         italic: Some(attrs.style == cosmic_text::Style::Italic),
@@ -871,7 +944,25 @@ fn attrs_to_style(attrs: &cosmic_text::Attrs<'_>) -> Style {
             let m: cosmic_text::Metrics = m.into();
             m.font_size
         }),
-        font: None, // Would need reverse font lookup, skip for now
+        font,
+    }
+}
+
+fn from_family(
+    family: cosmic_text::Family<'_>,
+    font_names: &HashSet<&'static str>,
+) -> font::Family {
+    match family {
+        cosmic_text::Family::Name(name) => {
+            font::Family::Name(font_names.get(name).copied().expect(
+                "Font name must have been registered via set_span_style or set_paragraph_style",
+            ))
+        }
+        cosmic_text::Family::SansSerif => font::Family::SansSerif,
+        cosmic_text::Family::Serif => font::Family::Serif,
+        cosmic_text::Family::Cursive => font::Family::Cursive,
+        cosmic_text::Family::Fantasy => font::Family::Fantasy,
+        cosmic_text::Family::Monospace => font::Family::Monospace,
     }
 }
 
