@@ -37,6 +37,54 @@ impl Font {
             ..Self::DEFAULT
         }
     }
+
+    /// Creates a [`Font`] with the given [`Family::Name`] from a runtime string.
+    ///
+    /// The name is interned in a global cache and never freed.
+    /// For compile-time constants, prefer [`Font::with_name`].
+    pub fn from_name(name: &str) -> Self {
+        use rustc_hash::FxHashSet;
+        use std::sync::{LazyLock, Mutex};
+
+        static NAMES: LazyLock<Mutex<FxHashSet<&'static str>>> =
+            LazyLock::new(|| Mutex::new(FxHashSet::default()));
+
+        let mut set = NAMES.lock().expect("font name pool");
+        let interned = if let Some(&existing) = set.get(name) {
+            existing
+        } else {
+            let s: &'static str = name.to_owned().leak();
+            let _ = set.insert(s);
+            s
+        };
+
+        Font {
+            family: Family::Name(interned),
+            ..Self::DEFAULT
+        }
+    }
+}
+
+/// Creates a [`Font`] with the given [`Family::Name`] from a runtime string.
+///
+/// Shorthand for [`Font::from_name`].
+pub fn font(name: &str) -> Font {
+    Font::from_name(name)
+}
+
+impl From<&str> for Font {
+    fn from(name: &str) -> Self {
+        Font::from_name(name)
+    }
+}
+
+impl From<Option<&str>> for Font {
+    fn from(name: Option<&str>) -> Self {
+        match name {
+            Some(name) => Font::from_name(name),
+            None => Font::DEFAULT,
+        }
+    }
 }
 
 /// A font family.

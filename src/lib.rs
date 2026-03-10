@@ -647,6 +647,7 @@ pub mod widget {
     mod renderer {}
 }
 
+pub use self::font::font;
 pub use application::Application;
 pub use daemon::Daemon;
 pub use error::Error;
