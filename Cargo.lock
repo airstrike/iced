@@ -1602,6 +1602,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "font_picker"
+version = "0.1.0"
+dependencies = [
+ "iced",
+]
+
+[[package]]
 name = "fontconfig-parser"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

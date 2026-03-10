@@ -45,6 +45,12 @@ pub enum Action<T> {
         channel: oneshot::Sender<Result<(), font::Error>>,
     },
 
+    /// List all available font families.
+    ListFamilies {
+        /// The channel to send back the family names.
+        channel: oneshot::Sender<Vec<String>>,
+    },
+
     /// Run a widget operation.
     Widget(Box<dyn core::widget::Operation>),
 
@@ -91,6 +97,7 @@ impl<T> Action<T> {
         match self {
             Action::Output(output) => Ok(output),
             Action::LoadFont { bytes, channel } => Err(Action::LoadFont { bytes, channel }),
+            Action::ListFamilies { channel } => Err(Action::ListFamilies { channel }),
             Action::Widget(operation) => Err(Action::Widget(operation)),
             Action::Clipboard(action) => Err(Action::Clipboard(action)),
             Action::Window(action) => Err(Action::Window(action)),
@@ -113,6 +120,9 @@ where
             Action::Output(output) => write!(f, "Action::Output({output:?})"),
             Action::LoadFont { .. } => {
                 write!(f, "Action::LoadFont")
+            }
+            Action::ListFamilies { .. } => {
+                write!(f, "Action::ListFamilies")
             }
             Action::Widget { .. } => {
                 write!(f, "Action::Widget")

@@ -1668,6 +1668,21 @@ fn run_action<'a, P, C>(
                 let _ = channel.send(Ok(()));
             }
         }
+        Action::ListFamilies { channel } => {
+            use std::collections::BTreeSet;
+
+            let font_system = crate::graphics::text::font_system();
+            let font_system = font_system.read().expect("font system lock");
+
+            let families = font_system
+                .families()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(String::from)
+                .collect();
+
+            let _ = channel.send(families);
+        }
         Action::Tick => {
             for (_id, window) in window_manager.iter_mut() {
                 window.renderer.tick();

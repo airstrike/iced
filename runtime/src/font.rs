@@ -14,3 +14,8 @@ pub fn load(bytes: impl Into<Cow<'static, [u8]>>) -> Task<Result<(), Error>> {
         channel,
     })
 }
+
+/// Returns a [`Task`] that produces all font family names available in the system.
+pub fn families() -> Task<Vec<String>> {
+    task::oneshot(|channel| Action::ListFamilies { channel })
+}
