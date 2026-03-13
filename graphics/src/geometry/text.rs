@@ -49,6 +49,8 @@ pub struct Text {
     pub letter_spacing: Em,
     /// The font features of the text.
     pub font_features: Vec<font::Feature>,
+    /// The font variation axis settings of the text.
+    pub font_variations: Vec<font::Variation>,
 }
 
 impl Text {
@@ -68,6 +70,7 @@ impl Text {
             ellipsis: Ellipsis::default(),
             letter_spacing: self.letter_spacing,
             font_features: self.font_features.clone(),
+            font_variations: Vec::new(),
             hint_factor: None,
         });
 
@@ -179,6 +182,7 @@ impl Default for Text {
             ellipsis: Ellipsis::default(),
             letter_spacing: Em::ZERO,
             font_features: vec![],
+            font_variations: vec![],
         }
     }
 }
