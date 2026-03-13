@@ -315,6 +315,12 @@ impl text::rich_editor::Editor for () {
 
     fn set_alignment(&mut self, _line: usize, _alignment: text::Alignment) {}
 
+    fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
+
+    fn line_geometry(&self, _line: usize) -> Option<(f32, f32, f32)> {
+        None
+    }
+
     fn style_at(&self, _line: usize, _column: usize) -> text::rich_editor::Style {
         text::rich_editor::Style::default()
     }

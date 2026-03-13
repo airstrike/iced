@@ -107,6 +107,13 @@ pub trait Editor: Sized + Default {
     /// Set only the alignment on a line without touching character defaults.
     fn set_alignment(&mut self, line: usize, alignment: crate::text::Alignment);
 
+    /// Set the left margin for a line (pixels). Creates space for list markers.
+    fn set_margin_left(&mut self, line: usize, margin: f32);
+
+    /// First visual line geometry for a paragraph line: (line_top, line_height, line_y_baseline).
+    /// Returns None if the line doesn't exist or isn't laid out.
+    fn line_geometry(&self, line: usize) -> Option<(f32, f32, f32)>;
+
     /// Read character formatting at a position.
     fn style_at(&self, line: usize, column: usize) -> Style;
 

@@ -664,6 +664,29 @@ impl rich_editor::Editor for Editor {
         });
     }
 
+    fn set_margin_left(&mut self, line: usize, margin: f32) {
+        self.with_internal_mut(|internal| {
+            let buffer = buffer_mut_from_editor(&mut internal.document);
+            if let Some(buffer_line) = buffer.lines.get_mut(line) {
+                let _ = buffer_line.set_margin_left(margin);
+            }
+        });
+    }
+
+    fn line_geometry(&self, line: usize) -> Option<(f32, f32, f32)> {
+        let internal = self.internal();
+        let buffer = buffer_from_editor(&internal.document);
+        for run in buffer.layout_runs() {
+            if run.line_i == line {
+                return Some((run.line_top, run.line_height, run.line_y));
+            }
+            if run.line_i > line {
+                break;
+            }
+        }
+        None
+    }
+
     fn style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
