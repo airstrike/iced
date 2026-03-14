@@ -673,12 +673,17 @@ impl rich_editor::Editor for Editor {
         });
     }
 
-    fn line_geometry(&self, line: usize) -> Option<(f32, f32, f32)> {
+    fn line_geometry(&self, line: usize) -> Option<rich_editor::LineGeometry> {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
         for run in buffer.layout_runs() {
             if run.line_i == line {
-                return Some((run.line_top, run.line_height, run.line_y));
+                return Some(rich_editor::LineGeometry {
+                    line_top: run.line_top,
+                    line_height: run.line_height,
+                    baseline_y: run.line_y,
+                    x_offset: run.x_offset,
+                });
             }
             if run.line_i > line {
                 break;

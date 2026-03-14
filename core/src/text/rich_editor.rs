@@ -43,6 +43,19 @@ pub struct ParagraphStyle {
     pub spacing_after: Option<f32>,
 }
 
+/// Geometry of the first visual line of a paragraph.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineGeometry {
+    /// Y offset from the top of the buffer to the top of this line.
+    pub line_top: f32,
+    /// Total height of this line (ascent + descent + leading).
+    pub line_height: f32,
+    /// Y offset from the top of the buffer to the baseline.
+    pub baseline_y: f32,
+    /// X offset of the line start (margin + alignment).
+    pub x_offset: f32,
+}
+
 /// A rich text editor — manages text + per-character formatting.
 pub trait Editor: Sized + Default {
     /// The font type.
@@ -110,9 +123,9 @@ pub trait Editor: Sized + Default {
     /// Set the left margin for a line (pixels). Creates space for list markers.
     fn set_margin_left(&mut self, line: usize, margin: f32);
 
-    /// First visual line geometry for a paragraph line: (line_top, line_height, line_y_baseline).
+    /// First visual line geometry for a paragraph line.
     /// Returns None if the line doesn't exist or isn't laid out.
-    fn line_geometry(&self, line: usize) -> Option<(f32, f32, f32)>;
+    fn line_geometry(&self, line: usize) -> Option<LineGeometry>;
 
     /// Read character formatting at a position.
     fn style_at(&self, line: usize, column: usize) -> Style;
