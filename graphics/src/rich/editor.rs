@@ -202,7 +202,7 @@ impl rich_editor::Editor for Editor {
                         {
                             return Some(
                                 Rectangle {
-                                    x: 0.0,
+                                    x: run.x_offset,
                                     width: run.line_height * 0.3,
                                     y: run.line_top,
                                     height: run.line_height,
@@ -960,12 +960,6 @@ fn from_family(
 /// `line_height` comes from the matching layout run so it reflects
 /// per-line variable heights.
 fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
-    let margin = buffer
-        .lines
-        .get(cursor.line)
-        .map(cosmic_text::BufferLine::margin_left)
-        .unwrap_or(0.0);
-
     for run in buffer.layout_runs() {
         if run.line_i != cursor.line {
             continue;
@@ -991,19 +985,19 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
                 .take_while(|glyph| cursor.index > glyph.start)
                 .last()
                 .map(|g| g.x + g.w)
-                .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(margin));
+                .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(run.x_offset));
 
             return (x, run.line_top, run.line_height);
         }
     }
 
     // Cursor is past the last run — use the end of the last run on the cursor's line
-    let mut last_x = margin;
+    let mut last_x = 0.0;
     let mut last_y = 0.0;
     let mut last_h = buffer.metrics().line_height;
     for run in buffer.layout_runs() {
         if run.line_i == cursor.line {
-            last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(margin);
+            last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
             last_y = run.line_top;
             last_h = run.line_height;
         }
