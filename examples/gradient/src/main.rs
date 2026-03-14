@@ -1,6 +1,6 @@
 use iced::gradient;
 use iced::theme;
-use iced::widget::{checkbox, column, container, row, slider, space, text};
+use iced::widget::{checkbox, column, container, row, slider, space, text, toggler};
 use iced::{Center, Color, Element, Fill, Radians, Theme, color};
 
 pub fn main() -> iced::Result {
@@ -17,6 +17,8 @@ struct Gradient {
     start: Color,
     end: Color,
     angle: Radians,
+    radius: f32,
+    radial: bool,
     transparent: bool,
 }
 
@@ -25,6 +27,8 @@ enum Message {
     StartChanged(Color),
     EndChanged(Color),
     AngleChanged(Radians),
+    RadiusChanged(f32),
+    RadialToggled(bool),
     TransparentToggled(bool),
 }
 
@@ -34,6 +38,8 @@ impl Gradient {
             start: Color::WHITE,
             end: color!(0x0000ff),
             angle: Radians(0.0),
+            radius: 1.0,
+            radial: false,
             transparent: false,
         }
     }
@@ -43,6 +49,8 @@ impl Gradient {
             Message::StartChanged(color) => self.start = color,
             Message::EndChanged(color) => self.end = color,
             Message::AngleChanged(angle) => self.angle = angle,
+            Message::RadiusChanged(radius) => self.radius = radius,
+            Message::RadialToggled(radial) => self.radial = radial,
             Message::TransparentToggled(transparent) => {
                 self.transparent = transparent;
             }
@@ -54,29 +62,51 @@ impl Gradient {
             start,
             end,
             angle,
+            radius,
+            radial,
             transparent,
         } = *self;
 
         let gradient_box = container(space())
             .style(move |_theme| {
-                let gradient = gradient::Linear::new(angle)
-                    .add_stop(0.0, start)
-                    .add_stop(1.0, end);
+                if radial {
+                    let mut g = gradient::Radial::new();
+                    g.radius = radius;
 
-                gradient.into()
+                    g.add_stop(0.0, start).add_stop(1.0, end).into()
+                } else {
+                    gradient::Linear::new(angle)
+                        .add_stop(0.0, start)
+                        .add_stop(1.0, end)
+                        .into()
+                }
             })
             .width(Fill)
             .height(Fill);
 
-        let angle_picker = row![
-            text("Angle").width(64),
-            slider(Radians::RANGE, self.angle, Message::AngleChanged).step(0.01)
-        ]
+        let gradient_control = if self.radial {
+            row![
+                text("Radius").width(64),
+                slider(0.01..=2.0, self.radius, Message::RadiusChanged).step(0.01)
+            ]
+        } else {
+            row![
+                text("Angle").width(64),
+                slider(Radians::RANGE, self.angle, Message::AngleChanged).step(0.01)
+            ]
+        }
         .spacing(8)
         .padding(8)
         .align_y(Center);
 
-        let transparency_toggle = iced::widget::Container::new(
+        let radial_toggle = container(
+            toggler(self.radial)
+                .label("Radial")
+                .on_toggle(Message::RadialToggled),
+        )
+        .padding(8);
+
+        let transparency_toggle = container(
             checkbox(transparent)
                 .label("Transparent window")
                 .on_toggle(Message::TransparentToggled),
@@ -86,7 +116,8 @@ impl Gradient {
         column![
             color_picker("Start", self.start).map(Message::StartChanged),
             color_picker("End", self.end).map(Message::EndChanged),
-            angle_picker,
+            gradient_control,
+            radial_toggle,
             transparency_toggle,
             gradient_box,
         ]
