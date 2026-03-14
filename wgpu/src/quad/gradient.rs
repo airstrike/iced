@@ -115,16 +115,18 @@ impl Pipeline {
                             4 => Uint32x4,
                             // Direction
                             5 => Float32x4,
+                            // Gradient type
+                            6 => Uint32,
                             // Position & Scale
-                            6 => Float32x4,
-                            // Border color
                             7 => Float32x4,
-                            // Border radius
+                            // Border color
                             8 => Float32x4,
+                            // Border radius
+                            9 => Float32x4,
                             // Border width
-                            9 => Float32,
+                            10 => Float32,
                             // Snap
-                            10 => Uint32,
+                            11 => Uint32,
                         ),
                     }],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),

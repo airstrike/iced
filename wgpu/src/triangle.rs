@@ -860,7 +860,9 @@ mod gradient {
                             // Offsets
                             5 => Uint32x4,
                             // Direction
-                            6 => Float32x4
+                            6 => Float32x4,
+                            // Gradient type
+                            7 => Uint32
                         ),
                     }],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),

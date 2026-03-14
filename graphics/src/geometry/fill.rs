@@ -61,6 +61,15 @@ impl From<gradient::Linear> for Fill {
     }
 }
 
+impl From<gradient::Radial> for Fill {
+    fn from(gradient: gradient::Radial) -> Self {
+        Fill {
+            style: Style::Gradient(Gradient::Radial(gradient)),
+            ..Default::default()
+        }
+    }
+}
+
 /// The fill rule defines how to determine what is inside and what is outside of
 /// a shape.
 ///

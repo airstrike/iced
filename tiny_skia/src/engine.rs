@@ -172,6 +172,59 @@ impl Engine {
                         )
                         .expect("Create linear gradient")
                     }
+                    Background::Gradient(Gradient::Radial(radial)) => {
+                        let center = crate::core::Point::new(
+                            quad.bounds.x + quad.bounds.width * radial.center.x,
+                            quad.bounds.y + quad.bounds.height * radial.center.y,
+                        );
+
+                        let dx = f32::max(
+                            center.x - quad.bounds.x,
+                            quad.bounds.x + quad.bounds.width - center.x,
+                        );
+                        let dy = f32::max(
+                            center.y - quad.bounds.y,
+                            quad.bounds.y + quad.bounds.height - center.y,
+                        );
+                        let radius = (dx * dx + dy * dy).sqrt() * radial.radius;
+
+                        let stops: Vec<tiny_skia::GradientStop> = radial
+                            .stops
+                            .into_iter()
+                            .flatten()
+                            .map(|stop| {
+                                tiny_skia::GradientStop::new(
+                                    stop.offset,
+                                    tiny_skia::Color::from_rgba(
+                                        stop.color.b,
+                                        stop.color.g,
+                                        stop.color.r,
+                                        stop.color.a,
+                                    )
+                                    .expect("Create color"),
+                                )
+                            })
+                            .collect();
+
+                        let center_ts = tiny_skia::Point {
+                            x: center.x,
+                            y: center.y,
+                        };
+
+                        tiny_skia::RadialGradient::new(
+                            center_ts,
+                            center_ts,
+                            radius,
+                            if stops.is_empty() {
+                                vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
+                            } else {
+                                stops
+                            },
+                            tiny_skia::SpreadMode::Pad,
+                            tiny_skia::Transform::identity(),
+                        )
+                        .expect("Create radial gradient")
+                    }
                 },
                 anti_alias: true,
                 ..tiny_skia::Paint::default()
