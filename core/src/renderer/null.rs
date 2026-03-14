@@ -317,7 +317,7 @@ impl text::rich_editor::Editor for () {
 
     fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
 
-    fn line_geometry(&self, _line: usize) -> Option<(f32, f32, f32)> {
+    fn line_geometry(&self, _line: usize) -> Option<text::rich_editor::LineGeometry> {
         None
     }
 
