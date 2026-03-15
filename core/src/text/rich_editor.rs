@@ -30,6 +30,8 @@ pub struct Style {
     pub size: Option<f32>,
     /// Override text color.
     pub color: Option<Color>,
+    /// Override letter spacing.
+    pub letter_spacing: Option<f32>,
 }
 
 /// Paragraph-level formatting style.

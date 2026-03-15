@@ -888,6 +888,10 @@ fn style_to_attrs<'a>(
         attrs = attrs.color(text::to_color(color));
     }
 
+    if let Some(ls) = style.letter_spacing {
+        attrs = attrs.letter_spacing(ls);
+    }
+
     if let Some(font) = style.font {
         // Build new attrs from the font, then re-apply non-font style
         let mut font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
@@ -958,6 +962,11 @@ fn attrs_to_style(
         color: attrs
             .color_opt
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
+        letter_spacing: if attrs.letter_spacing_opt != defaults.letter_spacing_opt {
+            attrs.letter_spacing_opt.map(|ls| ls.0)
+        } else {
+            None
+        },
         size: attrs.metrics_opt.map(|m| {
             let m: cosmic_text::Metrics = m.into();
             m.font_size
