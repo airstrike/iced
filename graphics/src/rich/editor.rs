@@ -932,6 +932,7 @@ fn style_to_attrs<'a>(
         }
 
         font_attrs.text_decoration = attrs.text_decoration;
+        font_attrs.letter_spacing_opt = attrs.letter_spacing_opt;
 
         attrs = font_attrs;
     }
