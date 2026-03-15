@@ -201,10 +201,12 @@ impl rich_editor::Editor for Editor {
                             && run.line_i >= start_cursor.line
                             && run.line_i <= end_cursor.line
                         {
+                            let w = run.line_height * 0.3;
+                            let x = empty_line_x(run.x_offset, w, &buffer.lines, run.line_i);
                             return Some(
                                 Rectangle {
-                                    x: run.x_offset,
-                                    width: run.line_height * 0.3,
+                                    x,
+                                    width: w,
                                     y: run.line_top,
                                     height: run.line_height,
                                 } * (1.0 / internal.hint_factor),
@@ -233,8 +235,12 @@ impl rich_editor::Editor for Editor {
                 let (caret_x, caret_y, caret_h) = caret_position(cursor, buffer);
                 let f = 1.0 / internal.hint_factor;
 
+                // Keep the 1px-wide caret within the editor bounds so it
+                // isn't clipped on right-aligned (or end-of-line) text.
+                let x = (caret_x * f).min(internal.bounds.width - 1.0).max(0.0);
+
                 Selection::Caret(Rectangle::new(
-                    Point::new(caret_x * f, caret_y * f),
+                    Point::new(x, caret_y * f),
                     Size::new(1.0, caret_h * f),
                 ))
             }
@@ -981,6 +987,22 @@ fn from_family(
 /// Find the caret rectangle for a cursor using layout runs.
 ///
 /// Returns `(x, y, line_height)` in hinted (physical) pixels, where
+/// For an empty line, adjust `x_offset` so that a visual indicator of the
+/// given `width` stays within the line rather than extending past the right
+/// edge (which is what happens with right-aligned text).
+fn empty_line_x(
+    x_offset: f32,
+    width: f32,
+    lines: &[cosmic_text::BufferLine],
+    line_i: usize,
+) -> f32 {
+    match lines.get(line_i).and_then(cosmic_text::BufferLine::align) {
+        Some(cosmic_text::Align::Right) | Some(cosmic_text::Align::End) => x_offset - width,
+        Some(cosmic_text::Align::Center) => x_offset - width / 2.0,
+        _ => x_offset,
+    }
+}
+
 /// `line_height` comes from the matching layout run so it reflects
 /// per-line variable heights.
 fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
