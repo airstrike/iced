@@ -117,8 +117,11 @@ pub trait Editor: Sized + Default {
     /// Set paragraph-level defaults + alignment.
     fn set_paragraph_style(&mut self, line: usize, style: &ParagraphStyle);
 
-    /// Set only the alignment on a line without touching character defaults.
-    fn set_alignment(&mut self, line: usize, alignment: crate::text::Alignment);
+    /// Set the default alignment for lines without explicit alignment.
+    ///
+    /// Lines that were previously using the old default are updated to the new
+    /// default.  Freshly-created lines (`None` in cosmic-text) also receive it.
+    fn align_x(&mut self, alignment: crate::text::Alignment);
 
     /// Set the left margin for a line (pixels). Creates space for list markers.
     fn set_margin_left(&mut self, line: usize, margin: f32);

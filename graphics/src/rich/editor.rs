@@ -62,6 +62,7 @@ struct Internal {
     font_features: Vec<font::Feature>,
     font_variations: Vec<font::Variation>,
     line_height_ratio: f32,
+    default_alignment: Alignment,
     /// Every `&'static str` font name that has entered the editor.
     /// See module-level doc for the full rationale.
     font_names: HashSet<&'static str>,
@@ -655,11 +656,28 @@ impl rich_editor::Editor for Editor {
         });
     }
 
-    fn set_alignment(&mut self, line: usize, alignment: Alignment) {
+    fn align_x(&mut self, alignment: Alignment) {
         self.with_internal_mut(|internal| {
+            let old = internal.default_alignment;
+            let new_align = text::to_align(alignment);
             let buffer = buffer_mut_from_editor(&mut internal.document);
-            if let Some(buffer_line) = buffer.lines.get_mut(line) {
-                let _ = buffer_line.set_align(text::to_align(alignment));
+
+            if alignment != old {
+                let old_align = text::to_align(old);
+                for line in buffer.lines.iter_mut() {
+                    let current = line.align();
+                    if current == old_align || current.is_none() {
+                        let _ = line.set_align(new_align);
+                    }
+                }
+                internal.default_alignment = alignment;
+            } else if new_align.is_some() {
+                // Default unchanged, but ensure newly-created lines get it.
+                for line in buffer.lines.iter_mut() {
+                    if line.align().is_none() {
+                        let _ = line.set_align(new_align);
+                    }
+                }
             }
         });
     }
@@ -774,6 +792,7 @@ impl Default for Internal {
             font_features: Vec::new(),
             font_variations: Vec::new(),
             line_height_ratio: 1.3,
+            default_alignment: Alignment::Default,
             font_names: HashSet::new(),
         }
     }
@@ -1049,5 +1068,112 @@ where
         cosmic_text::BufferRef::Owned(buffer) => buffer,
         cosmic_text::BufferRef::Borrowed(buffer) => buffer,
         cosmic_text::BufferRef::Arc(_buffer) => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::text::rich_editor::Editor as _;
+
+    fn editor(text: &str) -> Editor {
+        let mut ed = Editor::with_text(text);
+        // Trigger layout so buffer lines are shaped.
+        ed.update(
+            Size::new(200.0, 200.0),
+            Font::default(),
+            Pixels(16.0),
+            LineHeight::default(),
+            Em::ZERO,
+            Vec::new(),
+            Vec::new(),
+            Wrapping::Word,
+            None,
+        );
+        ed
+    }
+
+    fn line_align(ed: &Editor, line: usize) -> Option<cosmic_text::Align> {
+        ed.buffer().lines.get(line).and_then(|l| l.align())
+    }
+
+    #[test]
+    fn default_alignment_applies_to_all_lines() {
+        let mut ed = editor("line one\nline two\nline three");
+
+        // Initially no explicit alignment.
+        assert_eq!(line_align(&ed, 0), None);
+        assert_eq!(line_align(&ed, 1), None);
+        assert_eq!(line_align(&ed, 2), None);
+
+        ed.align_x(Alignment::Center);
+
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 2), Some(cosmic_text::Align::Center));
+    }
+
+    #[test]
+    fn default_alignment_preserves_explicit() {
+        let mut ed = editor("line one\nline two\nline three");
+
+        // Explicitly right-align line 1 via paragraph style.
+        ed.set_paragraph_style(
+            1,
+            &rich_editor::ParagraphStyle {
+                alignment: Some(Alignment::Right),
+                ..Default::default()
+            },
+        );
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Right));
+
+        // Set default to center — line 1 should stay Right.
+        ed.align_x(Alignment::Center);
+
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(
+            line_align(&ed, 1),
+            Some(cosmic_text::Align::Right),
+            "explicitly set line should keep its alignment"
+        );
+        assert_eq!(line_align(&ed, 2), Some(cosmic_text::Align::Center));
+    }
+
+    #[test]
+    fn changing_default_updates_non_explicit_lines() {
+        let mut ed = editor("aaa\nbbb");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Center));
+
+        // Change default to right.
+        ed.align_x(Alignment::Right);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Right));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Right));
+    }
+
+    #[test]
+    fn setting_default_to_default_restores_none() {
+        let mut ed = editor("hello");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+
+        // Setting back to Default should restore None.
+        ed.align_x(Alignment::Default);
+        assert_eq!(line_align(&ed, 0), None);
+    }
+
+    #[test]
+    fn same_default_is_noop() {
+        let mut ed = editor("hello");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+
+        // Setting the same value again should not change anything.
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
     }
 }

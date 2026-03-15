@@ -313,7 +313,7 @@ impl text::rich_editor::Editor for () {
 
     fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::ParagraphStyle) {}
 
-    fn set_alignment(&mut self, _line: usize, _alignment: text::Alignment) {}
+    fn align_x(&mut self, _alignment: text::Alignment) {}
 
     fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
 
