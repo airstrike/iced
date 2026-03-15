@@ -719,23 +719,25 @@ impl rich_editor::Editor for Editor {
     fn style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
+        // Compare against global defaults so per-line custom attrs
+        // (e.g. font set on an empty paragraph) are always reported
+        // as explicit, not swallowed by a same-as-line-defaults diff.
+        let global_defaults = cosmic_text::Attrs::new();
         buffer
             .lines
             .get(line)
             .map(|bl| {
-                let defaults = bl.attrs_list().defaults();
-                // When cursor is at or past end of line, use the last
-                // character's style so the caret height matches the text.
-                let idx = if column > 0 && column >= bl.text().len() {
-                    column - 1
+                let span = if bl.text().is_empty() {
+                    bl.attrs_list().defaults()
                 } else {
-                    column
+                    let idx = if column > 0 && column >= bl.text().len() {
+                        column - 1
+                    } else {
+                        column
+                    };
+                    bl.attrs_list().get_span(idx)
                 };
-                attrs_to_style(
-                    &bl.attrs_list().get_span(idx),
-                    &defaults,
-                    &internal.font_names,
-                )
+                attrs_to_style(&span, &global_defaults, &internal.font_names)
             })
             .unwrap_or_default()
     }
