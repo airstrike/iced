@@ -465,6 +465,7 @@ pub fn into_paint(style: Style) -> tiny_skia::Paint<'static> {
 
                     tiny_skia::RadialGradient::new(
                         center,
+                        0.0,
                         center,
                         radial.radius,
                         if stops.is_empty() {
@@ -476,6 +477,42 @@ pub fn into_paint(style: Style) -> tiny_skia::Paint<'static> {
                         tiny_skia::Transform::identity(),
                     )
                     .expect("Create radial gradient")
+                }
+                Gradient::Conic(conic) => {
+                    let stops: Vec<tiny_skia::GradientStop> = conic
+                        .stops
+                        .into_iter()
+                        .flatten()
+                        .map(|stop| {
+                            tiny_skia::GradientStop::new(
+                                stop.offset,
+                                tiny_skia::Color::from_rgba(
+                                    stop.color.b,
+                                    stop.color.g,
+                                    stop.color.r,
+                                    stop.color.a,
+                                )
+                                .expect("Create color"),
+                            )
+                        })
+                        .collect();
+
+                    tiny_skia::SweepGradient::new(
+                        tiny_skia::Point {
+                            x: conic.center.x,
+                            y: conic.center.y,
+                        },
+                        conic.start_angle.to_degrees(),
+                        conic.end_angle.to_degrees(),
+                        if stops.is_empty() {
+                            vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
+                        } else {
+                            stops
+                        },
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    )
+                    .expect("Create conic gradient")
                 }
             },
         },

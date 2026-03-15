@@ -53,6 +53,12 @@ fn gradient(
         let center = direction.xy;
         let radius = direction.z;
         coord_offset = distance(raw_position, center) / radius;
+    } else if (gradient_type == 2u) {
+        let center = direction.xy;
+        let start_angle = direction.z;
+        let end_angle = direction.w;
+        let angle = atan2(raw_position.y - center.y, raw_position.x - center.x);
+        coord_offset = (angle - start_angle) / (end_angle - start_angle);
     } else {
         let start = direction.xy;
         let end = direction.zw;

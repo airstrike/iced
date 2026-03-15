@@ -213,6 +213,7 @@ impl Engine {
 
                         tiny_skia::RadialGradient::new(
                             center_ts,
+                            0.0,
                             center_ts,
                             radius,
                             if stops.is_empty() {
@@ -224,6 +225,47 @@ impl Engine {
                             tiny_skia::Transform::identity(),
                         )
                         .expect("Create radial gradient")
+                    }
+                    Background::Gradient(Gradient::Conic(conic)) => {
+                        let center = crate::core::Point::new(
+                            quad.bounds.x + quad.bounds.width * conic.center.x,
+                            quad.bounds.y + quad.bounds.height * conic.center.y,
+                        );
+
+                        let stops: Vec<tiny_skia::GradientStop> = conic
+                            .stops
+                            .into_iter()
+                            .flatten()
+                            .map(|stop| {
+                                tiny_skia::GradientStop::new(
+                                    stop.offset,
+                                    tiny_skia::Color::from_rgba(
+                                        stop.color.b,
+                                        stop.color.g,
+                                        stop.color.r,
+                                        stop.color.a,
+                                    )
+                                    .expect("Create color"),
+                                )
+                            })
+                            .collect();
+
+                        tiny_skia::SweepGradient::new(
+                            tiny_skia::Point {
+                                x: center.x,
+                                y: center.y,
+                            },
+                            conic.start_angle.0.to_degrees(),
+                            conic.end_angle.0.to_degrees(),
+                            if stops.is_empty() {
+                                vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
+                            } else {
+                                stops
+                            },
+                            tiny_skia::SpreadMode::Pad,
+                            tiny_skia::Transform::identity(),
+                        )
+                        .expect("Create conic gradient")
                     }
                 },
                 anti_alias: true,

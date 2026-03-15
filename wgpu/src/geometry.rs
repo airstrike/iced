@@ -573,6 +573,9 @@ impl Transform {
                 radial.center = self.transform_point(radial.center);
                 radial.radius = radial.center.distance(scaled);
             }
+            Gradient::Conic(conic) => {
+                conic.center = self.transform_point(conic.center);
+            }
         }
 
         gradient

@@ -70,6 +70,15 @@ impl From<gradient::Radial> for Fill {
     }
 }
 
+impl From<gradient::Conic> for Fill {
+    fn from(gradient: gradient::Conic) -> Self {
+        Fill {
+            style: Style::Gradient(Gradient::Conic(gradient)),
+            ..Default::default()
+        }
+    }
+}
+
 /// The fill rule defines how to determine what is inside and what is outside of
 /// a shape.
 ///
