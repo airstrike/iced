@@ -657,6 +657,20 @@ impl rich_editor::Editor for Editor {
                 internal.register_font(font);
             }
             let buffer = buffer_mut_from_editor(&mut internal.document);
+
+            // Read buffer font_size (unhinted) before taking a mutable borrow on the line.
+            let buffer_font_size = buffer.metrics().font_size
+                / if internal.hint {
+                    internal.hint_factor
+                } else {
+                    1.0
+                };
+
+            let lh_ratio = style
+                .line_height
+                .map(|lh| lh.to_absolute(Pixels(buffer_font_size)).0 / buffer_font_size)
+                .unwrap_or(internal.line_height_ratio);
+
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 // Set default attrs for the line
                 let base_attrs = text::to_attributes(
@@ -665,8 +679,16 @@ impl rich_editor::Editor for Editor {
                     &internal.font_features,
                     &internal.font_variations,
                 );
-                let defaults =
-                    style_to_attrs(&style.style, &base_attrs, internal.line_height_ratio);
+                let mut defaults = style_to_attrs(&style.style, &base_attrs, lh_ratio);
+
+                // If line_height is set but size is not, we still need per-line
+                // metrics so cosmic-text uses the paragraph's line_height.
+                if style.line_height.is_some() && style.style.size.is_none() {
+                    defaults = defaults.metrics(cosmic_text::Metrics::new(
+                        buffer_font_size,
+                        buffer_font_size * lh_ratio,
+                    ));
+                }
 
                 // Rebuild AttrsList with new defaults, preserving spans
                 let old_spans: Vec<_> = buffer_line
@@ -777,6 +799,17 @@ impl rich_editor::Editor for Editor {
             .get(line)
             .map(|bl| {
                 let defaults = bl.attrs_list().defaults();
+
+                // Extract per-paragraph line_height from metrics_opt.
+                let line_height = defaults.metrics_opt.map(|m| {
+                    let m: cosmic_text::Metrics = m.into();
+                    if m.font_size > 0.0 {
+                        LineHeight::Relative(m.line_height / m.font_size)
+                    } else {
+                        LineHeight::Relative(internal.line_height_ratio)
+                    }
+                });
+
                 ParagraphStyle {
                     style: attrs_to_style(&defaults, &defaults, &internal.font_names),
                     alignment: bl.align().map(|a| match a {
@@ -787,6 +820,7 @@ impl rich_editor::Editor for Editor {
                         cosmic_text::Align::End => Alignment::Default,
                     }),
                     spacing_after: None,
+                    line_height,
                 }
             })
             .unwrap_or_default()

@@ -43,6 +43,8 @@ pub struct ParagraphStyle {
     pub alignment: Option<crate::text::Alignment>,
     /// Spacing after the paragraph in logical pixels.
     pub spacing_after: Option<f32>,
+    /// Line height override for this paragraph.
+    pub line_height: Option<LineHeight>,
 }
 
 /// Geometry of the first visual line of a paragraph.
