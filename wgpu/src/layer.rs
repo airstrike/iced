@@ -383,6 +383,7 @@ impl graphics::Layer for Layer {
     }
 }
 
+#[allow(clippy::default_constructed_unit_structs)]
 impl Default for Layer {
     fn default() -> Self {
         Self {

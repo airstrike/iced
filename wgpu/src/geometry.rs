@@ -570,6 +570,15 @@ impl Transform {
                 linear.start = self.transform_point(linear.start);
                 linear.end = self.transform_point(linear.end);
             }
+            Gradient::Radial(radial) => {
+                let scaled = self.transform_point(radial.center + Vector::new(radial.radius, 0.0));
+
+                radial.center = self.transform_point(radial.center);
+                radial.radius = radial.center.distance(scaled);
+            }
+            Gradient::Conic(conic) => {
+                conic.center = self.transform_point(conic.center);
+            }
         }
 
         gradient

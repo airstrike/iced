@@ -511,6 +511,18 @@ impl From<gradient::Linear> for Style {
     }
 }
 
+impl From<gradient::Radial> for Style {
+    fn from(gradient: gradient::Radial) -> Self {
+        Self::default().background(gradient)
+    }
+}
+
+impl From<gradient::Conic> for Style {
+    fn from(gradient: gradient::Conic) -> Self {
+        Self::default().background(gradient)
+    }
+}
+
 /// The theme catalog of a [`Container`].
 pub trait Catalog {
     /// The item class of the [`Catalog`].

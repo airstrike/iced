@@ -10,13 +10,17 @@ use half::f16;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// A fill which linearly interpolates colors along a direction.
+/// A fill which interpolates colors along a direction.
 ///
 /// For a gradient which can be used as a fill for a background of a widget, see [`crate::core::Gradient`].
 pub enum Gradient {
     /// A linear gradient interpolates colors along a direction from its `start` to its `end`
     /// point.
     Linear(Linear),
+    /// A radial gradient interpolates colors in an outward circular pattern from a center point.
+    Radial(Radial),
+    /// A conic gradient interpolates colors around a center point by angle.
+    Conic(Conic),
 }
 
 impl From<Linear> for Gradient {
@@ -25,11 +29,25 @@ impl From<Linear> for Gradient {
     }
 }
 
+impl From<Radial> for Gradient {
+    fn from(gradient: Radial) -> Self {
+        Self::Radial(gradient)
+    }
+}
+
+impl From<Conic> for Gradient {
+    fn from(gradient: Conic) -> Self {
+        Self::Conic(gradient)
+    }
+}
+
 impl Gradient {
     /// Packs the [`Gradient`] for use in shader code.
     pub fn pack(&self) -> Packed {
         match self {
             Gradient::Linear(linear) => linear.pack(),
+            Gradient::Radial(radial) => radial.pack(),
+            Gradient::Conic(conic) => conic.pack(),
         }
     }
 }
@@ -119,6 +137,189 @@ impl Linear {
             colors,
             offsets,
             direction,
+            gradient_type: 0,
+        }
+    }
+}
+
+/// A radial gradient.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Radial {
+    /// The absolute center of the gradient.
+    pub center: Point,
+
+    /// The absolute radius of the gradient.
+    pub radius: f32,
+
+    /// [`ColorStop`]s along the radial gradient.
+    pub stops: [Option<ColorStop>; 8],
+}
+
+impl Radial {
+    /// Creates a new [`Radial`] builder.
+    pub fn new(center: Point, radius: f32) -> Self {
+        Self {
+            center,
+            radius,
+            stops: [None; 8],
+        }
+    }
+
+    /// Adds a new [`ColorStop`], defined by an offset and a color, to the gradient.
+    ///
+    /// Any `offset` that is not within `0.0..=1.0` will be silently ignored.
+    ///
+    /// Any stop added after the 8th will be silently ignored.
+    pub fn add_stop(mut self, offset: f32, color: Color) -> Self {
+        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
+            let (Ok(index) | Err(index)) = self.stops.binary_search_by(|stop| match stop {
+                None => Ordering::Greater,
+                Some(stop) => stop.offset.partial_cmp(&offset).unwrap(),
+            });
+
+            if index < 8 {
+                self.stops[index] = Some(ColorStop { offset, color });
+            }
+        } else {
+            log::warn!("Gradient: ColorStop must be within 0.0..=1.0 range.");
+        };
+
+        self
+    }
+
+    /// Adds multiple [`ColorStop`]s to the gradient.
+    ///
+    /// Any stop added after the 8th will be silently ignored.
+    pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
+        for stop in stops {
+            self = self.add_stop(stop.offset, stop.color);
+        }
+
+        self
+    }
+
+    /// Packs the [`Gradient`] for use in shader code.
+    pub fn pack(&self) -> Packed {
+        let mut colors = [[0u32; 2]; 8];
+        let mut offsets = [f16::from(0u8); 8];
+
+        for (index, stop) in self.stops.iter().enumerate() {
+            let [r, g, b, a] = color::pack(stop.map_or(Color::default(), |s| s.color)).components();
+
+            colors[index] = [
+                pack_f16s([f16::from_f32(r), f16::from_f32(g)]),
+                pack_f16s([f16::from_f32(b), f16::from_f32(a)]),
+            ];
+
+            offsets[index] = stop.map_or(f16::from_f32(2.0), |s| f16::from_f32(s.offset));
+        }
+
+        let offsets = [
+            pack_f16s([offsets[0], offsets[1]]),
+            pack_f16s([offsets[2], offsets[3]]),
+            pack_f16s([offsets[4], offsets[5]]),
+            pack_f16s([offsets[6], offsets[7]]),
+        ];
+
+        let direction = [self.center.x, self.center.y, self.radius, 0.0];
+
+        Packed {
+            colors,
+            offsets,
+            direction,
+            gradient_type: 1,
+        }
+    }
+}
+
+/// A conic gradient.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Conic {
+    /// The absolute center of the gradient.
+    pub center: Point,
+
+    /// The angle the gradient starts from, in radians.
+    ///
+    /// `0.0` means the top (12 o'clock).
+    pub angle: f32,
+
+    /// [`ColorStop`]s along the conic gradient.
+    pub stops: [Option<ColorStop>; 8],
+}
+
+impl Conic {
+    /// Creates a new [`Conic`] builder.
+    pub fn new(center: Point, angle: f32) -> Self {
+        Self {
+            center,
+            angle,
+            stops: [None; 8],
+        }
+    }
+
+    /// Adds a new [`ColorStop`], defined by an offset and a color, to the gradient.
+    ///
+    /// Any `offset` that is not within `0.0..=1.0` will be silently ignored.
+    ///
+    /// Any stop added after the 8th will be silently ignored.
+    pub fn add_stop(mut self, offset: f32, color: Color) -> Self {
+        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
+            let (Ok(index) | Err(index)) = self.stops.binary_search_by(|stop| match stop {
+                None => Ordering::Greater,
+                Some(stop) => stop.offset.partial_cmp(&offset).unwrap(),
+            });
+
+            if index < 8 {
+                self.stops[index] = Some(ColorStop { offset, color });
+            }
+        } else {
+            log::warn!("Gradient: ColorStop must be within 0.0..=1.0 range.");
+        };
+
+        self
+    }
+
+    /// Adds multiple [`ColorStop`]s to the gradient.
+    ///
+    /// Any stop added after the 8th will be silently ignored.
+    pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
+        for stop in stops {
+            self = self.add_stop(stop.offset, stop.color);
+        }
+
+        self
+    }
+
+    /// Packs the [`Gradient`] for use in shader code.
+    pub fn pack(&self) -> Packed {
+        let mut colors = [[0u32; 2]; 8];
+        let mut offsets = [f16::from(0u8); 8];
+
+        for (index, stop) in self.stops.iter().enumerate() {
+            let [r, g, b, a] = color::pack(stop.map_or(Color::default(), |s| s.color)).components();
+
+            colors[index] = [
+                pack_f16s([f16::from_f32(r), f16::from_f32(g)]),
+                pack_f16s([f16::from_f32(b), f16::from_f32(a)]),
+            ];
+
+            offsets[index] = stop.map_or(f16::from_f32(2.0), |s| f16::from_f32(s.offset));
+        }
+
+        let offsets = [
+            pack_f16s([offsets[0], offsets[1]]),
+            pack_f16s([offsets[2], offsets[3]]),
+            pack_f16s([offsets[4], offsets[5]]),
+            pack_f16s([offsets[6], offsets[7]]),
+        ];
+
+        let direction = [self.center.x, self.center.y, self.angle, 0.0];
+
+        Packed {
+            colors,
+            offsets,
+            direction,
+            gradient_type: 2,
         }
     }
 }
@@ -132,44 +333,66 @@ pub struct Packed {
     // 8 offsets, 8x 16 bit floats packed into 4 u32s
     offsets: [u32; 4],
     direction: [f32; 4],
+    // 0 = linear, 1 = radial, 2 = conic
+    gradient_type: u32,
 }
 
 /// Creates a new [`Packed`] gradient for use in shader code.
 pub fn pack(gradient: &core::Gradient, bounds: Rectangle) -> Packed {
-    match gradient {
+    let (stops, direction, gradient_type) = match gradient {
         core::Gradient::Linear(linear) => {
-            let mut colors = [[0u32; 2]; 8];
-            let mut offsets = [f16::from(0u8); 8];
-
-            for (index, stop) in linear.stops.iter().enumerate() {
-                let [r, g, b, a] =
-                    color::pack(stop.map_or(Color::default(), |s| s.color)).components();
-
-                colors[index] = [
-                    pack_f16s([f16::from_f32(r), f16::from_f32(g)]),
-                    pack_f16s([f16::from_f32(b), f16::from_f32(a)]),
-                ];
-
-                offsets[index] = stop.map_or(f16::from_f32(2.0), |s| f16::from_f32(s.offset));
-            }
-
-            let offsets = [
-                pack_f16s([offsets[0], offsets[1]]),
-                pack_f16s([offsets[2], offsets[3]]),
-                pack_f16s([offsets[4], offsets[5]]),
-                pack_f16s([offsets[6], offsets[7]]),
-            ];
-
             let (start, end) = linear.angle.to_distance(&bounds);
 
-            let direction = [start.x, start.y, end.x, end.y];
-
-            Packed {
-                colors,
-                offsets,
-                direction,
-            }
+            (&linear.stops, [start.x, start.y, end.x, end.y], 0)
         }
+        core::Gradient::Radial(radial) => {
+            let center = Point::new(
+                bounds.x + bounds.width * radial.center.x,
+                bounds.y + bounds.height * radial.center.y,
+            );
+
+            let half_diagonal =
+                (bounds.width * bounds.width + bounds.height * bounds.height).sqrt() / 2.0;
+            let radius = half_diagonal * radial.radius;
+
+            (&radial.stops, [center.x, center.y, radius, 0.0], 1)
+        }
+        core::Gradient::Conic(conic) => {
+            let center = Point::new(
+                bounds.x + bounds.width * conic.center.x,
+                bounds.y + bounds.height * conic.center.y,
+            );
+
+            (&conic.stops, [center.x, center.y, conic.angle.0, 0.0], 2)
+        }
+    };
+
+    let mut colors = [[0u32; 2]; 8];
+    let mut offsets = [f16::from(0u8); 8];
+
+    for (index, stop) in stops.iter().enumerate() {
+        let [r, g, b, a] = color::pack(stop.map_or(Color::default(), |s| s.color)).components();
+
+        colors[index] = [
+            pack_f16s([f16::from_f32(r), f16::from_f32(g)]),
+            pack_f16s([f16::from_f32(b), f16::from_f32(a)]),
+        ];
+
+        offsets[index] = stop.map_or(f16::from_f32(2.0), |s| f16::from_f32(s.offset));
+    }
+
+    let offsets = [
+        pack_f16s([offsets[0], offsets[1]]),
+        pack_f16s([offsets[2], offsets[3]]),
+        pack_f16s([offsets[4], offsets[5]]),
+        pack_f16s([offsets[6], offsets[7]]),
+    ];
+
+    Packed {
+        colors,
+        offsets,
+        direction,
+        gradient_type,
     }
 }
 

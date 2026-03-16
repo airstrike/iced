@@ -442,6 +442,81 @@ pub fn into_paint(style: Style) -> tiny_skia::Paint<'static> {
                     )
                     .expect("Create linear gradient")
                 }
+                Gradient::Radial(radial) => {
+                    let stops: Vec<tiny_skia::GradientStop> = radial
+                        .stops
+                        .into_iter()
+                        .flatten()
+                        .map(|stop| {
+                            tiny_skia::GradientStop::new(
+                                stop.offset,
+                                tiny_skia::Color::from_rgba(
+                                    stop.color.b,
+                                    stop.color.g,
+                                    stop.color.r,
+                                    stop.color.a,
+                                )
+                                .expect("Create color"),
+                            )
+                        })
+                        .collect();
+
+                    let center = tiny_skia::Point {
+                        x: radial.center.x,
+                        y: radial.center.y,
+                    };
+
+                    tiny_skia::RadialGradient::new(
+                        center,
+                        0.0,
+                        center,
+                        radial.radius,
+                        if stops.is_empty() {
+                            vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
+                        } else {
+                            stops
+                        },
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    )
+                    .expect("Create radial gradient")
+                }
+                Gradient::Conic(conic) => {
+                    let stops: Vec<tiny_skia::GradientStop> = conic
+                        .stops
+                        .into_iter()
+                        .flatten()
+                        .map(|stop| {
+                            tiny_skia::GradientStop::new(
+                                stop.offset,
+                                tiny_skia::Color::from_rgba(
+                                    stop.color.b,
+                                    stop.color.g,
+                                    stop.color.r,
+                                    stop.color.a,
+                                )
+                                .expect("Create color"),
+                            )
+                        })
+                        .collect();
+
+                    tiny_skia::SweepGradient::new(
+                        tiny_skia::Point {
+                            x: conic.center.x,
+                            y: conic.center.y,
+                        },
+                        conic.angle.to_degrees() - 90.0,
+                        conic.angle.to_degrees() + 270.0,
+                        if stops.is_empty() {
+                            vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
+                        } else {
+                            stops
+                        },
+                        tiny_skia::SpreadMode::Pad,
+                        tiny_skia::Transform::identity(),
+                    )
+                    .expect("Create conic gradient")
+                }
             },
         },
         anti_alias: true,
