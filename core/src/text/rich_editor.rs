@@ -111,6 +111,7 @@ pub trait Editor: Sized + Default {
         new_font_variations: Vec<crate::font::Variation>,
         new_wrapping: Wrapping,
         new_hint_factor: Option<f32>,
+        new_default_style: Style,
     );
 
     /// Set character formatting on a range.

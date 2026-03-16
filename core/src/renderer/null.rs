@@ -300,6 +300,7 @@ impl text::rich_editor::Editor for () {
         _new_font_variations: Vec<crate::font::Variation>,
         _new_wrapping: text::Wrapping,
         _new_hint_factor: Option<f32>,
+        _new_default_style: text::rich_editor::Style,
     ) {
     }
 
