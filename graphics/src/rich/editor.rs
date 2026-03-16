@@ -62,6 +62,7 @@ struct Internal {
     font_features: Vec<font::Feature>,
     font_variations: Vec<font::Variation>,
     line_height_ratio: f32,
+    default_alignment: Alignment,
     /// Every `&'static str` font name that has entered the editor.
     /// See module-level doc for the full rationale.
     font_names: HashSet<&'static str>,
@@ -200,10 +201,12 @@ impl rich_editor::Editor for Editor {
                             && run.line_i >= start_cursor.line
                             && run.line_i <= end_cursor.line
                         {
+                            let w = run.line_height * 0.3;
+                            let x = empty_line_x(run.x_offset, w, &buffer.lines, run.line_i);
                             return Some(
                                 Rectangle {
-                                    x: run.x_offset,
-                                    width: run.line_height * 0.3,
+                                    x,
+                                    width: w,
                                     y: run.line_top,
                                     height: run.line_height,
                                 } * (1.0 / internal.hint_factor),
@@ -232,8 +235,12 @@ impl rich_editor::Editor for Editor {
                 let (caret_x, caret_y, caret_h) = caret_position(cursor, buffer);
                 let f = 1.0 / internal.hint_factor;
 
+                // Keep the 1px-wide caret within the editor bounds so it
+                // isn't clipped on right-aligned (or end-of-line) text.
+                let x = (caret_x * f).min(internal.bounds.width - 1.0).max(0.0);
+
                 Selection::Caret(Rectangle::new(
-                    Point::new(caret_x * f, caret_y * f),
+                    Point::new(x, caret_y * f),
                     Size::new(1.0, caret_h * f),
                 ))
             }
@@ -655,11 +662,28 @@ impl rich_editor::Editor for Editor {
         });
     }
 
-    fn set_alignment(&mut self, line: usize, alignment: Alignment) {
+    fn align_x(&mut self, alignment: Alignment) {
         self.with_internal_mut(|internal| {
+            let old = internal.default_alignment;
+            let new_align = text::to_align(alignment);
             let buffer = buffer_mut_from_editor(&mut internal.document);
-            if let Some(buffer_line) = buffer.lines.get_mut(line) {
-                let _ = buffer_line.set_align(text::to_align(alignment));
+
+            if alignment != old {
+                let old_align = text::to_align(old);
+                for line in buffer.lines.iter_mut() {
+                    let current = line.align();
+                    if current == old_align || current.is_none() {
+                        let _ = line.set_align(new_align);
+                    }
+                }
+                internal.default_alignment = alignment;
+            } else if new_align.is_some() {
+                // Default unchanged, but ensure newly-created lines get it.
+                for line in buffer.lines.iter_mut() {
+                    if line.align().is_none() {
+                        let _ = line.set_align(new_align);
+                    }
+                }
             }
         });
     }
@@ -695,23 +719,25 @@ impl rich_editor::Editor for Editor {
     fn style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
+        // Compare against global defaults so per-line custom attrs
+        // (e.g. font set on an empty paragraph) are always reported
+        // as explicit, not swallowed by a same-as-line-defaults diff.
+        let global_defaults = cosmic_text::Attrs::new();
         buffer
             .lines
             .get(line)
             .map(|bl| {
-                let defaults = bl.attrs_list().defaults();
-                // When cursor is at or past end of line, use the last
-                // character's style so the caret height matches the text.
-                let idx = if column > 0 && column >= bl.text().len() {
-                    column - 1
+                let span = if bl.text().is_empty() {
+                    bl.attrs_list().defaults()
                 } else {
-                    column
+                    let idx = if column > 0 && column >= bl.text().len() {
+                        column - 1
+                    } else {
+                        column
+                    };
+                    bl.attrs_list().get_span(idx)
                 };
-                attrs_to_style(
-                    &bl.attrs_list().get_span(idx),
-                    &defaults,
-                    &internal.font_names,
-                )
+                attrs_to_style(&span, &global_defaults, &internal.font_names)
             })
             .unwrap_or_default()
     }
@@ -774,6 +800,7 @@ impl Default for Internal {
             font_features: Vec::new(),
             font_variations: Vec::new(),
             line_height_ratio: 1.3,
+            default_alignment: Alignment::Default,
             font_names: HashSet::new(),
         }
     }
@@ -863,6 +890,10 @@ fn style_to_attrs<'a>(
         attrs = attrs.color(text::to_color(color));
     }
 
+    if let Some(ls) = style.letter_spacing {
+        attrs = attrs.letter_spacing(ls);
+    }
+
     if let Some(font) = style.font {
         // Build new attrs from the font, then re-apply non-font style
         let mut font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
@@ -903,6 +934,7 @@ fn style_to_attrs<'a>(
         }
 
         font_attrs.text_decoration = attrs.text_decoration;
+        font_attrs.letter_spacing_opt = attrs.letter_spacing_opt;
 
         attrs = font_attrs;
     }
@@ -933,6 +965,11 @@ fn attrs_to_style(
         color: attrs
             .color_opt
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
+        letter_spacing: if attrs.letter_spacing_opt != defaults.letter_spacing_opt {
+            attrs.letter_spacing_opt.map(|ls| ls.0)
+        } else {
+            None
+        },
         size: attrs.metrics_opt.map(|m| {
             let m: cosmic_text::Metrics = m.into();
             m.font_size
@@ -962,6 +999,22 @@ fn from_family(
 /// Find the caret rectangle for a cursor using layout runs.
 ///
 /// Returns `(x, y, line_height)` in hinted (physical) pixels, where
+/// For an empty line, adjust `x_offset` so that a visual indicator of the
+/// given `width` stays within the line rather than extending past the right
+/// edge (which is what happens with right-aligned text).
+fn empty_line_x(
+    x_offset: f32,
+    width: f32,
+    lines: &[cosmic_text::BufferLine],
+    line_i: usize,
+) -> f32 {
+    match lines.get(line_i).and_then(cosmic_text::BufferLine::align) {
+        Some(cosmic_text::Align::Right) | Some(cosmic_text::Align::End) => x_offset - width,
+        Some(cosmic_text::Align::Center) => x_offset - width / 2.0,
+        _ => x_offset,
+    }
+}
+
 /// `line_height` comes from the matching layout run so it reflects
 /// per-line variable heights.
 fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
@@ -1049,5 +1102,112 @@ where
         cosmic_text::BufferRef::Owned(buffer) => buffer,
         cosmic_text::BufferRef::Borrowed(buffer) => buffer,
         cosmic_text::BufferRef::Arc(_buffer) => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::text::rich_editor::Editor as _;
+
+    fn editor(text: &str) -> Editor {
+        let mut ed = Editor::with_text(text);
+        // Trigger layout so buffer lines are shaped.
+        ed.update(
+            Size::new(200.0, 200.0),
+            Font::default(),
+            Pixels(16.0),
+            LineHeight::default(),
+            Em::ZERO,
+            Vec::new(),
+            Vec::new(),
+            Wrapping::Word,
+            None,
+        );
+        ed
+    }
+
+    fn line_align(ed: &Editor, line: usize) -> Option<cosmic_text::Align> {
+        ed.buffer().lines.get(line).and_then(|l| l.align())
+    }
+
+    #[test]
+    fn default_alignment_applies_to_all_lines() {
+        let mut ed = editor("line one\nline two\nline three");
+
+        // Initially no explicit alignment.
+        assert_eq!(line_align(&ed, 0), None);
+        assert_eq!(line_align(&ed, 1), None);
+        assert_eq!(line_align(&ed, 2), None);
+
+        ed.align_x(Alignment::Center);
+
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 2), Some(cosmic_text::Align::Center));
+    }
+
+    #[test]
+    fn default_alignment_preserves_explicit() {
+        let mut ed = editor("line one\nline two\nline three");
+
+        // Explicitly right-align line 1 via paragraph style.
+        ed.set_paragraph_style(
+            1,
+            &rich_editor::ParagraphStyle {
+                alignment: Some(Alignment::Right),
+                ..Default::default()
+            },
+        );
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Right));
+
+        // Set default to center — line 1 should stay Right.
+        ed.align_x(Alignment::Center);
+
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(
+            line_align(&ed, 1),
+            Some(cosmic_text::Align::Right),
+            "explicitly set line should keep its alignment"
+        );
+        assert_eq!(line_align(&ed, 2), Some(cosmic_text::Align::Center));
+    }
+
+    #[test]
+    fn changing_default_updates_non_explicit_lines() {
+        let mut ed = editor("aaa\nbbb");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Center));
+
+        // Change default to right.
+        ed.align_x(Alignment::Right);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Right));
+        assert_eq!(line_align(&ed, 1), Some(cosmic_text::Align::Right));
+    }
+
+    #[test]
+    fn setting_default_to_default_restores_none() {
+        let mut ed = editor("hello");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+
+        // Setting back to Default should restore None.
+        ed.align_x(Alignment::Default);
+        assert_eq!(line_align(&ed, 0), None);
+    }
+
+    #[test]
+    fn same_default_is_noop() {
+        let mut ed = editor("hello");
+
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+
+        // Setting the same value again should not change anything.
+        ed.align_x(Alignment::Center);
+        assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
     }
 }
