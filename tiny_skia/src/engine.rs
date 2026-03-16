@@ -178,15 +178,11 @@ impl Engine {
                             quad.bounds.y + quad.bounds.height * radial.center.y,
                         );
 
-                        let dx = f32::max(
-                            center.x - quad.bounds.x,
-                            quad.bounds.x + quad.bounds.width - center.x,
-                        );
-                        let dy = f32::max(
-                            center.y - quad.bounds.y,
-                            quad.bounds.y + quad.bounds.height - center.y,
-                        );
-                        let radius = (dx * dx + dy * dy).sqrt() * radial.radius;
+                        let half_diagonal = (quad.bounds.width * quad.bounds.width
+                            + quad.bounds.height * quad.bounds.height)
+                            .sqrt()
+                            / 2.0;
+                        let radius = half_diagonal * radial.radius;
 
                         let stops: Vec<tiny_skia::GradientStop> = radial
                             .stops
@@ -255,8 +251,8 @@ impl Engine {
                                 x: center.x,
                                 y: center.y,
                             },
-                            conic.start_angle.0.to_degrees(),
-                            conic.end_angle.0.to_degrees(),
+                            conic.angle.0.to_degrees() - 90.0,
+                            conic.angle.0.to_degrees() + 270.0,
                             if stops.is_empty() {
                                 vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
                             } else {

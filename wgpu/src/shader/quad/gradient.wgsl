@@ -96,10 +96,10 @@ fn gradient(
         coord_offset = distance(raw_position, center) / radius;
     } else if (gradient_type == 2u) {
         let center = direction.xy;
-        let start_angle = direction.z;
-        let end_angle = direction.w;
-        let angle = atan2(raw_position.y - center.y, raw_position.x - center.x);
-        coord_offset = (angle - start_angle) / (end_angle - start_angle);
+        let start = direction.z;
+        var angle = atan2(raw_position.y - center.y, raw_position.x - center.x) + 1.570796327 - start;
+        angle = angle - floor(angle / 6.283185307) * 6.283185307;
+        coord_offset = angle / 6.283185307;
     } else {
         let start = direction.xy;
         let end = direction.zw;

@@ -502,8 +502,8 @@ pub fn into_paint(style: Style) -> tiny_skia::Paint<'static> {
                             x: conic.center.x,
                             y: conic.center.y,
                         },
-                        conic.start_angle.to_degrees(),
-                        conic.end_angle.to_degrees(),
+                        conic.angle.to_degrees() - 90.0,
+                        conic.angle.to_degrees() + 270.0,
                         if stops.is_empty() {
                             vec![tiny_skia::GradientStop::new(0.0, tiny_skia::Color::BLACK)]
                         } else {

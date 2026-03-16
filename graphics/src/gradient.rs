@@ -238,11 +238,10 @@ pub struct Conic {
     /// The absolute center of the gradient.
     pub center: Point,
 
-    /// The starting angle of the gradient in radians.
-    pub start_angle: f32,
-
-    /// The ending angle of the gradient in radians.
-    pub end_angle: f32,
+    /// The angle the gradient starts from, in radians.
+    ///
+    /// `0.0` means the top (12 o'clock).
+    pub angle: f32,
 
     /// [`ColorStop`]s along the conic gradient.
     pub stops: [Option<ColorStop>; 8],
@@ -250,11 +249,10 @@ pub struct Conic {
 
 impl Conic {
     /// Creates a new [`Conic`] builder.
-    pub fn new(center: Point, start_angle: f32, end_angle: f32) -> Self {
+    pub fn new(center: Point, angle: f32) -> Self {
         Self {
             center,
-            start_angle,
-            end_angle,
+            angle,
             stops: [None; 8],
         }
     }
@@ -315,12 +313,7 @@ impl Conic {
             pack_f16s([offsets[6], offsets[7]]),
         ];
 
-        let direction = [
-            self.center.x,
-            self.center.y,
-            self.start_angle,
-            self.end_angle,
-        ];
+        let direction = [self.center.x, self.center.y, self.angle, 0.0];
 
         Packed {
             colors,
@@ -358,10 +351,9 @@ pub fn pack(gradient: &core::Gradient, bounds: Rectangle) -> Packed {
                 bounds.y + bounds.height * radial.center.y,
             );
 
-            let dx = f32::max(center.x - bounds.x, bounds.x + bounds.width - center.x);
-            let dy = f32::max(center.y - bounds.y, bounds.y + bounds.height - center.y);
-            let max_dist = (dx * dx + dy * dy).sqrt();
-            let radius = max_dist * radial.radius;
+            let half_diagonal =
+                (bounds.width * bounds.width + bounds.height * bounds.height).sqrt() / 2.0;
+            let radius = half_diagonal * radial.radius;
 
             (&radial.stops, [center.x, center.y, radius, 0.0], 1)
         }
@@ -371,11 +363,7 @@ pub fn pack(gradient: &core::Gradient, bounds: Rectangle) -> Packed {
                 bounds.y + bounds.height * conic.center.y,
             );
 
-            (
-                &conic.stops,
-                [center.x, center.y, conic.start_angle.0, conic.end_angle.0],
-                2,
-            )
+            (&conic.stops, [center.x, center.y, conic.angle.0, 0.0], 2)
         }
     };
 

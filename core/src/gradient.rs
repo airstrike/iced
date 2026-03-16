@@ -127,10 +127,10 @@ pub struct Radial {
     ///
     /// `Point::new(0.5, 0.5)` means the center of the bounding box.
     pub center: Point,
-    /// The radius of the gradient, as a fraction of the distance from
-    /// the center to the farthest corner of the bounding box.
+    /// The radius of the gradient, as a fraction of the half-diagonal
+    /// of the bounding box.
     ///
-    /// `1.0` means the gradient extends to the farthest corner.
+    /// `1.0` means the gradient extends to the half-diagonal length.
     pub radius: f32,
     /// [`ColorStop`]s along the radial gradient.
     pub stops: [Option<ColorStop>; 8],
@@ -203,12 +203,10 @@ pub struct Conic {
     ///
     /// `Point::new(0.5, 0.5)` means the center of the bounding box.
     pub center: Point,
-    /// The starting angle of the gradient in [`Radians`].
-    pub start_angle: Radians,
-    /// The ending angle of the gradient in [`Radians`].
+    /// The angle the gradient starts from, in [`Radians`].
     ///
-    /// Defaults to a full turn (`2π`).
-    pub end_angle: Radians,
+    /// `0.0` means the top (12 o'clock), matching CSS `from` semantics.
+    pub angle: Radians,
     /// [`ColorStop`]s along the conic gradient.
     pub stops: [Option<ColorStop>; 8],
 }
@@ -217,8 +215,7 @@ impl Default for Conic {
     fn default() -> Self {
         Self {
             center: Point::new(0.5, 0.5),
-            start_angle: Radians(0.0),
-            end_angle: Radians(2.0 * std::f32::consts::PI),
+            angle: Radians(0.0),
             stops: [None; 8],
         }
     }
