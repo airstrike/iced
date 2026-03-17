@@ -300,7 +300,7 @@ impl text::rich_editor::Editor for () {
         _new_font_variations: Vec<crate::font::Variation>,
         _new_wrapping: text::Wrapping,
         _new_hint_factor: Option<f32>,
-        _new_default_style: text::rich_editor::Style,
+        _new_default_style: text::rich_editor::span::Style,
     ) {
     }
 
@@ -308,26 +308,26 @@ impl text::rich_editor::Editor for () {
         &mut self,
         _line: usize,
         _range: std::ops::Range<usize>,
-        _style: &text::rich_editor::Style,
+        _style: &text::rich_editor::span::Style,
     ) {
     }
 
-    fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::ParagraphStyle) {}
+    fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::paragraph::Style) {}
 
     fn align_x(&mut self, _alignment: text::Alignment) {}
 
     fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
 
-    fn line_geometry(&self, _line: usize) -> Option<text::rich_editor::LineGeometry> {
+    fn line_geometry(&self, _line: usize) -> Option<text::rich_editor::paragraph::Geometry> {
         None
     }
 
-    fn style_at(&self, _line: usize, _column: usize) -> text::rich_editor::Style {
-        text::rich_editor::Style::default()
+    fn span_style_at(&self, _line: usize, _column: usize) -> text::rich_editor::span::Style {
+        text::rich_editor::span::Style::default()
     }
 
-    fn paragraph_style(&self, _line: usize) -> text::rich_editor::ParagraphStyle {
-        text::rich_editor::ParagraphStyle::default()
+    fn paragraph_style_at(&self, _line: usize) -> text::rich_editor::paragraph::Style {
+        text::rich_editor::paragraph::Style::default()
     }
 }
 
