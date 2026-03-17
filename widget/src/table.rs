@@ -400,7 +400,7 @@ where
             );
 
             metrics.columns[column] = metrics.columns[column].max(size.width);
-            if !self.columns[column].fill_height {
+            if !(self.columns[column].fill_height && height_factor != 0) {
                 metrics.rows[row] = metrics.rows[row].max(size.height);
             }
             cells[i] = layout;
@@ -421,13 +421,21 @@ where
                     continue;
                 }
 
+                let cell_size = cell.as_widget().size();
+                let cell_fw = col.fill_width && cell_size.width.is_fill();
+                let cell_fh = col.fill_height && cell_size.height.is_fill();
+
+                if !cell_fw && !cell_fh {
+                    continue;
+                }
+
                 let row = i / columns;
-                let fill_width = if col.fill_width {
+                let fill_width = if cell_fw {
                     metrics.columns[column] + self.padding_x * 2.0
                 } else {
                     metrics.columns[column]
                 };
-                let fill_height = if col.fill_height {
+                let fill_height = if cell_fh {
                     metrics.rows[row] + self.padding_y * 2.0
                 } else {
                     metrics.rows[row]
@@ -435,9 +443,7 @@ where
                 let mut limits =
                     layout::Limits::new(Size::ZERO, Size::new(fill_width, fill_height));
 
-                // Only apply column width constraint for non-fill-width columns.
-                // Fill-width columns need the full width without compression.
-                if !col.fill_width {
+                if !cell_fw {
                     limits = limits.width(col.width);
                 }
 
@@ -467,8 +473,11 @@ where
             } = &self.columns[column];
 
             let col = &self.columns[column];
+            let cell_size = self.cells[i].as_widget().size();
+            let cell_fw = col.fill_width && cell_size.width.is_fill();
+            let cell_fh = col.fill_height && cell_size.height.is_fill();
 
-            let (cell_x, cell_width) = if col.fill_width {
+            let (cell_x, cell_width) = if cell_fw {
                 (
                     x - self.padding_x,
                     metrics.columns[column] + self.padding_x * 2.0,
@@ -476,7 +485,7 @@ where
             } else {
                 (x, metrics.columns[column])
             };
-            let (cell_y, cell_height) = if col.fill_height {
+            let (cell_y, cell_height) = if cell_fh {
                 (y - self.padding_y, metrics.rows[row] + self.padding_y * 2.0)
             } else {
                 (y, metrics.rows[row])
