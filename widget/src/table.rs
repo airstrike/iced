@@ -67,6 +67,8 @@ struct Column_ {
     width: Length,
     align_x: alignment::Horizontal,
     align_y: alignment::Vertical,
+    fill_width: bool,
+    fill_height: bool,
 }
 
 impl<'a, Message, Theme, Renderer> Table<'a, Message, Theme, Renderer>
@@ -104,6 +106,8 @@ where
                         width: column.width,
                         align_x: column.align_x,
                         align_y: column.align_y,
+                        fill_width: false,
+                        fill_height: false,
                     },
                     column.view,
                 )
@@ -281,21 +285,32 @@ where
             }
 
             let width_factor = width.fill_factor();
-            let height_factor = size.height.fill_factor();
 
-            if width_factor != 0 || height_factor != 0 || size.width.is_fill() {
+            // Detect fill columns from cell size hints
+            if size.width.is_fill() {
+                self.columns[column].fill_width = true;
+            }
+            if size.height.is_fill() {
+                self.columns[column].fill_height = true;
+            }
+
+            // Skip width-fluid cells for pass 2
+            if width_factor != 0 || size.width.is_fill() {
                 column_factors[column] = column_factors[column].max(width_factor);
 
-                row_factor = row_factor.max(height_factor);
+                row_factor = row_factor.max(size.height.fill_factor());
 
                 continue;
             }
 
+            // Lay out cell with compressed height so fill-height cells
+            // contribute their intrinsic content height to row metrics
             let limits = layout::Limits::new(
                 Size::ZERO,
                 Size::new(available.width - x, available.height - y),
             )
-            .width(width);
+            .width(width)
+            .height(Length::Shrink);
 
             let layout = cell.as_widget_mut().layout(state, renderer, &limits);
             let size = limits.resolve(width, Length::Shrink, layout.size());
@@ -391,13 +406,52 @@ where
             );
 
             metrics.columns[column] = metrics.columns[column].max(size.width);
-            metrics.rows[row] = metrics.rows[row].max(size.height);
+            if !self.columns[column].fill_height {
+                metrics.rows[row] = metrics.rows[row].max(size.height);
+            }
             cells[i] = layout;
 
             x += size.width + spacing_x;
         }
 
         // THIRD PASS
+        // Re-layout fill cells with finalized dimensions.
+        // Fill cells get the full band (content + padding on both sides)
+        // so backgrounds and canvas widgets extend from separator to separator.
+        if self.columns.iter().any(|c| c.fill_width || c.fill_height) {
+            for (i, (cell, state)) in self.cells.iter_mut().zip(&mut tree.children).enumerate() {
+                let column = i % columns;
+                let col = &self.columns[column];
+
+                if !col.fill_width && !col.fill_height {
+                    continue;
+                }
+
+                let row = i / columns;
+                let fill_width = if col.fill_width {
+                    metrics.columns[column] + self.padding_x * 2.0
+                } else {
+                    metrics.columns[column]
+                };
+                let fill_height = if col.fill_height {
+                    metrics.rows[row] + self.padding_y * 2.0
+                } else {
+                    metrics.rows[row]
+                };
+                let mut limits =
+                    layout::Limits::new(Size::ZERO, Size::new(fill_width, fill_height));
+
+                // Only apply column width constraint for non-fill-width columns.
+                // Fill-width columns need the full width without compression.
+                if !col.fill_width {
+                    limits = limits.width(col.width);
+                }
+
+                cells[i] = cell.as_widget_mut().layout(state, renderer, &limits);
+            }
+        }
+
+        // FOURTH PASS
         // Position each cell
         let mut x = self.padding_x;
         let mut y = self.padding_y;
@@ -418,11 +472,27 @@ where
                 align_x, align_y, ..
             } = &self.columns[column];
 
-            cell.move_to_mut((x, y));
+            let col = &self.columns[column];
+
+            let (cell_x, cell_width) = if col.fill_width {
+                (
+                    x - self.padding_x,
+                    metrics.columns[column] + self.padding_x * 2.0,
+                )
+            } else {
+                (x, metrics.columns[column])
+            };
+            let (cell_y, cell_height) = if col.fill_height {
+                (y - self.padding_y, metrics.rows[row] + self.padding_y * 2.0)
+            } else {
+                (y, metrics.rows[row])
+            };
+
+            cell.move_to_mut((cell_x, cell_y));
             cell.align_mut(
                 Alignment::from(*align_x),
                 Alignment::from(*align_y),
-                Size::new(metrics.columns[column], metrics.rows[row]),
+                Size::new(cell_width, cell_height),
             );
 
             x += metrics.columns[column] + spacing_x;
@@ -630,6 +700,12 @@ impl<'a, 'b, T, Message, Theme, Renderer> Column<'a, 'b, T, Message, Theme, Rend
     pub fn align_y(mut self, alignment: impl Into<alignment::Vertical>) -> Self {
         self.align_y = alignment.into();
         self
+    }
+
+    /// Centers the content of the [`Column`] both horizontally and vertically.
+    pub fn center(self) -> Self {
+        self.align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center)
     }
 }
 
