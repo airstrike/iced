@@ -95,7 +95,7 @@ where
 
         let mut cells = Vec::with_capacity(columns.size_hint().0 * (1 + rows.size_hint().0));
 
-        let (mut columns, views): (Vec<_>, Vec<_>) = columns
+        let (columns, views): (Vec<_>, Vec<_>) = columns
             .map(|column| {
                 width = width.enclose(column.width);
 
@@ -123,12 +123,6 @@ where
 
                 cells.push(cell);
             }
-        }
-
-        if width == Length::Shrink
-            && let Some(first) = columns.first_mut()
-        {
-            first.width = Length::Fill;
         }
 
         Self {
