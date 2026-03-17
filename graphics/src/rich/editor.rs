@@ -33,7 +33,7 @@ use crate::core::font;
 use crate::core::text::editor::{
     self, Action, Cursor, Direction, Edit, Motion, Position, Selection,
 };
-use crate::core::text::rich_editor::{self, ParagraphStyle, Style};
+use crate::core::text::rich_editor::{self, paragraph, span::Style};
 use crate::core::text::{Alignment, LineHeight, Wrapping};
 use crate::core::{Color, Em, Font, Pixels, Point, Rectangle, Size};
 use crate::text;
@@ -651,7 +651,7 @@ impl rich_editor::Editor for Editor {
         });
     }
 
-    fn set_paragraph_style(&mut self, line: usize, style: &ParagraphStyle) {
+    fn set_paragraph_style(&mut self, line: usize, style: &paragraph::Style) {
         self.with_internal_mut(|internal| {
             if let Some(font) = style.style.font {
                 internal.register_font(font);
@@ -668,7 +668,7 @@ impl rich_editor::Editor for Editor {
 
             let lh_ratio = style
                 .line_height
-                .map(|lh| lh.to_absolute(Pixels(buffer_font_size)).0 / buffer_font_size)
+                .map(|lh: LineHeight| lh.to_absolute(Pixels(buffer_font_size)).0 / buffer_font_size)
                 .unwrap_or(internal.line_height_ratio);
 
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
@@ -746,12 +746,12 @@ impl rich_editor::Editor for Editor {
         });
     }
 
-    fn line_geometry(&self, line: usize) -> Option<rich_editor::LineGeometry> {
+    fn line_geometry(&self, line: usize) -> Option<rich_editor::paragraph::Geometry> {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
         for run in buffer.layout_runs() {
             if run.line_i == line {
-                return Some(rich_editor::LineGeometry {
+                return Some(rich_editor::paragraph::Geometry {
                     line_top: run.line_top,
                     line_height: run.line_height,
                     baseline_y: run.line_y,
@@ -765,7 +765,7 @@ impl rich_editor::Editor for Editor {
         None
     }
 
-    fn style_at(&self, line: usize, column: usize) -> Style {
+    fn span_style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
         // Compare against global defaults so per-line custom attrs
@@ -791,7 +791,7 @@ impl rich_editor::Editor for Editor {
             .unwrap_or_default()
     }
 
-    fn paragraph_style(&self, line: usize) -> ParagraphStyle {
+    fn paragraph_style_at(&self, line: usize) -> paragraph::Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
         buffer
@@ -810,7 +810,7 @@ impl rich_editor::Editor for Editor {
                     }
                 });
 
-                ParagraphStyle {
+                paragraph::Style {
                     style: attrs_to_style(&defaults, &defaults, &internal.font_names),
                     alignment: bl.align().map(|a| match a {
                         cosmic_text::Align::Left => Alignment::Left,
@@ -821,6 +821,7 @@ impl rich_editor::Editor for Editor {
                     }),
                     spacing_after: None,
                     line_height,
+                    ..Default::default()
                 }
             })
             .unwrap_or_default()
@@ -1220,7 +1221,7 @@ mod tests {
         // Explicitly right-align line 1 via paragraph style.
         ed.set_paragraph_style(
             1,
-            &rich_editor::ParagraphStyle {
+            &rich_editor::paragraph::Style {
                 alignment: Some(Alignment::Right),
                 ..Default::default()
             },
