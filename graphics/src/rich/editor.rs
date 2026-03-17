@@ -957,6 +957,14 @@ fn style_to_attrs<'a>(
         attrs = attrs.letter_spacing(ls);
     }
 
+    if let Some(opsz) = style.optical_size {
+        attrs = attrs.optical_size(match opsz {
+            font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
+            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
+            font::OpticalSize::None => cosmic_text::OpticalSize::None,
+        });
+    }
+
     if let Some(font) = style.font {
         // Build new attrs from the font, then re-apply non-font style
         let mut font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
@@ -998,6 +1006,7 @@ fn style_to_attrs<'a>(
 
         font_attrs.text_decoration = attrs.text_decoration;
         font_attrs.letter_spacing_opt = attrs.letter_spacing_opt;
+        font_attrs.optical_size = attrs.optical_size;
 
         attrs = font_attrs;
     }
@@ -1038,6 +1047,15 @@ fn attrs_to_style(
             m.font_size
         }),
         font,
+        optical_size: if attrs.optical_size != defaults.optical_size {
+            Some(match attrs.optical_size {
+                cosmic_text::OpticalSize::Auto => font::OpticalSize::Auto,
+                cosmic_text::OpticalSize::Fixed(v) => font::OpticalSize::Fixed(v.to_bits()),
+                cosmic_text::OpticalSize::None => font::OpticalSize::None,
+            })
+        } else {
+            None
+        },
     }
 }
 

@@ -17,4 +17,6 @@ pub struct Style {
     pub color: Option<crate::Color>,
     /// Override letter spacing.
     pub letter_spacing: Option<f32>,
+    /// Optical sizing mode.
+    pub optical_size: Option<crate::font::OpticalSize>,
 }
