@@ -550,9 +550,36 @@ impl rich_editor::Editor for Editor {
 
                 for line in buffer.lines.iter_mut() {
                     let old_list = line.attrs_list();
+                    let old_defaults = old_list.defaults();
                     let mut new_list = cosmic_text::AttrsList::new(&default_attrs);
                     for (range, span_attrs) in old_list.spans() {
-                        new_list.add_span(range.clone(), &span_attrs.as_attrs());
+                        let mut attrs = span_attrs.as_attrs();
+                        // For each field, if the span matched the OLD defaults
+                        // (i.e. it was inherited, not explicitly overridden),
+                        // update it to the NEW defaults so it continues to
+                        // inherit rather than being stuck on the old value.
+                        if attrs.color_opt == old_defaults.color_opt {
+                            attrs.color_opt = default_attrs.color_opt;
+                        }
+                        if attrs.family == old_defaults.family {
+                            attrs.family = default_attrs.family;
+                        }
+                        if attrs.weight == old_defaults.weight {
+                            attrs.weight = default_attrs.weight;
+                        }
+                        if attrs.style == old_defaults.style {
+                            attrs.style = default_attrs.style;
+                        }
+                        if attrs.metrics_opt == old_defaults.metrics_opt {
+                            attrs.metrics_opt = default_attrs.metrics_opt;
+                        }
+                        if attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
+                            attrs.letter_spacing_opt = default_attrs.letter_spacing_opt;
+                        }
+                        if attrs.optical_size == old_defaults.optical_size {
+                            attrs.optical_size = default_attrs.optical_size;
+                        }
+                        new_list.add_span(range.clone(), &attrs);
                     }
                     let _ = line.set_attrs_list(new_list);
                 }
