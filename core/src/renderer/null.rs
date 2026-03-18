@@ -329,6 +329,8 @@ impl text::rich_editor::Editor for () {
     fn paragraph_style_at(&self, _line: usize) -> text::rich_editor::paragraph::Style {
         text::rich_editor::paragraph::Style::default()
     }
+
+    fn set_scrollable(&mut self, _scrollable: bool) {}
 }
 
 impl text::rich_editor::Renderer for () {

@@ -853,6 +853,13 @@ impl rich_editor::Editor for Editor {
             })
             .unwrap_or_default()
     }
+
+    fn set_scrollable(&mut self, scrollable: bool) {
+        use cosmic_text::Edit as _;
+        self.with_internal_mut(|internal| {
+            internal.document.set_scrollable(scrollable);
+        });
+    }
 }
 
 impl Default for Editor {

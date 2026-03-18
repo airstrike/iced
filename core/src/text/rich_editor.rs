@@ -98,6 +98,9 @@ pub trait Editor: Sized + Default {
 
     /// Read paragraph style.
     fn paragraph_style_at(&self, line: usize) -> paragraph::Style;
+
+    /// Enable or disable automatic scrolling to keep the cursor visible.
+    fn set_scrollable(&mut self, scrollable: bool);
 }
 
 /// A renderer that can draw a rich editor.
