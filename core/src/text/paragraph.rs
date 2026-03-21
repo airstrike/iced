@@ -187,6 +187,7 @@ impl<P: Paragraph> Plain<P> {
             letter_spacing: self.raw.letter_spacing(),
             font_features: self.raw.font_features().to_vec(),
             font_variations: self.raw.font_variations().to_vec(),
+            weight: None, // reconstructed from raw, weight already applied to font
             hint_factor: self.raw.hint_factor(),
         }
     }

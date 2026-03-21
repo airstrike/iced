@@ -1358,6 +1358,7 @@ where
                 letter_spacing: crate::core::Em::default(),
                 font_features: Vec::new(),
                 font_variations: Vec::new(),
+                weight: None,
                 hint_factor: None,
             };
 

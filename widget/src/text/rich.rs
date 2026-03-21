@@ -517,6 +517,7 @@ where
             letter_spacing,
             font_features: font_features.clone(),
             font_variations: font_variations.clone(),
+            weight: None,
             hint_factor: renderer.scale_factor(),
         };
 
@@ -538,6 +539,7 @@ where
                 letter_spacing,
                 font_features: font_features.clone(),
                 font_variations: font_variations.clone(),
+                weight: None,
                 hint_factor: renderer.scale_factor(),
             }) {
                 core::text::Difference::None => {}

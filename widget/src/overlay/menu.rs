@@ -576,6 +576,7 @@ where
                     letter_spacing: self.letter_spacing,
                     font_features: self.font_features.clone(),
                     font_variations: Vec::new(),
+                    weight: None,
                     hint_factor: renderer.scale_factor(),
                 },
                 Point::new(bounds.x + self.padding.left, bounds.center_y()),

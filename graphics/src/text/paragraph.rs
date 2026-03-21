@@ -101,11 +101,16 @@ impl core::text::Paragraph for Paragraph {
             text::to_ellipsize(text.ellipsis, text.bounds.height * hint_factor),
         );
 
+        let font = match text.weight {
+            Some(weight) => text.font.weight(weight),
+            None => text.font,
+        };
+
         buffer.set_text(
             font_system.raw(),
             text.content,
             &text::to_attributes(
-                text.font,
+                font,
                 text.letter_spacing,
                 &text.font_features,
                 &text.font_variations,

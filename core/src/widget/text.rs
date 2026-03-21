@@ -107,6 +107,17 @@ where
         self
     }
 
+    /// Sets the font [`Weight`] of the [`Text`] without changing the font family.
+    ///
+    /// This overrides the weight of whatever font is resolved (default or explicit),
+    /// allowing you to set weight without clobbering `font::set_defaults`.
+    ///
+    /// [`Weight`]: crate::font::Weight
+    pub fn weight(mut self, weight: font::Weight) -> Self {
+        self.format.weight = Some(weight);
+        self
+    }
+
     /// Sets the width of the [`Text`] boundaries.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.format.width = width.into();
@@ -312,6 +323,9 @@ pub struct Format<Font> {
     pub letter_spacing: Em,
     pub font_features: Vec<font::Feature>,
     pub font_variations: Vec<font::Variation>,
+    /// Optional weight override — applied to the resolved font without
+    /// changing the font family, so it works with `font::set_defaults`.
+    pub weight: Option<font::Weight>,
 }
 
 impl<Font> Default for Format<Font> {
@@ -330,6 +344,7 @@ impl<Font> Default for Format<Font> {
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
             font_variations: Vec::new(),
+            weight: None,
         }
     }
 }
@@ -365,6 +380,7 @@ where
             letter_spacing: format.letter_spacing,
             font_features: format.font_features,
             font_variations: format.font_variations,
+            weight: format.weight,
             hint_factor: renderer.scale_factor(),
         });
 

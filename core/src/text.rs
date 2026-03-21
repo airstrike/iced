@@ -59,6 +59,10 @@ pub struct Text<Content = String, Font = crate::Font> {
     /// The font variation axis settings of the [`Text`].
     pub font_variations: Vec<font::Variation>,
 
+    /// Optional weight override. When set, overrides the weight of `font`
+    /// without changing the font family.
+    pub weight: Option<font::Weight>,
+
     /// The scale factor that may be used to internally scale the layout
     /// calculation of the [`Paragraph`] and leverage metrics hinting.
     ///
@@ -91,6 +95,7 @@ where
             letter_spacing: self.letter_spacing,
             font_features: self.font_features.clone(),
             font_variations: self.font_variations.clone(),
+            weight: self.weight,
             hint_factor: self.hint_factor,
         }
     }

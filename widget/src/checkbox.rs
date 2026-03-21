@@ -325,6 +325,7 @@ where
                             letter_spacing: self.letter_spacing,
                             font_features: self.font_features.clone(),
                             font_variations: Vec::new(),
+                            weight: None,
                         },
                     )
                 } else {
@@ -453,6 +454,7 @@ where
                         letter_spacing: crate::core::Em::default(),
                         font_features: Vec::new(),
                         font_variations: Vec::new(),
+                        weight: None,
                         hint_factor: None,
                     },
                     bounds.center(),
