@@ -38,11 +38,6 @@ impl<'a> Layout<'a> {
         self.position
     }
 
-    /// Returns a reference to the underlying [`Node`].
-    pub fn node(&self) -> &'a Node {
-        self.node
-    }
-
     /// Returns the bounds of the [`Layout`].
     ///
     /// The returned [`Rectangle`] describes the position and size of a
