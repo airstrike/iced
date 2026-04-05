@@ -23,6 +23,15 @@ pub struct Style {
     pub list: Option<List>,
     /// Paragraph indentation.
     pub indent: Indent,
+    /// Semantic heading level (1-6), if this paragraph is a heading.
+    ///
+    /// This is a semantic tag — it records the author's intent
+    /// ("this is an H2") independently of how the paragraph is visually
+    /// styled via [`Style::style`] (font size, weight). Formats like
+    /// markdown use it for round-tripping heading syntax (`# `, `## `).
+    /// Editors may choose to render headings using conventions driven
+    /// by this field, or ignore it entirely.
+    pub heading: Option<u8>,
 }
 
 /// Geometry of the first visual line of a paragraph.
