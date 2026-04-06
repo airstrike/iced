@@ -773,6 +773,16 @@ impl rich_editor::Editor for Editor {
         });
     }
 
+    fn set_paragraph_spacing(&mut self, line: usize, top: f32, bottom: f32) {
+        self.with_internal_mut(|internal| {
+            let buffer = buffer_mut_from_editor(&mut internal.document);
+            if let Some(buffer_line) = buffer.lines.get_mut(line) {
+                let _ = buffer_line.set_margin_top(top);
+                let _ = buffer_line.set_margin_bottom(bottom);
+            }
+        });
+    }
+
     fn line_geometry(&self, line: usize) -> Option<rich_editor::paragraph::Geometry> {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);

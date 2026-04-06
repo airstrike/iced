@@ -89,6 +89,9 @@ pub trait Editor: Sized + Default {
     /// Set the left margin for a line (pixels). Creates space for list markers.
     fn set_margin_left(&mut self, line: usize, margin: f32);
 
+    /// Set vertical margins for a paragraph line.
+    fn set_paragraph_spacing(&mut self, line: usize, top: f32, bottom: f32);
+
     /// First visual line geometry for a paragraph line.
     /// Returns None if the line doesn't exist or isn't laid out.
     fn line_geometry(&self, line: usize) -> Option<paragraph::Geometry>;

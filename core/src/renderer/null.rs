@@ -318,6 +318,8 @@ impl text::rich_editor::Editor for () {
 
     fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
 
+    fn set_paragraph_spacing(&mut self, _line: usize, _top: f32, _bottom: f32) {}
+
     fn line_geometry(&self, _line: usize) -> Option<text::rich_editor::paragraph::Geometry> {
         None
     }

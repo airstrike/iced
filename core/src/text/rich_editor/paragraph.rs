@@ -1,4 +1,5 @@
 use crate::text::LineHeight;
+use crate::Color;
 
 use super::span;
 
@@ -23,15 +24,10 @@ pub struct Style {
     pub list: Option<List>,
     /// Paragraph indentation.
     pub indent: Indent,
-    /// Semantic heading level (1-6), if this paragraph is a heading.
-    ///
-    /// This is a semantic tag — it records the author's intent
-    /// ("this is an H2") independently of how the paragraph is visually
-    /// styled via [`Style::style`] (font size, weight). Formats like
-    /// markdown use it for round-tripping heading syntax (`# `, `## `).
-    /// Editors may choose to render headings using conventions driven
-    /// by this field, or ignore it entirely.
-    pub heading: Option<u8>,
+    /// Background fill for the paragraph.
+    pub fill: Option<Fill>,
+    /// Paragraph borders. Boxed for memory efficiency (most paragraphs have no borders).
+    pub borders: Option<Box<Borders>>,
 }
 
 /// Geometry of the first visual line of a paragraph.
@@ -103,4 +99,36 @@ pub enum Number {
     LowerRoman,
     /// I, II, III, ...
     UpperRoman,
+}
+
+/// A decorative fill inside a paragraph's bounding box.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fill {
+    /// The fill color.
+    pub color: Color,
+    /// `None` = full paragraph background (code block, callout).
+    /// `Some(h)` = centered horizontal quad of height `h` (rule).
+    pub height: Option<f32>,
+}
+
+/// A single border edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Border {
+    /// The border color.
+    pub color: Color,
+    /// The border width in logical pixels.
+    pub width: f32,
+}
+
+/// Four optional paragraph borders.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Borders {
+    /// Top border.
+    pub top: Option<Border>,
+    /// Right border.
+    pub right: Option<Border>,
+    /// Bottom border.
+    pub bottom: Option<Border>,
+    /// Left border.
+    pub left: Option<Border>,
 }
