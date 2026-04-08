@@ -1,5 +1,5 @@
-use crate::text::LineHeight;
 use crate::Color;
+use crate::text::LineHeight;
 
 use super::span;
 

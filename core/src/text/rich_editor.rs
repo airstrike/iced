@@ -96,6 +96,20 @@ pub trait Editor: Sized + Default {
     /// Returns None if the line doesn't exist or isn't laid out.
     fn line_geometry(&self, line: usize) -> Option<paragraph::Geometry>;
 
+    /// Calls `f` with the pixel rectangle of each visual line segment
+    /// within the given character range on `line`.
+    ///
+    /// Coordinates match `selection()` — already scaled by hint_factor.
+    /// Zero-width ranges produce no callbacks.
+    fn highlight_rect(
+        &self,
+        _line: usize,
+        _from: usize,
+        _to: usize,
+        _f: &mut dyn FnMut(Rectangle),
+    ) {
+    }
+
     /// Read character formatting at a position.
     fn span_style_at(&self, line: usize, column: usize) -> span::Style;
 

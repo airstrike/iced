@@ -252,6 +252,32 @@ impl rich_editor::Editor for Editor {
         cursor
     }
 
+    fn highlight_rect(&self, line: usize, from: usize, to: usize, f: &mut dyn FnMut(Rectangle)) {
+        if from >= to {
+            return;
+        }
+
+        let internal = self.internal();
+        let buffer = buffer_from_editor(&internal.document);
+        let from_cursor = cosmic_text::Cursor::new(line, from);
+        let to_cursor = cosmic_text::Cursor::new(line, to);
+        let scale = 1.0 / internal.hint_factor;
+
+        for run in buffer.layout_runs() {
+            if run.line_i == line
+                && let Some((x, w)) = run.highlight(from_cursor, to_cursor)
+                && w > 0.0
+            {
+                f(Rectangle {
+                    x: x * scale,
+                    width: w * scale,
+                    y: run.line_top * scale,
+                    height: run.line_height * scale,
+                });
+            }
+        }
+    }
+
     fn cursor(&self) -> Cursor {
         let editor = &self.internal().document;
         let cursor_pos = editor.cursor();

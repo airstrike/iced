@@ -324,6 +324,15 @@ impl text::rich_editor::Editor for () {
         None
     }
 
+    fn highlight_rect(
+        &self,
+        _line: usize,
+        _from: usize,
+        _to: usize,
+        _f: &mut dyn FnMut(Rectangle),
+    ) {
+    }
+
     fn span_style_at(&self, _line: usize, _column: usize) -> text::rich_editor::span::Style {
         text::rich_editor::span::Style::default()
     }
