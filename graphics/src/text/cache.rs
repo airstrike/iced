@@ -13,6 +13,7 @@ pub struct Cache {
     entries: FxHashMap<KeyHash, Entry>,
     aliases: FxHashMap<KeyHash, KeyHash>,
     recently_used: FxHashSet<KeyHash>,
+    version: text::Version,
 }
 
 impl Cache {
@@ -31,7 +32,15 @@ impl Cache {
         &mut self,
         font_system: &mut cosmic_text::FontSystem,
         key: Key<'_>,
+        version: text::Version,
     ) -> (KeyHash, &mut Entry) {
+        if version != self.version {
+            self.entries.clear();
+            self.aliases.clear();
+            self.recently_used.clear();
+            self.version = version;
+        }
+
         let hash = key.hash(FxHasher::default());
 
         if let Some(hash) = self.aliases.get(&hash) {
