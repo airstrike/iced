@@ -11,6 +11,9 @@ categories.workspace = true
 keywords.workspace = true
 rust-version.workspace = true
 
+[lib]
+crate-type = ["lib", "dylib"]
+
 [lints]
 workspace = true
 

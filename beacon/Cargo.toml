@@ -10,6 +10,9 @@ homepage.workspace = true
 categories.workspace = true
 keywords.workspace = true
 
+[lib]
+crate-type = ["lib", "dylib"]
+
 [dependencies]
 iced_core.workspace = true
 iced_core.features = ["serde"]
