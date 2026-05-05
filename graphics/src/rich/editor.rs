@@ -137,12 +137,12 @@ impl rich_editor::Editor for Editor {
         let mut font_system = text::font_system().write().expect("Write font system");
 
         buffer.set_text(
-            font_system.raw(),
             text,
             &cosmic_text::Attrs::new(),
             cosmic_text::Shaping::Advanced,
             None,
         );
+        buffer.shape_until_scroll(font_system.raw(), false);
 
         Editor(Some(Arc::new(Internal {
             document: cosmic_text::Editor::new(buffer),
@@ -193,9 +193,10 @@ impl rich_editor::Editor for Editor {
                 let start_cursor = cosmic_text::Cursor::new(start.line, start.index);
                 let end_cursor = cosmic_text::Cursor::new(end.line, end.index);
 
+                let factor = 1.0 / internal.hint_factor;
                 let regions = buffer
                     .layout_runs()
-                    .filter_map(|run| {
+                    .flat_map(|run| {
                         // Empty lines within the selection range still need a
                         // visible indicator so the highlight looks continuous.
                         if run.glyphs.is_empty()
@@ -204,29 +205,27 @@ impl rich_editor::Editor for Editor {
                         {
                             let w = run.line_height * 0.3;
                             let x = empty_line_x(run.x_offset, w, &buffer.lines, run.line_i);
-                            return Some(
+                            return vec![
                                 Rectangle {
                                     x,
                                     width: w,
                                     y: run.line_top,
                                     height: run.line_height,
-                                } * (1.0 / internal.hint_factor),
-                            );
+                                } * factor,
+                            ];
                         }
 
-                        let (x, width) = run.highlight(start_cursor, end_cursor)?;
-                        if width > 0.0 {
-                            Some(
+                        run.highlight(start_cursor, end_cursor)
+                            .filter(|(_, width)| *width > 0.0)
+                            .map(|(x, width)| {
                                 Rectangle {
                                     x,
                                     width,
                                     y: run.line_top,
                                     height: run.line_height,
-                                } * (1.0 / internal.hint_factor),
-                            )
-                        } else {
-                            None
-                        }
+                                } * factor
+                            })
+                            .collect()
                     })
                     .collect();
 
@@ -264,16 +263,17 @@ impl rich_editor::Editor for Editor {
         let scale = 1.0 / internal.hint_factor;
 
         for run in buffer.layout_runs() {
-            if run.line_i == line
-                && let Some((x, w)) = run.highlight(from_cursor, to_cursor)
-                && w > 0.0
-            {
-                f(Rectangle {
-                    x: x * scale,
-                    width: w * scale,
-                    y: run.line_top * scale,
-                    height: run.line_height * scale,
-                });
+            if run.line_i == line {
+                for (x, w) in run.highlight(from_cursor, to_cursor) {
+                    if w > 0.0 {
+                        f(Rectangle {
+                            x: x * scale,
+                            width: w * scale,
+                            y: run.line_top * scale,
+                            height: run.line_height * scale,
+                        });
+                    }
+                }
             }
         }
     }
@@ -621,14 +621,11 @@ impl rich_editor::Editor for Editor {
                 internal.hint = new_hint_factor.is_some();
                 internal.hint_factor = new_hint_factor.unwrap_or(1.0);
 
-                buffer.set_hinting(
-                    font_system.raw(),
-                    if internal.hint {
-                        cosmic_text::Hinting::Enabled
-                    } else {
-                        cosmic_text::Hinting::Disabled
-                    },
-                );
+                buffer.set_hinting(if internal.hint {
+                    cosmic_text::Hinting::Enabled
+                } else {
+                    cosmic_text::Hinting::Disabled
+                });
 
                 hinting_changed = true;
             }
@@ -639,13 +636,10 @@ impl rich_editor::Editor for Editor {
             {
                 log::trace!("Updating `Metrics` of rich `Editor`...");
 
-                buffer.set_metrics(
-                    font_system.raw(),
-                    cosmic_text::Metrics::new(
-                        new_size.0 * internal.hint_factor,
-                        new_line_height.0 * internal.hint_factor,
-                    ),
-                );
+                buffer.set_metrics(cosmic_text::Metrics::new(
+                    new_size.0 * internal.hint_factor,
+                    new_line_height.0 * internal.hint_factor,
+                ));
             }
 
             // Track line_height_ratio for formatting reference
@@ -656,14 +650,13 @@ impl rich_editor::Editor for Editor {
             if new_wrap != buffer.wrap() {
                 log::trace!("Updating `Wrap` strategy of rich `Editor`...");
 
-                buffer.set_wrap(font_system.raw(), new_wrap);
+                buffer.set_wrap(new_wrap);
             }
 
             if new_bounds != internal.bounds || hinting_changed {
                 log::trace!("Updating size of rich `Editor`...");
 
                 buffer.set_size(
-                    font_system.raw(),
                     Some(new_bounds.width * internal.hint_factor),
                     Some(new_bounds.height * internal.hint_factor),
                 );

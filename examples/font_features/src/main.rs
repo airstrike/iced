@@ -10,7 +10,7 @@ pub fn main() -> iced::Result {
         .theme(App::theme)
         .window_size((1200.0, 800.0))
         .settings(iced::Settings {
-            default_font: Font::with_name(FONT_NAME),
+            default_font: Font::new(FONT_NAME),
             default_text_size: 16.into(),
             ..Default::default()
         })
@@ -55,7 +55,7 @@ impl App {
     fn theme(&self) -> iced::Theme {
         iced::Theme::custom(
             FONT_NAME.to_string(),
-            iced::theme::Palette {
+            iced::theme::palette::Seed {
                 background: color!(0x111111),
                 text: color!(0xFFFFFF),
                 primary: color!(0xFFFFFF),
@@ -169,7 +169,7 @@ fn to_optical_size(v: f32) -> font::OpticalSize {
 fn inter(weight: font::Weight) -> Font {
     Font {
         weight,
-        ..Font::with_name(FONT_NAME)
+        ..Font::new(FONT_NAME)
     }
 }
 
@@ -177,7 +177,7 @@ fn inter_opsz(weight: font::Weight, opsz: f32) -> Font {
     Font {
         weight,
         optical_size: to_optical_size(opsz),
-        ..Font::with_name(FONT_NAME)
+        ..Font::new(FONT_NAME)
     }
 }
 
@@ -457,7 +457,7 @@ fn weight_sample<'a>(
             font::Style::Normal
         },
         optical_size: to_optical_size(opsz),
-        ..Font::with_name(FONT_NAME)
+        ..Font::new(FONT_NAME)
     };
 
     let mut sample_text = text(sample).size(font_size).font(f);
@@ -638,7 +638,7 @@ spectators, or dedicated by a devout prince.";
     let italic = Font {
         style: font::Style::Italic,
         optical_size: to_optical_size(opsz),
-        ..Font::with_name(FONT_NAME)
+        ..Font::new(FONT_NAME)
     };
 
     container(responsive(move |size| {
@@ -906,7 +906,7 @@ fn feature_row<'a>(
             container(
                 text(tag_label)
                     .size(13)
-                    .font(Font::with_name(MONO_FONT))
+                    .font(Font::new(MONO_FONT))
                     .style(theme::text::dark),
             )
             .padding([2, 6])
@@ -985,7 +985,7 @@ fn feature_listing() -> Element<'static, Message> {
 
     fn feature_entry<'a>(tag: &'a str, name: &'a str) -> Element<'a, Message> {
         row![
-            container(text(tag).size(13).font(Font::with_name(MONO_FONT)),)
+            container(text(tag).size(13).font(Font::new(MONO_FONT)),)
                 .padding([2, 6])
                 .style(theme::container::listing_tag),
             text(name).size(14),

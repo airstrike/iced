@@ -93,18 +93,18 @@ impl Pipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("iced_wgpu::image pipeline layout"),
-            bind_group_layouts: &[&constant_layout, &texture_layout],
+            bind_group_layouts: &[Some(&constant_layout), Some(&texture_layout)],
             immediate_size: 0,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("iced_wgpu image shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
-                include_str!("../shader/vertex.wgsl"),
+                include_str!("shader/vertex.wgsl"),
                 "\n",
-                include_str!("../shader/color.wgsl"),
+                include_str!("shader/color.wgsl"),
                 "\n",
-                include_str!("../shader/image.wgsl"),
+                include_str!("shader/image.wgsl"),
             ))),
         });
 

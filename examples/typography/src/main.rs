@@ -8,7 +8,7 @@ pub fn main() -> iced::Result {
         .window_size((1200.0, 700.0))
         .centered()
         .settings(iced::Settings {
-            default_font: Font::with_name(FONT_NAME),
+            default_font: Font::new(FONT_NAME),
             default_text_size: 16.into(),
             ..Default::default()
         })
@@ -78,7 +78,7 @@ impl App {
     fn theme(&self) -> iced::Theme {
         iced::Theme::custom(
             "Typography".to_string(),
-            iced::theme::Palette {
+            iced::theme::palette::Seed {
                 background: color!(0x1a1a1a),
                 text: color!(0xe0e0e0),
                 primary: color!(0x6db3f2),
@@ -275,7 +275,7 @@ fn roboto(weight: font::Weight, opsz: font::OpticalSize) -> Font {
     Font {
         weight,
         optical_size: opsz,
-        ..Font::with_name(FONT_NAME)
+        ..Font::new(FONT_NAME)
     }
 }
 
@@ -448,7 +448,7 @@ fn weights(opsz: font::OpticalSize, vars: &[font::Variation]) -> Element<'static
 
         column(RAMP.iter().map(|(weight, label, sample)| {
             column![
-                text(format!("{label}")).size(11).style(theme::text::dim),
+                text(label.to_string()).size(11).style(theme::text::dim),
                 text(*sample)
                     .size(sample_size)
                     .font(roboto(*weight, opsz))

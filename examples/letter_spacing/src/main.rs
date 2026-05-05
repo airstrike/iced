@@ -11,7 +11,7 @@ pub fn main() -> iced::Result {
         .theme(Example::theme)
         .window_size((820.0, 820.0))
         .settings(iced::Settings {
-            default_font: Font::with_name("IBM Plex Sans"),
+            default_font: Font::new("IBM Plex Sans"),
             default_text_size: 14.into(),
             ..Default::default()
         })
@@ -79,7 +79,7 @@ impl Example {
 
     fn theme(&self) -> iced::Theme {
         let palette = match self.theme_choice {
-            ThemeChoice::Light => iced::theme::Palette {
+            ThemeChoice::Light => iced::theme::palette::Seed {
                 background: color!(0xFFFFFF),
                 text: color!(0x737373),
                 primary: color!(0x000000),
@@ -87,7 +87,7 @@ impl Example {
                 danger: color!(0xef4444),
                 warning: color!(0xf59e0b),
             },
-            ThemeChoice::Dark => iced::theme::Palette {
+            ThemeChoice::Dark => iced::theme::palette::Seed {
                 background: color!(0x09090b),
                 text: color!(0xa1a1aa),
                 primary: color!(0xfafafa),
@@ -465,9 +465,9 @@ impl ThemeChoice {
     const ALL: &[Self] = &[Self::Light, Self::Dark];
 }
 
-impl Into<ThemeChoice> for Mode {
-    fn into(self) -> ThemeChoice {
-        match self {
+impl From<Mode> for ThemeChoice {
+    fn from(mode: Mode) -> Self {
+        match mode {
             Mode::Light => ThemeChoice::Light,
             Mode::Dark | Mode::None => ThemeChoice::Dark,
         }
@@ -532,8 +532,8 @@ impl FontChoice {
 
     fn to_font(self) -> Font {
         match self {
-            Self::IBMPlexSans => Font::with_name("IBM Plex Sans"),
-            Self::Lato => Font::with_name("Lato"),
+            Self::IBMPlexSans => Font::new("IBM Plex Sans"),
+            Self::Lato => Font::new("Lato"),
         }
     }
 }
@@ -624,7 +624,7 @@ mod theme {
             status: widget::button::Status,
             selected: bool,
         ) -> widget::button::Style {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
 
             if selected {
                 widget::button::Style {
@@ -654,7 +654,7 @@ mod theme {
 
         pub fn header(theme: &iced::Theme) -> widget::text::Style {
             widget::text::Style {
-                color: Some(theme.extended_palette().primary.base.color),
+                color: Some(theme.palette().primary.base.color),
             }
         }
     }
@@ -663,7 +663,7 @@ mod theme {
         use super::*;
 
         pub fn thin(theme: &iced::Theme, status: widget::slider::Status) -> widget::slider::Style {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
 
             let handle_color = match status {
                 widget::slider::Status::Active => palette.primary.base.color,
@@ -691,7 +691,7 @@ mod theme {
         use super::*;
 
         pub fn card(theme: &iced::Theme) -> widget::container::Style {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
             widget::container::Style {
                 border: Border {
                     color: palette.background.strong.color,
@@ -704,14 +704,14 @@ mod theme {
 
         pub fn segmented_picker(theme: &iced::Theme) -> widget::container::Style {
             widget::container::Style {
-                background: Some(theme.extended_palette().background.strong.color.into()),
+                background: Some(theme.palette().background.strong.color.into()),
                 border: iced::border::rounded(12.0),
                 ..Default::default()
             }
         }
 
         pub fn text_editor(theme: &iced::Theme) -> widget::container::Style {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
             widget::container::Style {
                 border: Border {
                     color: palette.background.strong.color,

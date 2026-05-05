@@ -159,6 +159,22 @@ pub fn font_system() -> &'static RwLock<FontSystem> {
         #[cfg(feature = "fira-sans")]
         raw.db_mut().set_sans_serif_family("Fira Sans");
 
+        #[cfg(target_os = "macos")]
+        {
+            #[cfg(not(feature = "fira-sans"))]
+            raw.db_mut().set_sans_serif_family(".SF NS");
+            raw.db_mut().set_serif_family("Times New Roman");
+            raw.db_mut().set_monospace_family("Menlo");
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            #[cfg(not(feature = "fira-sans"))]
+            raw.db_mut().set_sans_serif_family("Segoe UI");
+            raw.db_mut().set_serif_family("Times New Roman");
+            raw.db_mut().set_monospace_family("Consolas");
+        }
+
         RwLock::new(FontSystem {
             raw,
             loaded_fonts: HashSet::new(),
@@ -285,7 +301,7 @@ pub fn align(
 
             needs_relayout = true;
         } else if let Some(line) = buffer.lines.first_mut() {
-            needs_relayout = line.set_align(None);
+            needs_relayout |= line.set_align(None);
         }
     }
 
@@ -293,7 +309,8 @@ pub fn align(
     if needs_relayout {
         log::trace!("Relayouting paragraph...");
 
-        buffer.set_size(font_system, Some(min_bounds.width), Some(min_bounds.height));
+        buffer.set_size(Some(min_bounds.width), Some(min_bounds.height));
+        buffer.shape_until_scroll(font_system, false);
     }
 
     min_bounds

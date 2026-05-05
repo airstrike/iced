@@ -37,7 +37,6 @@ mod text;
 mod triangle;
 
 #[cfg(any(feature = "image", feature = "svg"))]
-#[path = "image/mod.rs"]
 mod image;
 
 #[cfg(not(any(feature = "image", feature = "svg")))]
@@ -121,7 +120,11 @@ impl Renderer {
         }
     }
 
-    fn draw(
+    /// Record commands that draw the current primitives to the target texture view.
+    ///
+    /// You must call [`finish`](Self::finish) and [`recall`](Self::recall) when submitting
+    /// the resulting [`wgpu::CommandEncoder`].
+    pub fn draw(
         &mut self,
         clear_color: Option<Color>,
         target: &wgpu::TextureView,
@@ -634,6 +637,28 @@ impl Renderer {
                 .count()
         });
     }
+
+    /// Prepares currently mapped buffers for use in a submission.
+    ///
+    /// Usually, this method is only needed if you are calling [`Renderer::draw`] directly,
+    /// instead of relying on [`Renderer::present`].
+    ///
+    /// You must call this method _before_ submitting the resulting [`wgpu::CommandEncoder`]
+    /// of [`Renderer::draw`] to a [`wgpu::Queue`].
+    pub fn finish(&mut self) {
+        self.staging_belt.finish();
+    }
+
+    /// Recalls all of the closed buffers back to be reused.
+    ///
+    /// Usually, this method is only needed if you are calling [`Renderer::draw`] directly,
+    /// instead of relying on [`Renderer::present`] to a [`wgpu::Queue`].
+    ///
+    /// You must call this method _after_ submitting the resulting [`wgpu::CommandEncoder`]
+    /// of [`Renderer::draw`] to a [`wgpu::Queue`].
+    pub fn recall(&mut self) {
+        self.staging_belt.recall();
+    }
 }
 
 impl core::Renderer for Renderer {
@@ -885,10 +910,10 @@ impl renderer::Headless for Renderer {
             return None;
         }
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::from_env().unwrap_or(wgpu::Backends::PRIMARY),
             flags: wgpu::InstanceFlags::empty(),
-            ..wgpu::InstanceDescriptor::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
         let adapter = instance
