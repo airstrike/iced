@@ -192,7 +192,7 @@ where
 
         let cell_height = match self.height {
             Sizing::AspectRatio(ratio) => Some(cell_width / ratio),
-            Sizing::EvenlyDistribute(Length::Shrink) => None,
+            Sizing::EvenlyDistribute(length) if length.compressing() => None,
             Sizing::EvenlyDistribute(_) => {
                 let total_rows = self.children.len().div_ceil(cells_per_row);
                 Some(

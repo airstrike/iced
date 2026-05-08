@@ -410,31 +410,30 @@ where
             });
         }
 
-        let max_width = match self.width {
-            Length::Shrink => {
-                state.options.resize_with(options.len(), Default::default);
+        let max_width = if self.width.compressing() {
+            state.options.resize_with(options.len(), Default::default);
 
-                for (option, paragraph) in options.iter().zip(state.options.iter_mut()) {
-                    let label = (self.to_string)(option);
+            for (option, paragraph) in options.iter().zip(state.options.iter_mut()) {
+                let label = (self.to_string)(option);
 
-                    let _ = paragraph.update(Text {
-                        content: &label,
-                        ..option_text.clone()
-                    });
-                }
-
-                let labels_width = state.options.iter().fold(0.0, |width, paragraph| {
-                    f32::max(width, paragraph.min_width())
+                let _ = paragraph.update(Text {
+                    content: &label,
+                    ..option_text.clone()
                 });
-
-                labels_width.max(
-                    self.placeholder
-                        .as_ref()
-                        .map(|_| state.placeholder.min_width())
-                        .unwrap_or(0.0),
-                )
             }
-            _ => 0.0,
+
+            let labels_width = state.options.iter().fold(0.0, |width, paragraph| {
+                f32::max(width, paragraph.min_width())
+            });
+
+            labels_width.max(
+                self.placeholder
+                    .as_ref()
+                    .map(|_| state.placeholder.min_width())
+                    .unwrap_or(0.0),
+            )
+        } else {
+            0.0
         };
 
         let size = {

@@ -96,6 +96,21 @@ impl Length {
         self.fill_factor() != 0
     }
 
+    /// Returns `true` if the [`Length`] compresses to its content's
+    /// intrinsic size: [`Length::Shrink`], or [`Length::Bounded`] with
+    /// `compression: true` (i.e. produced by `Shrink.max(N)` /
+    /// `Shrink.min(N)`).
+    pub fn compressing(&self) -> bool {
+        matches!(
+            self,
+            Length::Shrink
+                | Length::Bounded {
+                    compression: true,
+                    ..
+                }
+        )
+    }
+
     /// Returns the "fluid" variant of the [`Length`].
     ///
     /// Specifically:
