@@ -37,7 +37,6 @@ where
     padding: Padding,
     width: Length,
     height: Length,
-    max_width: f32,
     align_items: Alignment,
     keys: Vec<Key>,
     children: Vec<Element<'a, Message, Theme, Renderer>>,
@@ -66,7 +65,6 @@ where
             padding: Padding::ZERO,
             width: Length::Shrink,
             height: Length::Shrink,
-            max_width: f32::INFINITY,
             align_items: Alignment::Start,
             keys,
             children,
@@ -116,8 +114,15 @@ where
     }
 
     /// Sets the maximum width of the [`Column`].
+    ///
+    /// Folded into [`width`] as a [`Length::Bounded`] variant: when called
+    /// after `width(Fill)` or `width(Shrink)`, the cap propagates through
+    /// `Limits` cleanly and overrides any inherited cross-axis compression
+    /// from a `Shrink` ancestor.
+    ///
+    /// [`width`]: Self::width
     pub fn max_width(mut self, max_width: impl Into<Pixels>) -> Self {
-        self.max_width = max_width.into().0;
+        self.width = self.width.max(max_width);
         self
     }
 
@@ -241,10 +246,7 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits
-            .max_width(self.max_width)
-            .width(self.width)
-            .height(self.height);
+        let limits = limits.width(self.width).height(self.height);
 
         layout::flex::resolve(
             layout::flex::Axis::Vertical,

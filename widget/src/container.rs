@@ -64,8 +64,6 @@ where
     padding: Padding,
     width: Length,
     height: Length,
-    max_width: f32,
-    max_height: f32,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     clip: bool,
@@ -88,8 +86,6 @@ where
             padding: Padding::ZERO,
             width: size.width.fluid(),
             height: size.height.fluid(),
-            max_width: f32::INFINITY,
-            max_height: f32::INFINITY,
             horizontal_alignment: alignment::Horizontal::Left,
             vertical_alignment: alignment::Vertical::Top,
             clip: false,
@@ -123,14 +119,25 @@ where
     }
 
     /// Sets the maximum width of the [`Container`].
+    ///
+    /// Folded into [`width`] as a [`Length::Bounded`] variant: when called
+    /// after `width(Fill)` or `width(Shrink)`, the cap propagates through
+    /// `Limits` cleanly and overrides any inherited cross-axis compression
+    /// from a `Shrink` ancestor.
+    ///
+    /// [`width`]: Self::width
     pub fn max_width(mut self, max_width: impl Into<Pixels>) -> Self {
-        self.max_width = max_width.into().0;
+        self.width = self.width.max(max_width);
         self
     }
 
     /// Sets the maximum height of the [`Container`].
+    ///
+    /// See [`max_width`] for the folding semantics.
+    ///
+    /// [`max_width`]: Self::max_width
     pub fn max_height(mut self, max_height: impl Into<Pixels>) -> Self {
-        self.max_height = max_height.into().0;
+        self.height = self.height.max(max_height);
         self
     }
 
@@ -253,8 +260,8 @@ where
             limits,
             self.width,
             self.height,
-            self.max_width,
-            self.max_height,
+            f32::INFINITY,
+            f32::INFINITY,
             self.padding,
             self.horizontal_alignment,
             self.vertical_alignment,

@@ -36,7 +36,6 @@ pub struct Column<'a, Message, Theme = crate::Theme, Renderer = crate::Renderer>
     padding: Padding,
     width: Length,
     height: Length,
-    max_width: f32,
     align: Alignment,
     clip: bool,
     children: Vec<Element<'a, Message, Theme, Renderer>>,
@@ -78,7 +77,6 @@ where
             padding: Padding::ZERO,
             width: Length::Shrink,
             height: Length::Shrink,
-            max_width: f32::INFINITY,
             align: Alignment::Start,
             clip: false,
             children,
@@ -114,8 +112,15 @@ where
     }
 
     /// Sets the maximum width of the [`Column`].
+    ///
+    /// Folded into [`width`] as a [`Length::Bounded`] variant: when called
+    /// after `width(Fill)` or `width(Shrink)`, the cap propagates through
+    /// `Limits` cleanly and overrides any inherited cross-axis compression
+    /// from a `Shrink` ancestor.
+    ///
+    /// [`width`]: Self::width
     pub fn max_width(mut self, max_width: impl Into<Pixels>) -> Self {
-        self.max_width = max_width.into().0;
+        self.width = self.width.max(max_width);
         self
     }
 
@@ -209,12 +214,10 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits.max_width(self.max_width);
-
         layout::flex::resolve(
             layout::flex::Axis::Vertical,
             renderer,
-            &limits,
+            limits,
             self.width,
             self.height,
             self.padding,

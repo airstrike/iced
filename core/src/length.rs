@@ -36,8 +36,10 @@ impl Length {
     /// Creates a bounded [`Length`] that must take at least the given minimum amount of
     /// space.
     pub fn min(self, min: impl Into<Pixels>) -> Self {
+        let min_v = min.into().0;
         let (max, compression) = match self {
-            Length::Fixed(_) | Length::FillPortion(_) => return self,
+            Length::FillPortion(_) => return self,
+            Length::Fixed(amount) => return Length::Fixed(amount.max(min_v)),
             Length::Fill => (None, false),
             Length::Shrink => (None, true),
             Length::Bounded {
@@ -46,7 +48,7 @@ impl Length {
         };
 
         Self::Bounded {
-            min: Some(min.into().0),
+            min: Some(min_v),
             max,
             compression,
         }
@@ -55,8 +57,10 @@ impl Length {
     /// Creates a bounded [`Length`] that can take up to the given maximum amount of
     /// space.
     pub fn max(self, max: impl Into<Pixels>) -> Self {
+        let max_v = max.into().0;
         let (min, compression) = match self {
-            Length::Fixed(_) | Length::FillPortion(_) => return self,
+            Length::FillPortion(_) => return self,
+            Length::Fixed(amount) => return Length::Fixed(amount.min(max_v)),
             Length::Fill => (None, false),
             Length::Shrink => (None, true),
             Length::Bounded {
@@ -66,7 +70,7 @@ impl Length {
 
         Self::Bounded {
             min,
-            max: Some(max.into().0),
+            max: Some(max_v),
             compression,
         }
     }
