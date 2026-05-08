@@ -144,14 +144,6 @@ where
     // We can defer the layout of any elements that have a fixed size in the main axis,
     // allowing them to use the cross calculations of the next pass.
     if cross_compress && some_fill_cross {
-        // If pass 1 didn't widen `cross` (no fixed/shrink-cross children
-        // laid out), Fill-cross children below would collapse to width 0.
-        // Fall back to `max_cross` so Fill children fill the available
-        // limit — matches CSS-like "Fill takes available space" when no
-        // fixed sibling constrains them.
-        if cross == 0.0 {
-            cross = max_cross;
-        }
         for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
             let (main_size, cross_size) = {
                 let size = child.as_widget().size();
