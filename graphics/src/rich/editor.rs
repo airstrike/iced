@@ -574,38 +574,22 @@ impl rich_editor::Editor for Editor {
                     internal.line_height_ratio,
                 );
 
+                // Rebuild each line's AttrsList with the new document
+                // defaults. Sparse span overrides carry over as-is and
+                // re-resolve against the new defaults automatically —
+                // this loop used to compare each Attrs field against the
+                // old defaults to re-baseline, but cosmic-text's spans
+                // are now `AttrsOverride`, so that's free.
                 for line in buffer.lines.iter_mut() {
-                    let old_list = line.attrs_list();
-                    let old_defaults = old_list.defaults();
+                    let old_spans: Vec<_> = line
+                        .attrs_list()
+                        .spans()
+                        .into_iter()
+                        .map(|(range, over)| (range.clone(), over.clone()))
+                        .collect();
                     let mut new_list = cosmic_text::AttrsList::new(&default_attrs);
-                    for (range, span_attrs) in old_list.spans() {
-                        let mut attrs = span_attrs.as_attrs();
-                        // For each field, if the span matched the OLD defaults
-                        // (i.e. it was inherited, not explicitly overridden),
-                        // update it to the NEW defaults so it continues to
-                        // inherit rather than being stuck on the old value.
-                        if attrs.color_opt == old_defaults.color_opt {
-                            attrs.color_opt = default_attrs.color_opt;
-                        }
-                        if attrs.family == old_defaults.family {
-                            attrs.family = default_attrs.family;
-                        }
-                        if attrs.weight == old_defaults.weight {
-                            attrs.weight = default_attrs.weight;
-                        }
-                        if attrs.style == old_defaults.style {
-                            attrs.style = default_attrs.style;
-                        }
-                        if attrs.metrics_opt == old_defaults.metrics_opt {
-                            attrs.metrics_opt = default_attrs.metrics_opt;
-                        }
-                        if attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
-                            attrs.letter_spacing_opt = default_attrs.letter_spacing_opt;
-                        }
-                        if attrs.optical_size == old_defaults.optical_size {
-                            attrs.optical_size = default_attrs.optical_size;
-                        }
-                        new_list.add_span(range.clone(), &attrs);
+                    for (range, over) in &old_spans {
+                        new_list.add_span(range.clone(), over);
                     }
                     let _ = line.set_attrs_list(new_list);
                 }
@@ -676,21 +660,29 @@ impl rich_editor::Editor for Editor {
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
-                let attrs = style_to_attrs(style, &base, internal.line_height_ratio);
 
                 if buffer_line.text().is_empty() {
-                    // Empty lines have no characters to span. Update the
-                    // line defaults so the style applies to future input
-                    // and is visible in `style_at` / cursor queries.
+                    // Empty lines have no characters to span. Apply the
+                    // style to the line *defaults* so it takes effect
+                    // for future input and is visible in cursor queries.
+                    let attrs = style_to_attrs(style, &base, internal.line_height_ratio);
                     let mut new_list = cosmic_text::AttrsList::new(&attrs);
-                    // Re-add any existing spans (shouldn't be any, but be safe)
-                    for (range, span_attrs) in buffer_line.attrs_list().spans() {
-                        new_list.add_span(range.clone(), &span_attrs.as_attrs());
+                    // Re-add any existing sparse overrides (shouldn't be
+                    // any, but be safe — they'll re-resolve against the
+                    // new defaults automatically).
+                    for (range, over) in buffer_line.attrs_list().spans() {
+                        new_list.add_span(range.clone(), over);
                     }
                     let _ = buffer_line.set_attrs_list(new_list);
                 } else {
+                    // Build a sparse override carrying only the fields
+                    // the caller set. Unspecified fields stay `Inherit`
+                    // and resolve to the line defaults at lookup time —
+                    // this is what makes paragraph-style changes
+                    // re-inherit cleanly (no baked stale values).
+                    let over = style_to_override(style, &base, internal.line_height_ratio);
                     let mut new_list = buffer_line.attrs_list().clone();
-                    new_list.add_span(range, &attrs);
+                    new_list.add_span(range, &over);
                     let _ = buffer_line.set_attrs_list(new_list);
                 }
             }
@@ -736,16 +728,21 @@ impl rich_editor::Editor for Editor {
                     ));
                 }
 
-                // Rebuild AttrsList with new defaults, preserving spans
+                // Rebuild AttrsList with new defaults. Sparse overrides
+                // carry over as-is — fields they don't set re-resolve
+                // against the new defaults at lookup time. No
+                // field-by-field re-baselining needed (that workaround
+                // existed solely because the old storage baked defaults
+                // into each span's `Attrs`).
                 let old_spans: Vec<_> = buffer_line
                     .attrs_list()
                     .spans()
                     .into_iter()
-                    .map(|(range, attrs)| (range.clone(), attrs.as_attrs()))
+                    .map(|(range, over)| (range.clone(), over.clone()))
                     .collect();
                 let mut new_list = cosmic_text::AttrsList::new(&defaults);
-                for (range, attrs) in &old_spans {
-                    new_list.add_span(range.clone(), attrs);
+                for (range, over) in &old_spans {
+                    new_list.add_span(range.clone(), over);
                 }
                 let _ = buffer_line.set_attrs_list(new_list);
 
@@ -971,6 +968,92 @@ impl PartialEq for Weak {
             _ => false,
         }
     }
+}
+
+/// Build a sparse [`AttrsOverride`] from a [`Style`], composing only the
+/// fields the caller explicitly set against `base` for whole-struct
+/// overrides (currently `text_decoration`).
+///
+/// Use this for span overrides — unset fields stay `Inherit` and will
+/// resolve against the line defaults at lookup time, which is what
+/// prevents the "heading→body keeps size 32" baking bug.
+fn style_to_override(
+    style: &Style,
+    base: &cosmic_text::Attrs<'_>,
+    line_height_ratio: f32,
+) -> cosmic_text::AttrsOverride {
+    use cosmic_text::Override;
+    let mut over = cosmic_text::AttrsOverride::default();
+
+    if let Some(bold) = style.bold {
+        over.weight = Override::Set(if bold {
+            cosmic_text::Weight::BOLD
+        } else {
+            cosmic_text::Weight::NORMAL
+        });
+    }
+
+    if let Some(italic) = style.italic {
+        over.style = Override::Set(if italic {
+            cosmic_text::Style::Italic
+        } else {
+            cosmic_text::Style::Normal
+        });
+    }
+
+    // text_decoration is a whole-struct override in AttrsOverride. If
+    // either underline or strikethrough is set in `style`, compose
+    // against `base.text_decoration` so the unspecified field is
+    // preserved.
+    if style.underline.is_some() || style.strikethrough.is_some() {
+        let mut td = base.text_decoration;
+        if let Some(underline) = style.underline {
+            td.underline = if underline {
+                cosmic_text::UnderlineStyle::Single
+            } else {
+                cosmic_text::UnderlineStyle::None
+            };
+        }
+        if let Some(strikethrough) = style.strikethrough {
+            td.strikethrough = strikethrough;
+        }
+        over.text_decoration = Override::Set(td);
+    }
+
+    if let Some(size) = style.size {
+        over.metrics = Override::Set(Some(cosmic_text::CacheMetrics::from(
+            cosmic_text::Metrics::new(size, size * line_height_ratio),
+        )));
+    }
+
+    if let Some(color) = style.color {
+        over.color = Override::Set(Some(text::to_color(color)));
+    }
+
+    if let Some(ls) = style.letter_spacing {
+        over.letter_spacing = Override::Set(Some(cosmic_text::LetterSpacing(ls)));
+    }
+
+    if let Some(opsz) = style.optical_size {
+        over.optical_size = Override::Set(match opsz {
+            font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
+            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
+            font::OpticalSize::None => cosmic_text::OpticalSize::None,
+        });
+    }
+
+    if let Some(font) = style.font {
+        // `text::to_attributes` derives family + stretch from the Font.
+        // The OLD style_to_attrs effectively ignored the Font's intrinsic
+        // weight/style (always overwriting from style.bold/italic or the
+        // base attrs); we match that by NOT setting over.weight/over.style
+        // from the font.
+        let font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
+        over.family = Override::Set(cosmic_text::FamilyOwned::new(font_attrs.family));
+        over.stretch = Override::Set(font_attrs.stretch);
+    }
+
+    over
 }
 
 fn style_to_attrs<'a>(
@@ -1357,5 +1440,99 @@ mod tests {
         // Setting the same value again should not change anything.
         ed.align_x(Alignment::Center);
         assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
+    }
+
+    /// Bug B regression: applying a span override under heading defaults
+    /// must not bake the heading's size/bold into the span. After
+    /// demoting paragraph to body, the span's *unspecified* fields
+    /// (Inherit) re-resolve against the new body defaults — bold and
+    /// size disappear.
+    #[test]
+    fn heading_to_body_demotion_inherits_new_defaults() {
+        let mut ed = editor("AGENTS.md");
+
+        // Apply heading-like defaults: bold + 32px.
+        ed.set_paragraph_style(
+            0,
+            &rich_editor::paragraph::Style {
+                style: Style {
+                    bold: Some(true),
+                    size: Some(32.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        // Add a span carrying ONLY italic — bold and size should
+        // inherit from defaults at lookup time.
+        ed.set_span_style(
+            0,
+            0..9,
+            &Style {
+                italic: Some(true),
+                ..Default::default()
+            },
+        );
+
+        // Sanity check: with heading defaults, the span resolves to
+        // bold + italic + 32px.
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(s.bold, Some(true));
+        assert_eq!(s.italic, Some(true));
+        assert_eq!(s.size, Some(32.0));
+
+        // Demote to body — empty paragraph style means defaults' bold
+        // and size go away.
+        ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
+
+        // The span override still carries italic, but bold and size now
+        // resolve against the new (empty) defaults. THIS is bug B fixed.
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(s.italic, Some(true), "explicit italic survives demotion");
+        assert_eq!(s.bold, Some(false), "inherited bold drops on demotion");
+        assert_eq!(s.size, None, "inherited size drops on demotion");
+    }
+
+    /// Counterpart to the previous test: when a span *explicitly* sets
+    /// bold, that override survives paragraph demotion. Only inherited
+    /// fields re-resolve. This is the difference between "user nested
+    /// bold inside a heading" and "user inherited heading-bold".
+    #[test]
+    fn explicit_span_fields_preserved_across_demotion() {
+        let mut ed = editor("AGENTS.md");
+
+        ed.set_paragraph_style(
+            0,
+            &rich_editor::paragraph::Style {
+                style: Style {
+                    bold: Some(true),
+                    size: Some(32.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        // Span explicitly sets bold=true (the "nested strong" case).
+        ed.set_span_style(
+            0,
+            0..9,
+            &Style {
+                bold: Some(true),
+                ..Default::default()
+            },
+        );
+
+        ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
+
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(
+            s.bold,
+            Some(true),
+            "explicit bold from the span override survives demotion"
+        );
+        assert_eq!(
+            s.size, None,
+            "size was inherited from heading defaults, so it drops"
+        );
     }
 }

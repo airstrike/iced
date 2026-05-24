@@ -674,7 +674,7 @@ impl editor::Editor for Editor {
                 let format = format_highlight(&highlight);
 
                 if format.color.is_some() || format.font.is_some() {
-                    list.add_span(
+                    list.add_span_from_attrs(
                         range,
                         &cosmic_text::Attrs {
                             color_opt: format.color.map(text::to_color),
