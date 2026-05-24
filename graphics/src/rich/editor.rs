@@ -1535,4 +1535,46 @@ mod tests {
             "size was inherited from heading defaults, so it drops"
         );
     }
+
+    /// Verifies `paragraph_style_at` reports the line's current
+    /// defaults, independent of any sparse span overrides on that
+    /// line. Reading the paragraph style after a demotion should
+    /// reflect the new (body) defaults, not the old (heading) ones.
+    #[test]
+    fn paragraph_style_at_tracks_current_defaults() {
+        let mut ed = editor("AGENTS.md");
+
+        ed.set_paragraph_style(
+            0,
+            &rich_editor::paragraph::Style {
+                style: Style {
+                    bold: Some(true),
+                    size: Some(32.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        // Add a span override that DIFFERS from defaults — to confirm
+        // the paragraph-style read doesn't accidentally see span attrs.
+        ed.set_span_style(
+            0,
+            0..9,
+            &Style {
+                color: Some(Color::from_rgb8(255, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        let para = ed.paragraph_style_at(0);
+        assert_eq!(para.style.bold, Some(true));
+        assert_eq!(para.style.size, Some(32.0));
+
+        // Demote.
+        ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
+
+        let para = ed.paragraph_style_at(0);
+        assert_eq!(para.style.bold, Some(false));
+        assert_eq!(para.style.size, None);
+    }
 }
