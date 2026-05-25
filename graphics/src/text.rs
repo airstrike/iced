@@ -262,17 +262,43 @@ impl PartialEq for Raw {
 }
 
 /// Measures the dimensions of the given [`cosmic_text::Buffer`].
+///
+/// Sums the layout-run heights (one per wrapped line) and adds each
+/// laid-out buffer line's `margin_top` + `margin_bottom` exactly once.
+/// Without the margin pass we under-report total height by the sum
+/// of per-line vertical margins, which causes the editor widget to
+/// clip the bottom of any document that uses paragraph spacing.
 pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
-    let (width, height, has_rtl) =
-        buffer
-            .layout_runs()
-            .fold((0.0, 0.0, false), |(width, height, has_rtl), run| {
-                (
-                    run.line_w.max(width),
-                    height + run.line_height,
-                    has_rtl || run.rtl,
-                )
-            });
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    let mut has_rtl = false;
+    let mut last_line_i: Option<usize> = None;
+
+    for run in buffer.layout_runs() {
+        if last_line_i != Some(run.line_i) {
+            // Closed-out previous buffer line: add its margin_bottom.
+            if let Some(prev_i) = last_line_i
+                && let Some(line) = buffer.lines.get(prev_i)
+            {
+                height += line.margin_bottom();
+            }
+            // Opening a new buffer line: add its margin_top.
+            if let Some(line) = buffer.lines.get(run.line_i) {
+                height += line.margin_top();
+            }
+            last_line_i = Some(run.line_i);
+        }
+        width = width.max(run.line_w);
+        height += run.line_height;
+        has_rtl = has_rtl || run.rtl;
+    }
+
+    // Close out the very last laid-out buffer line.
+    if let Some(last_i) = last_line_i
+        && let Some(line) = buffer.lines.get(last_i)
+    {
+        height += line.margin_bottom();
+    }
 
     (Size::new(width, height), has_rtl)
 }
