@@ -826,27 +826,27 @@ impl rich_editor::Editor for Editor {
     fn span_style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
-        // Compare against global defaults so per-line custom attrs
-        // (e.g. font set on an empty paragraph) are always reported
-        // as explicit, not swallowed by a same-as-line-defaults diff.
-        let global_defaults = cosmic_text::Attrs::new();
-        buffer
-            .lines
-            .get(line)
-            .map(|bl| {
-                let span = if bl.text().is_empty() {
-                    bl.attrs_list().defaults()
-                } else {
-                    let idx = if column > 0 && column >= bl.text().len() {
-                        column - 1
-                    } else {
-                        column
-                    };
-                    bl.attrs_list().get_span(idx)
-                };
-                attrs_to_style(&span, &global_defaults, &internal.font_names)
-            })
-            .unwrap_or_default()
+        let Some(bl) = buffer.lines.get(line) else {
+            return Style::default();
+        };
+
+        // Empty lines have no characters, so no per-span overrides
+        // exist — return an empty (all-`Inherit`) Style. Consumers
+        // that want the effective style (e.g. a toolbar showing whether
+        // the cursor sits on bold text) merge with paragraph/document
+        // defaults at their layer.
+        if bl.text().is_empty() {
+            return Style::default();
+        }
+
+        let idx = if column > 0 && column >= bl.text().len() {
+            column - 1
+        } else {
+            column
+        };
+        let defaults = bl.attrs_list().defaults();
+        let span = bl.attrs_list().get_span(idx);
+        attrs_to_sparse_style(&span, &defaults, &internal.font_names)
     }
 
     fn paragraph_style_at(&self, line: usize) -> paragraph::Style {
@@ -869,7 +869,7 @@ impl rich_editor::Editor for Editor {
                 });
 
                 paragraph::Style {
-                    style: attrs_to_style(&defaults, &defaults, &internal.font_names),
+                    style: attrs_to_effective_style(&defaults, &internal.font_names),
                     alignment: bl.align().map(|a| match a {
                         cosmic_text::Align::Left => Alignment::Left,
                         cosmic_text::Align::Center => Alignment::Center,
@@ -1165,21 +1165,20 @@ fn style_to_attrs<'a>(
     attrs
 }
 
-fn attrs_to_style(
+/// Build a [`Style`] representing the *effective* character attributes
+/// at `attrs` — every applicable field reports its value as `Some(_)`.
+///
+/// Used by [`paragraph_style_at`], where the returned Style describes
+/// the paragraph's own character defaults (e.g. heading-1 is bold +
+/// 32px). Consumers compare these against their own theme to decide
+/// what's a paragraph-level override.
+///
+/// Family is reported as `Some(_)` only when it isn't cosmic-text's
+/// `SansSerif` sentinel — that variant is the "no font set" default.
+fn attrs_to_effective_style(
     attrs: &cosmic_text::Attrs<'_>,
-    defaults: &cosmic_text::Attrs<'_>,
     font_names: &HashSet<&'static str>,
 ) -> Style {
-    // Only report an explicit font when the span differs from the line defaults.
-    let font = if attrs.family != defaults.family {
-        Some(Font {
-            family: from_family(attrs.family, font_names),
-            ..Font::default()
-        })
-    } else {
-        None
-    };
-
     Style {
         bold: Some(attrs.weight >= cosmic_text::Weight::BOLD),
         italic: Some(attrs.style == cosmic_text::Style::Italic),
@@ -1188,16 +1187,90 @@ fn attrs_to_style(
         color: attrs
             .color_opt
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
+        letter_spacing: attrs.letter_spacing_opt.map(|ls| ls.0),
+        size: attrs.metrics_opt.map(|m| {
+            let m: cosmic_text::Metrics = m.into();
+            m.font_size
+        }),
+        font: match attrs.family {
+            cosmic_text::Family::SansSerif => None,
+            family => Some(Font {
+                family: from_family(family, font_names),
+                ..Font::default()
+            }),
+        },
+        optical_size: match attrs.optical_size {
+            cosmic_text::OpticalSize::None => None,
+            cosmic_text::OpticalSize::Auto => Some(font::OpticalSize::Auto),
+            cosmic_text::OpticalSize::Fixed(v) => Some(font::OpticalSize::Fixed(v.to_bits())),
+        },
+    }
+}
+
+/// Build a *sparse* [`Style`] containing only the fields where `attrs`
+/// differs from `defaults` — i.e., the per-span override on top of the
+/// line defaults. Fields that match `defaults` are returned as `None`,
+/// meaning "inherit."
+///
+/// Used by [`span_style_at`]. Honors the `Option<T>` contract on every
+/// Style field: `None` = inherit, `Some(v)` = explicit. Consumers that
+/// want the effective value (e.g. a toolbar showing whether the cursor
+/// is on bold text) re-merge with paragraph/document defaults at the
+/// consumer layer; consumers that want overrides (serializers,
+/// op-based history) get them directly.
+///
+/// Caveat: `Style` cannot represent "explicitly clear" for the
+/// already-`Option`-typed fields (color, size, letter_spacing). A span
+/// that force-clears a non-None default is reported as `None` (inherit)
+/// for now. Round-tripping force-clears would need a richer Style type.
+fn attrs_to_sparse_style(
+    attrs: &cosmic_text::Attrs<'_>,
+    defaults: &cosmic_text::Attrs<'_>,
+    font_names: &HashSet<&'static str>,
+) -> Style {
+    let bold = attrs.weight >= cosmic_text::Weight::BOLD;
+    let italic = attrs.style == cosmic_text::Style::Italic;
+    let underline = attrs.text_decoration.underline != cosmic_text::UnderlineStyle::None;
+    let strikethrough = attrs.text_decoration.strikethrough;
+
+    let bold_default = defaults.weight >= cosmic_text::Weight::BOLD;
+    let italic_default = defaults.style == cosmic_text::Style::Italic;
+    let underline_default = defaults.text_decoration.underline != cosmic_text::UnderlineStyle::None;
+    let strikethrough_default = defaults.text_decoration.strikethrough;
+
+    Style {
+        bold: (bold != bold_default).then_some(bold),
+        italic: (italic != italic_default).then_some(italic),
+        underline: (underline != underline_default).then_some(underline),
+        strikethrough: (strikethrough != strikethrough_default).then_some(strikethrough),
+        color: if attrs.color_opt != defaults.color_opt {
+            attrs
+                .color_opt
+                .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0))
+        } else {
+            None
+        },
+        size: if attrs.metrics_opt != defaults.metrics_opt {
+            attrs.metrics_opt.map(|m| {
+                let m: cosmic_text::Metrics = m.into();
+                m.font_size
+            })
+        } else {
+            None
+        },
         letter_spacing: if attrs.letter_spacing_opt != defaults.letter_spacing_opt {
             attrs.letter_spacing_opt.map(|ls| ls.0)
         } else {
             None
         },
-        size: attrs.metrics_opt.map(|m| {
-            let m: cosmic_text::Metrics = m.into();
-            m.font_size
-        }),
-        font,
+        font: if attrs.family != defaults.family {
+            Some(Font {
+                family: from_family(attrs.family, font_names),
+                ..Font::default()
+            })
+        } else {
+            None
+        },
         optical_size: if attrs.optical_size != defaults.optical_size {
             Some(match attrs.optical_size {
                 cosmic_text::OpticalSize::Auto => font::OpticalSize::Auto,
@@ -1453,16 +1526,14 @@ mod tests {
         assert_eq!(line_align(&ed, 0), Some(cosmic_text::Align::Center));
     }
 
-    /// Bug B regression: applying a span override under heading defaults
-    /// must not bake the heading's size/bold into the span. After
-    /// demoting paragraph to body, the span's *unspecified* fields
-    /// (Inherit) re-resolve against the new body defaults — bold and
-    /// size disappear.
+    /// `span_style_at` returns a *sparse* Style — None for fields that
+    /// match the current line defaults, Some only for explicit overrides.
+    /// Under heading-1 defaults, a span that only sets italic reports
+    /// italic=Some(true) and everything else None.
     #[test]
-    fn heading_to_body_demotion_inherits_new_defaults() {
+    fn span_style_at_reports_sparse_override() {
         let mut ed = editor("AGENTS.md");
 
-        // Apply heading-like defaults: bold + 32px.
         ed.set_paragraph_style(
             0,
             &rich_editor::paragraph::Style {
@@ -1474,8 +1545,6 @@ mod tests {
                 ..Default::default()
             },
         );
-        // Add a span carrying ONLY italic — bold and size should
-        // inherit from defaults at lookup time.
         ed.set_span_style(
             0,
             0..9,
@@ -1485,31 +1554,19 @@ mod tests {
             },
         );
 
-        // Sanity check: with heading defaults, the span resolves to
-        // bold + italic + 32px.
         let s = ed.span_style_at(0, 3);
-        assert_eq!(s.bold, Some(true));
-        assert_eq!(s.italic, Some(true));
-        assert_eq!(s.size, Some(32.0));
-
-        // Demote to body — empty paragraph style means defaults' bold
-        // and size go away.
-        ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
-
-        // The span override still carries italic, but bold and size now
-        // resolve against the new (empty) defaults. THIS is bug B fixed.
-        let s = ed.span_style_at(0, 3);
-        assert_eq!(s.italic, Some(true), "explicit italic survives demotion");
-        assert_eq!(s.bold, Some(false), "inherited bold drops on demotion");
-        assert_eq!(s.size, None, "inherited size drops on demotion");
+        assert_eq!(s.italic, Some(true), "explicit italic shows as override");
+        assert_eq!(s.bold, None, "bold matches defaults — not in sparse Style");
+        assert_eq!(s.size, None, "size matches defaults — not in sparse Style");
     }
 
-    /// Counterpart to the previous test: when a span *explicitly* sets
-    /// bold, that override survives paragraph demotion. Only inherited
-    /// fields re-resolve. This is the difference between "user nested
-    /// bold inside a heading" and "user inherited heading-bold".
+    /// Bug B regression: when paragraph defaults change (heading→body),
+    /// the span's *unspecified* fields re-resolve against the new
+    /// defaults. The sparse Style still reports only what the span
+    /// explicitly set — but the in-cosmic-text effective resolution
+    /// follows the new defaults.
     #[test]
-    fn explicit_span_fields_preserved_across_demotion() {
+    fn heading_to_body_demotion_inherits_new_defaults() {
         let mut ed = editor("AGENTS.md");
 
         ed.set_paragraph_style(
@@ -1523,7 +1580,58 @@ mod tests {
                 ..Default::default()
             },
         );
-        // Span explicitly sets bold=true (the "nested strong" case).
+        ed.set_span_style(
+            0,
+            0..9,
+            &Style {
+                italic: Some(true),
+                ..Default::default()
+            },
+        );
+
+        // While heading defaults are in effect, sparse Style only has italic.
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(s.italic, Some(true));
+        assert_eq!(s.bold, None);
+        assert_eq!(s.size, None);
+
+        // Demote to body.
+        ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
+
+        // The override is unchanged (still just italic). Bold and size
+        // are still `Inherit` — and against the new body defaults
+        // (no bold, no size), they still report None. This is the
+        // structural guarantee: sparse spans + sparse reads = no
+        // baking, no stale heading attrs leaking through.
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(s.italic, Some(true), "explicit italic survives demotion");
+        assert_eq!(s.bold, None);
+        assert_eq!(s.size, None);
+    }
+
+    /// Counterpart: a span that *explicitly* sets bold matches heading
+    /// defaults (so sparse Style reports None while in heading-1 — the
+    /// override matches defaults, indistinguishable from inherit in the
+    /// sparse view). After demoting to body, defaults' bold goes away
+    /// and the explicit override reveals itself as Some(true) in the
+    /// sparse Style.
+    #[test]
+    fn explicit_span_fields_revealed_after_demotion() {
+        let mut ed = editor("AGENTS.md");
+
+        ed.set_paragraph_style(
+            0,
+            &rich_editor::paragraph::Style {
+                style: Style {
+                    bold: Some(true),
+                    size: Some(32.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        // Span explicitly sets bold=true — but this matches heading-1
+        // defaults so the sparse view reports None.
         ed.set_span_style(
             0,
             0..9,
@@ -1533,18 +1641,24 @@ mod tests {
             },
         );
 
+        let s = ed.span_style_at(0, 3);
+        assert_eq!(
+            s.bold, None,
+            "while bold matches defaults, sparse view reports None"
+        );
+
+        // Demote: now defaults' bold is gone, so the explicit
+        // override is visible in the sparse Style.
         ed.set_paragraph_style(0, &rich_editor::paragraph::Style::default());
 
         let s = ed.span_style_at(0, 3);
         assert_eq!(
             s.bold,
             Some(true),
-            "explicit bold from the span override survives demotion"
+            "explicit bold survives in cosmic-text storage and now \
+             differs from body defaults — sparse view exposes it"
         );
-        assert_eq!(
-            s.size, None,
-            "size was inherited from heading defaults, so it drops"
-        );
+        assert_eq!(s.size, None, "size was inherit-only — drops to None");
     }
 
     /// Verifies `paragraph_style_at` reports the line's current
