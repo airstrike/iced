@@ -232,17 +232,22 @@ impl rich_editor::Editor for Editor {
                 Selection::Range(regions)
             }
             _ => {
-                let (caret_x, caret_y, caret_h) = caret_position(cursor, buffer);
-                let f = 1.0 / internal.hint_factor;
+                if let Some((caret_x, caret_y, caret_h)) = caret_position(cursor, buffer) {
+                    let f = 1.0 / internal.hint_factor;
 
-                // Keep the 1px-wide caret within the editor bounds so it
-                // isn't clipped on right-aligned (or end-of-line) text.
-                let x = (caret_x * f).min(internal.bounds.width - 1.0).max(0.0);
+                    // Keep the 1px-wide caret within the editor bounds so it
+                    // isn't clipped on right-aligned (or end-of-line) text.
+                    let x = (caret_x * f).min(internal.bounds.width - 1.0).max(0.0);
 
-                Selection::Caret(Rectangle::new(
-                    Point::new(x, caret_y * f),
-                    Size::new(1.0, caret_h * f),
-                ))
+                    Selection::Caret(Rectangle::new(
+                        Point::new(x, caret_y * f),
+                        Size::new(1.0, caret_h * f),
+                    ))
+                } else {
+                    // Cursor's line is scrolled out of view; render
+                    // nothing instead of falling back to (0, 0).
+                    Selection::Range(Vec::new())
+                }
             }
         };
 
@@ -1244,7 +1249,16 @@ fn empty_line_x(
 
 /// `line_height` comes from the matching layout run so it reflects
 /// per-line variable heights.
-fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
+/// Compute the caret's `(x, y, line_height)` for `cursor`, or `None`
+/// when the cursor's line has no laid-out run in the buffer's current
+/// visible range (i.e. scrolled out of view). The caller suppresses
+/// caret rendering in the `None` case.
+fn caret_position(
+    cursor: cosmic_text::Cursor,
+    buffer: &cosmic_text::Buffer,
+) -> Option<(f32, f32, f32)> {
+    let mut last_on_line: Option<(f32, f32, f32)> = None;
+
     for run in buffer.layout_runs() {
         if run.line_i != cursor.line {
             continue;
@@ -1272,23 +1286,20 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
                 .map(|g| g.x + g.w)
                 .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(run.x_offset));
 
-            return (x, run.line_top, run.line_height);
+            return Some((x, run.line_top, run.line_height));
         }
+
+        // Cursor is past the end of this run — remember it as the
+        // past-the-end candidate for the cursor's line.
+        let x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
+        last_on_line = Some((x, run.line_top, run.line_height));
     }
 
-    // Cursor is past the last run — use the end of the last run on the cursor's line
-    let mut last_x = 0.0;
-    let mut last_y = 0.0;
-    let mut last_h = buffer.metrics().line_height;
-    for run in buffer.layout_runs() {
-        if run.line_i == cursor.line {
-            last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
-            last_y = run.line_top;
-            last_h = run.line_height;
-        }
-    }
-
-    (last_x, last_y, last_h)
+    // If we saw any run on the cursor's line but the cursor was past
+    // the end, fall back to the last seen position. Otherwise the
+    // cursor's line is not in the visible layout (scrolled away) and
+    // there is no caret to draw.
+    last_on_line
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
