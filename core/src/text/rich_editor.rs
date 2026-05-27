@@ -56,6 +56,23 @@ pub trait Editor: Sized + Default {
     /// Returns the minimum bounds to fit contents.
     fn min_bounds(&self) -> Size;
 
+    /// Returns the number of logical pixels the renderer should shift
+    /// the buffer's `(0, 0)` *down* from the editor's content-area
+    /// origin so the first visible line's ascenders don't clip.
+    ///
+    /// Non-zero only when the user-chosen line height for the first
+    /// line is smaller than the font's natural ascent + descent — at
+    /// which point cosmic-text centers glyphs around the baseline and
+    /// the topmost ascenders end up above `line_top = 0`. The widget
+    /// uses this value to offset the buffer position it passes to
+    /// the renderer's `fill_rich_editor`.
+    ///
+    /// Default impl returns `0.0` (no overflow) for backends without
+    /// glyph-extent awareness.
+    fn visual_top_pad(&self) -> f32 {
+        0.0
+    }
+
     /// Returns the hint factor, if any.
     fn hint_factor(&self) -> Option<f32>;
 

@@ -261,20 +261,46 @@ impl PartialEq for Raw {
     }
 }
 
-/// Measures the dimensions of the given [`cosmic_text::Buffer`].
+/// Measures the *visible* dimensions of the given [`cosmic_text::Buffer`].
 ///
-/// Sums the layout-run heights (one per wrapped line) and adds each
-/// laid-out buffer line's `margin_top` + `margin_bottom` exactly once.
-/// Without the margin pass we under-report total height by the sum
-/// of per-line vertical margins, which causes the editor widget to
-/// clip the bottom of any document that uses paragraph spacing.
+/// Three things go into the height:
+///
+/// 1. Sum of layout-run `line_height`s (one per wrapped line).
+/// 2. Each laid-out buffer line's `margin_top` + `margin_bottom`,
+///    exactly once.
+/// 3. Glyph overflow on the first and last visible runs. When a
+///    user-chosen `line_height` is shorter than the font's natural
+///    `max_ascent + max_descent`, cosmic-text centers glyphs around
+///    the baseline — which means the first line's ascenders extend
+///    *above* `line_top = 0` and the last line's descenders extend
+///    *below* `line_top + line_height`. Without accounting for that
+///    overflow, the widget allocates too little vertical space and
+///    glyphs at the document boundaries clip against the editor's
+///    scissor.
+///
+/// The returned height reflects the inked region the renderer needs
+/// to draw without clipping. Pair with [`visual_top_pad`] to learn
+/// how far the buffer's `(0, 0)` should be shifted from the widget's
+/// content-area origin so the first line's ascenders land inside the
+/// allocation.
 pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
     let mut width = 0.0_f32;
     let mut height = 0.0_f32;
     let mut has_rtl = false;
     let mut last_line_i: Option<usize> = None;
 
+    let mut first_top_overflow = 0.0_f32;
+    let mut last_bottom_overflow = 0.0_f32;
+    let mut is_first_run = true;
+
     for run in buffer.layout_runs() {
+        if is_first_run {
+            // Glyph top relative to line_top, negative if ascenders
+            // extend above the line slot.
+            let glyph_above_line = run.line_top - (run.line_y - run.max_ascent);
+            first_top_overflow = glyph_above_line.max(0.0);
+            is_first_run = false;
+        }
         if last_line_i != Some(run.line_i) {
             // Closed-out previous buffer line: add its margin_bottom.
             if let Some(prev_i) = last_line_i
@@ -291,6 +317,11 @@ pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
         width = width.max(run.line_w);
         height += run.line_height;
         has_rtl = has_rtl || run.rtl;
+
+        // Track this run's bottom overflow; the loop's final
+        // assignment is the *last* run's overflow.
+        let glyph_below_line = (run.line_y + run.max_descent) - (run.line_top + run.line_height);
+        last_bottom_overflow = glyph_below_line.max(0.0);
     }
 
     // Close out the very last laid-out buffer line.
@@ -300,7 +331,30 @@ pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
         height += line.margin_bottom();
     }
 
+    height += first_top_overflow + last_bottom_overflow;
+
     (Size::new(width, height), has_rtl)
+}
+
+/// Returns how many logical pixels the first visible run's glyph top
+/// extends above its `line_top`, i.e. the amount the renderer needs
+/// to shift the buffer's `(0, 0)` *down* so that the topmost ascender
+/// lands at the editor's content-area top rather than clipping
+/// against the scissor.
+///
+/// Pairs with [`measure`]: `measure` includes this overflow in the
+/// returned height; the widget reads `visual_top_pad` to know how
+/// much of that height belongs above the buffer's origin.
+///
+/// Returns `0.0` when there's no first run (empty buffer) or when
+/// the line slot fully contains the glyph ascent (the common case
+/// for sensible line heights).
+pub fn visual_top_pad(buffer: &cosmic_text::Buffer) -> f32 {
+    let Some(first) = buffer.layout_runs().next() else {
+        return 0.0;
+    };
+    let glyph_top = first.line_y - first.max_ascent;
+    (first.line_top - glyph_top).max(0.0)
 }
 
 /// Aligns the given [`cosmic_text::Buffer`] with the given [`Alignment`]

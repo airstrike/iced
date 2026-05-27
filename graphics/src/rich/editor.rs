@@ -513,6 +513,11 @@ impl rich_editor::Editor for Editor {
         bounds * (1.0 / internal.hint_factor)
     }
 
+    fn visual_top_pad(&self) -> f32 {
+        let internal = self.internal();
+        text::visual_top_pad(buffer_from_editor(&internal.document)) / internal.hint_factor
+    }
+
     fn hint_factor(&self) -> Option<f32> {
         let internal = self.internal();
 
