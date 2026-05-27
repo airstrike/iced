@@ -197,6 +197,8 @@ impl rich_editor::Editor for Editor {
                 let regions = buffer
                     .layout_runs()
                     .flat_map(|run| {
+                        let (run_y, run_height) = visible_line_bounds(&run);
+
                         // Empty lines within the selection range still need a
                         // visible indicator so the highlight looks continuous.
                         if run.glyphs.is_empty()
@@ -209,8 +211,8 @@ impl rich_editor::Editor for Editor {
                                 Rectangle {
                                     x,
                                     width: w,
-                                    y: run.line_top,
-                                    height: run.line_height,
+                                    y: run_y,
+                                    height: run_height,
                                 } * factor,
                             ];
                         }
@@ -221,8 +223,8 @@ impl rich_editor::Editor for Editor {
                                 Rectangle {
                                     x,
                                     width,
-                                    y: run.line_top,
-                                    height: run.line_height,
+                                    y: run_y,
+                                    height: run_height,
                                 } * factor
                             })
                             .collect()
@@ -269,13 +271,14 @@ impl rich_editor::Editor for Editor {
 
         for run in buffer.layout_runs() {
             if run.line_i == line {
+                let (y, height) = visible_line_bounds(&run);
                 for (x, w) in run.highlight(from_cursor, to_cursor) {
                     if w > 0.0 {
                         f(Rectangle {
                             x: x * scale,
                             width: w * scale,
-                            y: run.line_top * scale,
-                            height: run.line_height * scale,
+                            y: y * scale,
+                            height: height * scale,
                         });
                     }
                 }
@@ -1327,10 +1330,17 @@ fn empty_line_x(
 
 /// `line_height` comes from the matching layout run so it reflects
 /// per-line variable heights.
-/// Compute the caret's `(x, y, line_height)` for `cursor`, or `None`
+/// Compute the caret's `(x, y, height)` for `cursor`, or `None`
 /// when the cursor's line has no laid-out run in the buffer's current
 /// visible range (i.e. scrolled out of view). The caller suppresses
 /// caret rendering in the `None` case.
+///
+/// `y` and `height` use [`visible_line_bounds`] so the caret reaches
+/// the topmost ascender and bottommost descender of the line, not
+/// just the layout slot — important when the line slot is compact
+/// (e.g. user-chosen `line_height` smaller than the font's natural
+/// extent) where the slot is significantly shorter than the inked
+/// glyphs.
 fn caret_position(
     cursor: cosmic_text::Cursor,
     buffer: &cosmic_text::Buffer,
@@ -1355,6 +1365,8 @@ fn caret_position(
             }
         };
 
+        let (y, height) = visible_line_bounds(&run);
+
         if on_this_line {
             let x = run
                 .glyphs
@@ -1364,13 +1376,13 @@ fn caret_position(
                 .map(|g| g.x + g.w)
                 .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(run.x_offset));
 
-            return Some((x, run.line_top, run.line_height));
+            return Some((x, y, height));
         }
 
         // Cursor is past the end of this run — remember it as the
         // past-the-end candidate for the cursor's line.
         let x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
-        last_on_line = Some((x, run.line_top, run.line_height));
+        last_on_line = Some((x, y, height));
     }
 
     // If we saw any run on the cursor's line but the cursor was past
@@ -1378,6 +1390,28 @@ fn caret_position(
     // cursor's line is not in the visible layout (scrolled away) and
     // there is no caret to draw.
     last_on_line
+}
+
+/// Returns the line's visible vertical bounds: `(y, height)`. Covers
+/// both the layout slot (`line_top..line_top + line_height`) and the
+/// inked glyph extent (`line_y - max_ascent..line_y + max_descent`),
+/// taking the union so:
+///
+/// - At loose line-heights (slot ⊇ glyphs) the slot is returned —
+///   selection/caret matches the user's chosen line spacing including
+///   whitespace above/below glyphs.
+/// - At compact line-heights (glyphs overflow the slot, e.g. user
+///   picked LH < 1.0, or a font like Instrument Serif whose descender
+///   exceeds the typical metric), the inked extent is returned so the
+///   selection rect and caret reach all the visible pixels.
+fn visible_line_bounds(run: &cosmic_text::LayoutRun<'_>) -> (f32, f32) {
+    let glyph_top = run.line_y - run.max_ascent;
+    let glyph_bottom = run.line_y + run.max_descent;
+    let slot_top = run.line_top;
+    let slot_bottom = run.line_top + run.line_height;
+    let top = glyph_top.min(slot_top);
+    let bottom = glyph_bottom.max(slot_bottom);
+    (top, bottom - top)
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
@@ -1791,5 +1825,124 @@ mod tests {
     fn empty_buffer_has_zero_top_pad() {
         let ed = editor_with("", Pixels(16.0), LineHeight::Relative(0.5));
         assert_eq!(ed.visual_top_pad(), 0.0);
+    }
+
+    // ── Selection / caret cover the glyph extent at compact LH ────────────────
+
+    /// Helper: read the first layout run's glyph extent (max_ascent +
+    /// max_descent) so tests can compare selection geometry against
+    /// the actual inked area, not the layout slot.
+    fn first_run_glyph_extent(ed: &Editor) -> f32 {
+        let internal = ed.internal();
+        let buffer = buffer_from_editor(&internal.document);
+        let first = buffer
+            .layout_runs()
+            .next()
+            .expect("buffer should have at least one layout run");
+        (first.max_ascent + first.max_descent) / internal.hint_factor
+    }
+
+    /// Helper: build a Cursor selecting columns 0..end on line 0.
+    fn select_first_chars(end: usize) -> editor::Cursor {
+        editor::Cursor {
+            position: editor::Position {
+                line: 0,
+                column: end,
+            },
+            selection: Some(editor::Position { line: 0, column: 0 }),
+        }
+    }
+
+    /// Bug repro: at compact line-height the selection rectangle is
+    /// drawn at the line slot's size, which is shorter than the
+    /// actual visible glyphs. The rect should at minimum cover the
+    /// glyph extent (`max_ascent + max_descent`) — selecting a
+    /// character should highlight the WHOLE glyph, including
+    /// ascenders and descenders that overflow the slot.
+    #[test]
+    fn selection_rect_covers_glyph_extent_at_compact_line_height() {
+        let mut ed = editor_with("hello", Pixels(28.0), LineHeight::Relative(0.5));
+        let glyph_extent = first_run_glyph_extent(&ed);
+        // Sanity: glyph extent should be substantially larger than
+        // the 14px slot for 28px @ LH 0.5.
+        assert!(
+            glyph_extent > 25.0,
+            "glyph extent should be ~32 for 28px font, got {glyph_extent}",
+        );
+
+        ed.move_to(select_first_chars(3));
+
+        let selection = ed.selection();
+        let rects = match selection {
+            editor::Selection::Range(rects) => rects,
+            other => panic!("expected Selection::Range, got {other:?}"),
+        };
+        assert!(!rects.is_empty(), "expected at least one selection rect");
+
+        for rect in &rects {
+            assert!(
+                rect.height >= glyph_extent - 0.5,
+                "selection rect height {} should cover full glyph extent {glyph_extent}; \
+                 line slot at LH 0.5 is only 14px, so a value near 14 means the rect \
+                 was drawn at the slot's height and is clipping ascenders/descenders",
+                rect.height,
+            );
+        }
+    }
+
+    /// Bug repro (caret): same problem as the selection range — the
+    /// caret rectangle is drawn at `line_height`, so at compact LH
+    /// the blinking caret is a short stub that doesn't cover the
+    /// glyph extent. It should reach from the topmost ascender to
+    /// the bottommost descender.
+    #[test]
+    fn caret_height_covers_glyph_extent_at_compact_line_height() {
+        let mut ed = editor_with("hello", Pixels(28.0), LineHeight::Relative(0.5));
+        let glyph_extent = first_run_glyph_extent(&ed);
+
+        // Cursor with no selection — should produce a Caret variant.
+        ed.move_to(editor::Cursor {
+            position: editor::Position { line: 0, column: 2 },
+            selection: None,
+        });
+
+        let caret = match ed.selection() {
+            editor::Selection::Caret(rect) => rect,
+            other => panic!("expected Selection::Caret, got {other:?}"),
+        };
+
+        assert!(
+            caret.height >= glyph_extent - 0.5,
+            "caret height {} should cover full glyph extent {glyph_extent}; \
+             current code uses line_height (14px @ LH 0.5), producing a stub caret \
+             that doesn't reach the ascenders or descenders",
+            caret.height,
+        );
+    }
+
+    /// Sanity: at loose LH (where the slot is *larger* than the
+    /// glyph extent), the selection rect should remain the slot
+    /// size — covering the whitespace above/below glyphs is the
+    /// expected behavior for line-spaced text. The fix should be
+    /// "at least the glyph extent," not "exactly the glyph extent."
+    #[test]
+    fn selection_rect_matches_slot_at_loose_line_height() {
+        let mut ed = editor_with("hello", Pixels(16.0), LineHeight::Relative(1.5));
+        ed.move_to(select_first_chars(3));
+
+        let rects = match ed.selection() {
+            editor::Selection::Range(rects) => rects,
+            other => panic!("expected Selection::Range, got {other:?}"),
+        };
+
+        // 16 * 1.5 = 24 line slot, glyph extent ≈ 16 * 1.15 = 18.4.
+        // Rect should be ~24 (the slot), not 18.
+        for rect in &rects {
+            assert!(
+                (rect.height - 24.0).abs() < 1.0,
+                "loose LH: rect should match line slot (24px), got {}",
+                rect.height,
+            );
+        }
     }
 }
