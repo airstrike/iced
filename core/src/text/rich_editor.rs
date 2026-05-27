@@ -18,6 +18,21 @@ pub mod paragraph;
 /// Per-character (span) formatting types.
 pub mod span;
 
+/// Which decoration line a [`Editor::decorations`] callback rectangle
+/// represents. Useful for widgets that want to draw underlines and
+/// strikethroughs in different colors, or to opt out of one kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Decoration {
+    /// A single underline (the default for `text_decoration.underline`).
+    Underline,
+    /// Two stacked underlines (for `UnderlineStyle::Double`).
+    DoubleUnderline,
+    /// A line through the middle of the glyphs.
+    Strikethrough,
+    /// A line above the glyphs (between ascender and line top).
+    Overline,
+}
+
 /// A rich text editor — manages text + per-character formatting.
 pub trait Editor: Sized + Default {
     /// The font type.
@@ -125,6 +140,21 @@ pub trait Editor: Sized + Default {
         _to: usize,
         _f: &mut dyn FnMut(Rectangle),
     ) {
+    }
+
+    /// Calls `f` once per decoration span (underline, strikethrough,
+    /// overline) currently in the buffer, with the rectangle to fill
+    /// and the resolved color.
+    ///
+    /// Coordinates match `selection()` and `highlight_rect()` —
+    /// already scaled by `hint_factor`, ready for the widget to add
+    /// its buffer-origin offset and pass to `fill_quad`.
+    ///
+    /// `default_color` is the editor's text color, used when neither
+    /// the span nor the decoration carries its own color override.
+    ///
+    /// Default impl is a no-op for backends without decoration data.
+    fn decorations(&self, _default_color: Color, _f: &mut dyn FnMut(Decoration, Rectangle, Color)) {
     }
 
     /// Read character formatting at a position.

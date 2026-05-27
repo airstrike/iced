@@ -286,6 +286,126 @@ impl rich_editor::Editor for Editor {
         }
     }
 
+    fn decorations(
+        &self,
+        default_color: Color,
+        f: &mut dyn FnMut(rich_editor::Decoration, Rectangle, Color),
+    ) {
+        let internal = self.internal();
+        let buffer = buffer_from_editor(&internal.document);
+        let scale = 1.0 / internal.hint_factor;
+
+        for run in buffer.layout_runs() {
+            for span in run.decorations {
+                let glyphs = run.glyphs.get(span.glyph_range.clone()).unwrap_or(&[][..]);
+                if glyphs.is_empty() {
+                    continue;
+                }
+
+                let font_size = span.font_size;
+                let mut x_min = f32::INFINITY;
+                let mut x_max = f32::NEG_INFINITY;
+                for glyph in glyphs {
+                    x_min = x_min.min(glyph.x);
+                    x_max = x_max.max(glyph.x + glyph.w);
+                }
+                let width = x_max - x_min;
+                if width <= 0.0 {
+                    continue;
+                }
+
+                let data = &span.data;
+                let td = &data.text_decoration;
+                let span_color = span.color_opt.map(from_cosmic_color);
+
+                let resolve = |override_opt: Option<cosmic_text::Color>| -> Color {
+                    override_opt
+                        .map(from_cosmic_color)
+                        .or(span_color)
+                        .unwrap_or(default_color)
+                };
+
+                // Underline (Single or Double).
+                match td.underline {
+                    cosmic_text::UnderlineStyle::None => {}
+                    cosmic_text::UnderlineStyle::Single | cosmic_text::UnderlineStyle::Double => {
+                        let color = resolve(td.underline_color_opt);
+                        let thickness = (data.underline_metrics.thickness * font_size)
+                            .max(1.0)
+                            .ceil();
+                        let y = run.line_y - data.underline_metrics.offset * font_size;
+                        let rect = Rectangle {
+                            x: x_min,
+                            y,
+                            width,
+                            height: thickness,
+                        };
+                        match td.underline {
+                            cosmic_text::UnderlineStyle::Single => {
+                                f(rich_editor::Decoration::Underline, rect * scale, color);
+                            }
+                            cosmic_text::UnderlineStyle::Double => {
+                                f(
+                                    rich_editor::Decoration::DoubleUnderline,
+                                    rect * scale,
+                                    color,
+                                );
+                                let second = Rectangle {
+                                    x: x_min,
+                                    y: y + thickness * 2.0,
+                                    width,
+                                    height: thickness,
+                                };
+                                f(
+                                    rich_editor::Decoration::DoubleUnderline,
+                                    second * scale,
+                                    color,
+                                );
+                            }
+                            cosmic_text::UnderlineStyle::None => {}
+                        }
+                    }
+                }
+
+                if td.strikethrough {
+                    let color = resolve(td.strikethrough_color_opt);
+                    let thickness = (data.strikethrough_metrics.thickness * font_size)
+                        .max(1.0)
+                        .ceil();
+                    let y = run.line_y - data.strikethrough_metrics.offset * font_size;
+                    f(
+                        rich_editor::Decoration::Strikethrough,
+                        Rectangle {
+                            x: x_min,
+                            y,
+                            width,
+                            height: thickness,
+                        } * scale,
+                        color,
+                    );
+                }
+
+                if td.overline {
+                    let color = resolve(td.overline_color_opt);
+                    let thickness = (data.underline_metrics.thickness * font_size)
+                        .max(1.0)
+                        .ceil();
+                    let y = (run.line_y - data.ascent * font_size).max(run.line_top);
+                    f(
+                        rich_editor::Decoration::Overline,
+                        Rectangle {
+                            x: x_min,
+                            y,
+                            width,
+                            height: thickness,
+                        } * scale,
+                        color,
+                    );
+                }
+            }
+        }
+    }
+
     fn cursor(&self) -> Cursor {
         let editor = &self.internal().document;
         let cursor_pos = editor.cursor();
@@ -1414,6 +1534,10 @@ fn visible_line_bounds(run: &cosmic_text::LayoutRun<'_>) -> (f32, f32) {
     (top, bottom - top)
 }
 
+fn from_cosmic_color(color: cosmic_text::Color) -> Color {
+    Color::from_rgba8(color.r(), color.g(), color.b(), color.a() as f32 / 255.0)
+}
+
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
     match motion {
         Motion::Left => cosmic_text::Motion::Left,
@@ -1944,5 +2068,131 @@ mod tests {
                 rect.height,
             );
         }
+    }
+
+    // ── Decoration rendering (underline / strikethrough) ─────────────────────
+
+    /// Helper: collect decoration callback emissions into a Vec.
+    fn collect_decorations(ed: &Editor) -> Vec<(rich_editor::Decoration, Rectangle, Color)> {
+        let mut out = Vec::new();
+        ed.decorations(Color::BLACK, &mut |kind, rect, color| {
+            out.push((kind, rect, color));
+        });
+        out
+    }
+
+    /// `set_span_style` modifies the AttrsList and marks the layout
+    /// dirty; `buffer.layout_runs()` won't reshape on demand, so the
+    /// next thing that needs glyphs must trigger shape. We just call
+    /// `update` again — it ends in `shape_until_scroll`.
+    fn reshape(ed: &mut Editor) {
+        ed.update(
+            Size::new(200.0, 200.0),
+            Font::default(),
+            Pixels(16.0),
+            LineHeight::default(),
+            Em::ZERO,
+            Vec::new(),
+            Vec::new(),
+            Wrapping::Word,
+            None,
+            Style::default(),
+        );
+    }
+
+    /// Bug repro: a span with `underline: Some(true)` should produce
+    /// exactly one Underline decoration rect over its range. With no
+    /// implementation, this returns nothing — the markdown sample's
+    /// "and underline styles" doesn't render an underline.
+    #[test]
+    fn underline_span_emits_one_underline_decoration() {
+        let mut ed = editor("hello world");
+        ed.set_span_style(
+            0,
+            0..5,
+            &Style {
+                underline: Some(true),
+                ..Default::default()
+            },
+        );
+
+        reshape(&mut ed);
+        let decos = collect_decorations(&ed);
+        let underlines: Vec<_> = decos
+            .iter()
+            .filter(|(k, _, _)| *k == rich_editor::Decoration::Underline)
+            .collect();
+
+        assert_eq!(
+            underlines.len(),
+            1,
+            "expected exactly one underline decoration for a single-line span, got {decos:?}",
+        );
+        let (_, rect, _) = underlines[0];
+        assert!(
+            rect.width > 0.0 && rect.height > 0.0,
+            "underline rect should have positive dimensions, got {rect:?}",
+        );
+        // Underline sits just below the baseline — for a 16px font
+        // with default LH, baseline lands ~16-18px from the slot top,
+        // so the underline rect's y should be below ~12.
+        assert!(
+            rect.y > 12.0,
+            "underline should sit below the baseline, got y = {}",
+            rect.y,
+        );
+    }
+
+    /// A span with `strikethrough: Some(true)` should produce a
+    /// Strikethrough rect, NOT an underline. They use different font
+    /// metrics (strikethrough_metrics vs underline_metrics) and are
+    /// positioned through the x-height region.
+    #[test]
+    fn strikethrough_span_emits_strikethrough_decoration() {
+        let mut ed = editor("hello world");
+        ed.set_span_style(
+            0,
+            0..5,
+            &Style {
+                strikethrough: Some(true),
+                ..Default::default()
+            },
+        );
+
+        reshape(&mut ed);
+        let decos = collect_decorations(&ed);
+        let kinds: Vec<rich_editor::Decoration> = decos.iter().map(|(k, _, _)| *k).collect();
+
+        assert!(
+            kinds.contains(&rich_editor::Decoration::Strikethrough),
+            "expected a Strikethrough decoration, got kinds: {kinds:?}",
+        );
+        assert!(
+            !kinds.contains(&rich_editor::Decoration::Underline),
+            "strikethrough-only span should not emit an underline, got kinds: {kinds:?}",
+        );
+    }
+
+    /// A span without any decoration set should emit no decoration
+    /// callbacks. Drives the "plain bold span isn't accidentally
+    /// underlined" guarantee.
+    #[test]
+    fn plain_span_emits_no_decoration() {
+        let mut ed = editor("hello world");
+        ed.set_span_style(
+            0,
+            0..5,
+            &Style {
+                bold: Some(true),
+                ..Default::default()
+            },
+        );
+
+        reshape(&mut ed);
+        let decos = collect_decorations(&ed);
+        assert!(
+            decos.is_empty(),
+            "bold-only span should emit no decorations, got {decos:?}",
+        );
     }
 }
