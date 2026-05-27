@@ -1427,13 +1427,17 @@ mod tests {
     use crate::core::text::rich_editor::Editor as _;
 
     fn editor(text: &str) -> Editor {
+        editor_with(text, Pixels(16.0), LineHeight::default())
+    }
+
+    fn editor_with(text: &str, size: Pixels, line_height: LineHeight) -> Editor {
         let mut ed = Editor::with_text(text);
         // Trigger layout so buffer lines are shaped.
         ed.update(
             Size::new(200.0, 200.0),
             Font::default(),
-            Pixels(16.0),
-            LineHeight::default(),
+            size,
+            line_height,
             Em::ZERO,
             Vec::new(),
             Vec::new(),
@@ -1706,5 +1710,86 @@ mod tests {
         let para = ed.paragraph_style_at(0);
         assert_eq!(para.style.bold, Some(false));
         assert_eq!(para.style.size, None);
+    }
+
+    // ── Glyph-overflow / visual_top_pad / measure ─────────────────────────────
+
+    /// Default line-height (Relative(1.3)) gives the font more vertical
+    /// room than its natural ascent+descent, so cosmic-text's centering
+    /// distributes excess space above+below the glyph and there's no
+    /// overflow. `visual_top_pad` is 0, `min_bounds().height` equals the
+    /// sum of layout-run heights.
+    #[test]
+    fn loose_line_height_has_no_visual_overflow() {
+        let ed = editor_with("hello", Pixels(16.0), LineHeight::Relative(1.3));
+        assert_eq!(
+            ed.visual_top_pad(),
+            0.0,
+            "loose LH should have no top overflow",
+        );
+        // min_bounds().height should equal the single line's height ≈
+        // 16 × 1.3 = 20.8. Allow a small slack for hinting / rounding.
+        let h = ed.min_bounds().height;
+        assert!(
+            (h - 20.8).abs() < 1.0,
+            "expected min_bounds.height ≈ 20.8 for one line at 16px @ LH 1.3, got {h}",
+        );
+    }
+
+    /// When `line_height < max_ascent + max_descent`, cosmic-text
+    /// centers glyphs around the baseline — the overflow shows up
+    /// symmetrically above `line_top` and below `line_top + line_height`.
+    /// `visual_top_pad` reports the top half; `min_bounds.height` adds
+    /// both halves to the layout-summed height.
+    #[test]
+    fn compact_line_height_reports_glyph_overflow() {
+        // 28px text at LH 0.5 → 14px slot. The font's natural extent
+        // is ~1.15-1.2 × font_size ≈ 32-34px. So we expect ~10px of
+        // overflow distributed symmetrically: ~5px above, ~5px below.
+        let ed = editor_with("hello", Pixels(28.0), LineHeight::Relative(0.5));
+
+        let top_pad = ed.visual_top_pad();
+        assert!(
+            top_pad > 4.0 && top_pad < 12.0,
+            "expected visual_top_pad in (4, 12) for 28px @ LH 0.5, got {top_pad}",
+        );
+
+        // Slot = 14px, but min_bounds should include the overflow:
+        // ≈ 14 + 2 × top_pad. Symmetric centering means top_pad ≈
+        // bottom_overflow, so min_bounds.height ≈ slot + 2 × top_pad.
+        let h = ed.min_bounds().height;
+        let expected = 14.0 + 2.0 * top_pad;
+        assert!(
+            (h - expected).abs() < 1.0,
+            "min_bounds.height = {h}, expected ≈ slot(14) + 2 × top_pad({top_pad}) = {expected}",
+        );
+    }
+
+    /// Two-line buffer with compact LH: the top overflow is only on
+    /// the first line, the bottom overflow only on the last. Inner
+    /// runs' overflow is absorbed by neighbors — `min_bounds` doesn't
+    /// double-count.
+    #[test]
+    fn multi_line_overflow_counts_only_first_and_last() {
+        let ed = editor_with("hello\nworld", Pixels(28.0), LineHeight::Relative(0.5));
+        let top_pad = ed.visual_top_pad();
+        let h = ed.min_bounds().height;
+
+        // Two slots of 14px each = 28px layout height.
+        // Plus first-line top overflow + last-line bottom overflow,
+        // each ≈ top_pad (symmetric centering).
+        let expected = 28.0 + 2.0 * top_pad;
+        assert!(
+            (h - expected).abs() < 1.0,
+            "two-line min_bounds.height = {h}, expected ≈ 2 × slot(14) + 2 × top_pad({top_pad}) = {expected}",
+        );
+    }
+
+    /// An empty buffer shouldn't panic and should report 0 top_pad
+    /// (no glyphs, nothing to overflow).
+    #[test]
+    fn empty_buffer_has_zero_top_pad() {
+        let ed = editor_with("", Pixels(16.0), LineHeight::Relative(0.5));
+        assert_eq!(ed.visual_top_pad(), 0.0);
     }
 }
