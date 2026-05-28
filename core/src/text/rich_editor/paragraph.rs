@@ -120,7 +120,13 @@ pub struct Border {
     pub width: f32,
 }
 
-/// Four optional paragraph borders.
+/// Four optional paragraph borders, plus a per-side `from_text`
+/// inset matching Word's "Border and Shading Options → From Text"
+/// panel: the distance between each border and the text inside it.
+///
+/// Indent (`paragraph::Style::indent`) moves the whole paragraph
+/// rectangle — border *and* text together. `from_text` is the gap
+/// *inside* the rectangle between the border and the text.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Borders {
     /// Top border.
@@ -131,4 +137,8 @@ pub struct Borders {
     pub bottom: Option<Border>,
     /// Left border.
     pub left: Option<Border>,
+    /// Per-side gap between the border and the text it surrounds, in
+    /// logical pixels. Mirrors Word's `<w:pBdr w:space="…">` attribute
+    /// for each side. Default is all-zero — borders touch the text.
+    pub from_text: crate::Padding,
 }
