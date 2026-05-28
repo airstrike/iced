@@ -357,6 +357,29 @@ pub fn visual_top_pad(buffer: &cosmic_text::Buffer) -> f32 {
     (first.line_top - glyph_top).max(0.0)
 }
 
+/// Returns how many logical pixels the LAST visible run's glyph bottom
+/// extends below its slot bottom (`line_top + line_height`), i.e. the
+/// amount of vertical room the widget must reserve at the bottom for
+/// the descenders not to be clipped by the scissor.
+///
+/// Pairs with [`measure`]: `measure` includes this overflow in the
+/// returned height. Widgets that allocate `min_bounds().height` will
+/// already have room; widgets that pass a fixed viewport to
+/// [`crate::core::text::rich_editor::Editor::update`] can read this to
+/// extend their clip rect on the bottom by the same amount the top
+/// is extended via [`visual_top_pad`].
+///
+/// Returns `0.0` when there's no last run (empty buffer) or when the
+/// last line's slot fully contains its glyph descent.
+pub fn visual_bottom_pad(buffer: &cosmic_text::Buffer) -> f32 {
+    let Some(last) = buffer.layout_runs().last() else {
+        return 0.0;
+    };
+    let glyph_bottom = last.line_y + last.max_descent;
+    let slot_bottom = last.line_top + last.line_height;
+    (glyph_bottom - slot_bottom).max(0.0)
+}
+
 /// Aligns the given [`cosmic_text::Buffer`] with the given [`Alignment`]
 /// and returns its minimum [`Size`].
 pub fn align(

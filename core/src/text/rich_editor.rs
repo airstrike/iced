@@ -88,6 +88,22 @@ pub trait Editor: Sized + Default {
         0.0
     }
 
+    /// Returns the number of logical pixels the LAST visible line's
+    /// glyph bottom extends below its slot bottom — the bottom-side
+    /// counterpart of [`visual_top_pad`].
+    ///
+    /// Widgets whose allocation matches `min_bounds().height` already
+    /// reserve room for this overflow (it's baked into the measure).
+    /// Widgets that constrain the buffer to a fixed viewport (and
+    /// hence may render glyphs whose descenders extend past their
+    /// clip rect) can read this to extend the clip on the bottom.
+    ///
+    /// Default impl returns `0.0` for backends without glyph-extent
+    /// awareness.
+    fn visual_bottom_pad(&self) -> f32 {
+        0.0
+    }
+
     /// Returns the hint factor, if any.
     fn hint_factor(&self) -> Option<f32>;
 

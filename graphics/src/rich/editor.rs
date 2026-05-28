@@ -564,22 +564,55 @@ impl rich_editor::Editor for Editor {
                     }
                 },
 
-                // Mouse events
+                // Mouse events.
+                //
+                // The click position arrives in *content* space (widget
+                // bounds minus padding), but cosmic-text wants buffer
+                // space. Two transforms:
+                //
+                // 1. Subtract `visual_top_pad`: the widget shifted the
+                //    buffer origin down by that amount so the first
+                //    line's ascender doesn't clip at LH < 1. Hit-test
+                //    needs to undo the shift, otherwise a click on the
+                //    visible heading lands a line below in buffer space.
+                //
+                // 2. Clamp clicks in paragraph-spacing gaps onto the
+                //    previous slot's bottom. cosmic-text's hit_test
+                //    keeps `first_run = true` until it enters a slot;
+                //    if the click is past run 0's slot but before
+                //    run 1's slot (paragraph spacing gap), iter 2 sees
+                //    `first_run && y < line_top` and places the cursor
+                //    at the START of run 1 — which is the wrong UX
+                //    (Word puts it at the END of the previous line).
                 Action::Click(position) => {
+                    let raw_x = position.x * internal.hint_factor;
+                    let buffer_y = {
+                        let buffer = buffer_from_editor(&*editor);
+                        let top_pad = text::visual_top_pad(buffer);
+                        let raw_y = position.y * internal.hint_factor - top_pad;
+                        clamp_click_into_slot(buffer, raw_y)
+                    };
                     editor.action(
                         font_system.raw(),
                         cosmic_text::Action::Click {
-                            x: (position.x * internal.hint_factor) as i32,
-                            y: (position.y * internal.hint_factor) as i32,
+                            x: raw_x as i32,
+                            y: buffer_y as i32,
                         },
                     );
                 }
                 Action::Drag(position) => {
+                    let raw_x = position.x * internal.hint_factor;
+                    let buffer_y = {
+                        let buffer = buffer_from_editor(&*editor);
+                        let top_pad = text::visual_top_pad(buffer);
+                        let raw_y = position.y * internal.hint_factor - top_pad;
+                        clamp_click_into_slot(buffer, raw_y)
+                    };
                     editor.action(
                         font_system.raw(),
                         cosmic_text::Action::Drag {
-                            x: (position.x * internal.hint_factor) as i32,
-                            y: (position.y * internal.hint_factor) as i32,
+                            x: raw_x as i32,
+                            y: buffer_y as i32,
                         },
                     );
 
@@ -639,6 +672,11 @@ impl rich_editor::Editor for Editor {
     fn visual_top_pad(&self) -> f32 {
         let internal = self.internal();
         text::visual_top_pad(buffer_from_editor(&internal.document)) / internal.hint_factor
+    }
+
+    fn visual_bottom_pad(&self) -> f32 {
+        let internal = self.internal();
+        text::visual_bottom_pad(buffer_from_editor(&internal.document)) / internal.hint_factor
     }
 
     fn hint_factor(&self) -> Option<f32> {
@@ -1536,6 +1574,46 @@ fn visible_line_bounds(run: &cosmic_text::LayoutRun<'_>) -> (f32, f32) {
 
 fn from_cosmic_color(color: cosmic_text::Color) -> Color {
     Color::from_rgba8(color.r(), color.g(), color.b(), color.a() as f32 / 255.0)
+}
+
+/// Clamp `y` so it lands inside *some* slot rather than in a
+/// paragraph-spacing gap.
+///
+/// cosmic-text's hit_test only places a cursor when `y` falls inside
+/// a layout slot (`[line_top, line_top + line_height)`); if `y` is in
+/// a gap between two slots (because the lower paragraph carries a
+/// `space_before` or the upper paragraph carries a `spacing_after`),
+/// the iterator's `first_run` flag stays true until the next slot
+/// engages, and cosmic-text ends up placing the cursor at the START
+/// of that next slot. Word's behavior is to place it at the END of
+/// the previous line. We replicate that by pulling `y` just inside
+/// the previous slot before forwarding to cosmic-text.
+///
+/// Pre-first-slot and past-last-slot clicks are handed through
+/// unchanged — cosmic-text already handles those (cursor lands at
+/// start of first line / end of last line respectively).
+fn clamp_click_into_slot(buffer: &cosmic_text::Buffer, y: f32) -> f32 {
+    let mut prev_slot_bottom: Option<f32> = None;
+    for run in buffer.layout_runs() {
+        let slot_top = run.line_top;
+        let slot_bottom = slot_top + run.line_height;
+        if y < slot_top {
+            if let Some(prev_bottom) = prev_slot_bottom {
+                // Click is in the gap between previous and this run.
+                // Pull just inside the previous slot.
+                return (prev_bottom - 1.0).max(0.0);
+            }
+            // No previous run — click is above the very first slot.
+            return y;
+        }
+        if y < slot_bottom {
+            // Inside a slot — no adjustment needed.
+            return y;
+        }
+        prev_slot_bottom = Some(slot_bottom);
+    }
+    // Past every slot — leave for cosmic-text to clamp to last line end.
+    y
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
