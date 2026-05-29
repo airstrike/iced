@@ -35,7 +35,7 @@ use crate::core::text::editor::{
 };
 use crate::core::text::rich_editor::{self, paragraph, span::Style};
 use crate::core::text::{Alignment, LineHeight, Wrapping};
-use crate::core::{Color, Em, Font, Pixels, Point, Rectangle, Size};
+use crate::core::{Color, Em, Font, Padding, Pixels, Point, Rectangle, Size};
 use crate::text;
 
 use cosmic_text::Edit as _;
@@ -664,9 +664,16 @@ impl rich_editor::Editor for Editor {
     fn min_bounds(&self) -> Size {
         let internal = self.internal();
 
-        let (bounds, _has_rtl) = text::measure(buffer_from_editor(&internal.document));
+        let buffer = buffer_from_editor(&internal.document);
+        let (bounds, _has_rtl) = text::measure(buffer);
 
-        bounds * (1.0 / internal.hint_factor)
+        // `measure` excludes the scroll-reserved vertical pad (it cancels in
+        // the glyph-overflow math), so add it back so an auto-sized editor
+        // allocates room for the top/bottom breathing space.
+        let pad = buffer.vertical_pad();
+        let mut bounds = bounds * (1.0 / internal.hint_factor);
+        bounds.height += (pad.top + pad.bottom) / internal.hint_factor;
+        bounds
     }
 
     fn visual_top_pad(&self) -> f32 {
@@ -688,6 +695,7 @@ impl rich_editor::Editor for Editor {
     fn update(
         &mut self,
         new_bounds: Size,
+        new_padding: Padding,
         new_font: Font,
         new_size: Pixels,
         new_line_height: LineHeight,
@@ -807,6 +815,15 @@ impl rich_editor::Editor for Editor {
 
                 buffer.set_wrap(new_wrap);
             }
+
+            // Reserve the vertical padding inside the scroll extent. Applied
+            // every update in hinted pixels, so a hint_factor change is picked
+            // up automatically. Horizontal padding is already baked into
+            // `new_bounds` by the caller.
+            buffer.set_vertical_pad(cosmic_text::VerticalPad {
+                top: new_padding.top * internal.hint_factor,
+                bottom: new_padding.bottom * internal.hint_factor,
+            });
 
             if new_bounds != internal.bounds || hinting_changed {
                 log::trace!("Updating size of rich `Editor`...");
@@ -1057,6 +1074,7 @@ impl rich_editor::Editor for Editor {
             internal.document.set_scrollable(scrollable);
         });
     }
+
 }
 
 impl Default for Editor {

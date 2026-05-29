@@ -4,7 +4,7 @@
 //! per-paragraph formatting directly — no Highlighter needed.
 
 use crate::text::{LineHeight, Wrapping};
-use crate::{Color, Em, Pixels, Point, Rectangle, Size};
+use crate::{Color, Em, Padding, Pixels, Point, Rectangle, Size};
 
 use std::ops::Range;
 
@@ -108,9 +108,18 @@ pub trait Editor: Sized + Default {
     fn hint_factor(&self) -> Option<f32>;
 
     /// Updates layout — NO Highlighter parameter.
+    ///
+    /// `new_padding` is the editor's content padding. Horizontal padding is
+    /// already reflected in `new_bounds` (the text-layout area) by the caller;
+    /// the editor reserves the vertical padding (`top`/`bottom`) *inside* the
+    /// scroll extent so it scrolls with content instead of shrinking the
+    /// viewport. At rest the first line sits `top` below the viewport top; at
+    /// maximum scroll the last line sits `bottom` above the bottom; in between
+    /// text fills the viewport edge-to-edge.
     fn update(
         &mut self,
         new_bounds: Size,
+        new_padding: Padding,
         new_font: Self::Font,
         new_size: Pixels,
         new_line_height: LineHeight,

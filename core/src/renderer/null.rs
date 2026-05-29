@@ -292,6 +292,7 @@ impl text::rich_editor::Editor for () {
     fn update(
         &mut self,
         _new_bounds: Size,
+        _new_padding: crate::Padding,
         _new_font: Self::Font,
         _new_size: Pixels,
         _new_line_height: text::LineHeight,

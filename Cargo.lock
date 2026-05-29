@@ -998,7 +998,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.19.0"
-source = "git+https://github.com/airstrike/cosmic-text?branch=feat%2Fattrs-override#070320b8107ef4fabd2f657642c6ce2193c250d7"
+source = "git+https://github.com/airstrike/cosmic-text?branch=feat%2Fattrs-override#e8ff801aff9f63911d717d957bf192492d7bd0ed"
 dependencies = [
  "bitflags 2.11.1",
  "fontdb",
