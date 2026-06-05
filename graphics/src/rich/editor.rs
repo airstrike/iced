@@ -1074,7 +1074,6 @@ impl rich_editor::Editor for Editor {
             internal.document.set_scrollable(scrollable);
         });
     }
-
 }
 
 impl Default for Editor {
