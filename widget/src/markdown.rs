@@ -335,7 +335,7 @@ impl Span {
                 };
 
                 if let Some(link) = link.as_ref() {
-                    span.color(style.link_color).link(link.clone())
+                    span.color(style.link.color).link(link.clone())
                 } else {
                     span
                 }
@@ -1071,8 +1071,17 @@ pub struct Style {
     pub inline_code_font: Font,
     /// The [`Font`] to be applied to code blocks.
     pub code_block_font: Font,
-    /// The [`Color`] to be applied to links.
-    pub link_color: Color,
+    /// The styling applied to links.
+    pub link: Link,
+}
+
+/// The styling of links, by interaction state.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Link {
+    /// The color of a link at rest.
+    pub color: Color,
+    /// The color of a link while hovered.
+    pub hovered: Color,
 }
 
 impl Style {
@@ -1088,7 +1097,10 @@ impl Style {
             inline_code_color: Color::WHITE,
             inline_code_font: Font::MONOSPACE,
             code_block_font: Font::MONOSPACE,
-            link_color: seed.primary,
+            link: Link {
+                color: seed.primary,
+                hovered: palette::deviate(seed.primary, 0.1),
+            },
         }
     }
 }
@@ -1231,6 +1243,7 @@ pub fn heading<'a, Message, Theme, Renderer>(
     text: &'a Text,
     index: usize,
     on_link_click: impl Fn(Uri) -> Message + 'a,
+    link_hovered_color: Color,
 ) -> Element<'a, Message, Theme, Renderer>
 where
     Message: 'a,
@@ -1248,24 +1261,25 @@ where
         ..
     } = settings;
 
-    container(
-        rich_text(text.spans(settings.style))
-            .on_link_click(on_link_click)
-            .size(match level {
-                pulldown_cmark::HeadingLevel::H1 => h1_size,
-                pulldown_cmark::HeadingLevel::H2 => h2_size,
-                pulldown_cmark::HeadingLevel::H3 => h3_size,
-                pulldown_cmark::HeadingLevel::H4 => h4_size,
-                pulldown_cmark::HeadingLevel::H5 => h5_size,
-                pulldown_cmark::HeadingLevel::H6 => h6_size,
-            }),
-    )
-    .padding(padding::top(if index > 0 {
-        text_size / 2.0
-    } else {
-        Pixels::ZERO
-    }))
-    .into()
+    let content = rich_text(text.spans(settings.style))
+        .on_link_click(on_link_click)
+        .link_hovered_color(link_hovered_color)
+        .size(match level {
+            pulldown_cmark::HeadingLevel::H1 => h1_size,
+            pulldown_cmark::HeadingLevel::H2 => h2_size,
+            pulldown_cmark::HeadingLevel::H3 => h3_size,
+            pulldown_cmark::HeadingLevel::H4 => h4_size,
+            pulldown_cmark::HeadingLevel::H5 => h5_size,
+            pulldown_cmark::HeadingLevel::H6 => h6_size,
+        });
+
+    container(content)
+        .padding(padding::top(if index > 0 {
+            text_size / 2.0
+        } else {
+            Pixels::ZERO
+        }))
+        .into()
 }
 
 /// Displays a paragraph using the default look.
@@ -1273,6 +1287,7 @@ pub fn paragraph<'a, Message, Theme, Renderer>(
     settings: Settings,
     text: &Text,
     on_link_click: impl Fn(Uri) -> Message + 'a,
+    link_hovered_color: Color,
 ) -> Element<'a, Message, Theme, Renderer>
 where
     Message: 'a,
@@ -1282,6 +1297,7 @@ where
     rich_text(text.spans(settings.style))
         .size(settings.text_size)
         .on_link_click(on_link_click)
+        .link_hovered_color(link_hovered_color)
         .into()
 }
 
@@ -1511,6 +1527,15 @@ where
     /// Produces a message when a link is clicked with the given [`Uri`].
     fn on_link_click(url: Uri) -> Message;
 
+    /// The color of a link, given whether it is currently hovered.
+    fn link_color(&self, settings: Settings, hovered: bool) -> Color {
+        if hovered {
+            settings.style.link.hovered
+        } else {
+            settings.style.link.color
+        }
+    }
+
     /// Displays an image.
     ///
     /// By default, it will show a container with the image title.
@@ -1535,19 +1560,27 @@ where
     /// By default, it calls [`heading`].
     fn heading(
         &self,
-        settings: Settings,
+        mut settings: Settings,
         level: &'a HeadingLevel,
         text: &'a Text,
         index: usize,
     ) -> Element<'a, Message, Theme, Renderer> {
-        heading(settings, level, text, index, Self::on_link_click)
+        let hovered = self.link_color(settings, true);
+        settings.style.link.color = self.link_color(settings, false);
+        heading(settings, level, text, index, Self::on_link_click, hovered)
     }
 
     /// Displays a paragraph.
     ///
     /// By default, it calls [`paragraph`].
-    fn paragraph(&self, settings: Settings, text: &Text) -> Element<'a, Message, Theme, Renderer> {
-        paragraph(settings, text, Self::on_link_click)
+    fn paragraph(
+        &self,
+        mut settings: Settings,
+        text: &Text,
+    ) -> Element<'a, Message, Theme, Renderer> {
+        let hovered = self.link_color(settings, true);
+        settings.style.link.color = self.link_color(settings, false);
+        paragraph(settings, text, Self::on_link_click, hovered)
     }
 
     /// Displays a code block.
