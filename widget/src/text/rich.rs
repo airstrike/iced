@@ -2,7 +2,7 @@ use crate::core::alignment;
 use crate::core::layout;
 use crate::core::mouse;
 use crate::core::renderer;
-use crate::core::text::{Paragraph, Span};
+use crate::core::text::{Decoration, Paragraph, Span};
 use crate::core::widget::text::{
     self, Alignment, Catalog, Ellipsis, LineHeight, Shaping, Style, StyleFn, Wrapping,
 };
@@ -343,13 +343,6 @@ where
                 }
 
                 if span.underline || span.strikethrough || is_hovered_link {
-                    let size = span.size.or(self.size).unwrap_or(renderer.default_size());
-
-                    let line_height = span
-                        .line_height
-                        .unwrap_or(self.line_height)
-                        .to_absolute(size);
-
                     let color = if is_hovered_link {
                         self.link_hovered_color
                     } else {
@@ -359,39 +352,24 @@ where
                     .or(style.color)
                     .unwrap_or(defaults.text_color);
 
-                    let baseline =
-                        translation + Vector::new(0.0, size.0 + (line_height.0 - size.0) / 2.0);
-
-                    if span.underline || is_hovered_link {
-                        for bounds in &regions {
+                    let mut draw = |decoration| {
+                        for bounds in state.paragraph.decoration_bounds(index, decoration) {
                             renderer.fill_quad(
                                 renderer::Quad {
-                                    bounds: Rectangle::new(
-                                        bounds.position() + baseline
-                                            - Vector::new(0.0, size.0 * 0.08),
-                                        Size::new(bounds.width, 1.0),
-                                    ),
+                                    bounds: bounds + translation,
                                     ..Default::default()
                                 },
                                 color,
                             );
                         }
+                    };
+
+                    if span.underline || is_hovered_link {
+                        draw(Decoration::Underline);
                     }
 
                     if span.strikethrough {
-                        for bounds in &regions {
-                            renderer.fill_quad(
-                                renderer::Quad {
-                                    bounds: Rectangle::new(
-                                        bounds.position() + baseline
-                                            - Vector::new(0.0, size.0 / 2.0),
-                                        Size::new(bounds.width, 1.0),
-                                    ),
-                                    ..Default::default()
-                                },
-                                color,
-                            );
-                        }
+                        draw(Decoration::Strikethrough);
                     }
                 }
             }

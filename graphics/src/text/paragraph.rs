@@ -2,7 +2,9 @@
 use crate::core;
 use crate::core::alignment;
 use crate::core::font;
-use crate::core::text::{Alignment, Ellipsis, Hit, LineHeight, Shaping, Span, Text, Wrapping};
+use crate::core::text::{
+    Alignment, Decoration, Ellipsis, Hit, LineHeight, Shaping, Span, Text, Wrapping,
+};
 use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
 use crate::text;
 
@@ -495,6 +497,71 @@ impl core::text::Paragraph for Paragraph {
         let _ = internal
             .buffer
             .recolor_metadata(index, color.map(text::to_color));
+    }
+
+    fn decoration_bounds(&self, index: usize, decoration: Decoration) -> Vec<Rectangle> {
+        let internal = self.internal();
+        let hint_factor = self.0.hint_factor;
+
+        let Ok(mut font_system) = text::font_system().write() else {
+            return Vec::new();
+        };
+        let font_system = font_system.raw();
+
+        let mut bounds = Vec::new();
+
+        for run in internal.buffer.layout_runs() {
+            let mut x_min = f32::MAX;
+            let mut x_max = f32::MIN;
+            let mut font = None;
+
+            for glyph in run.glyphs.iter().filter(|glyph| glyph.metadata == index) {
+                x_min = x_min.min(glyph.x);
+                x_max = x_max.max(glyph.x + glyph.w);
+                font = font.or(Some((glyph.font_id, glyph.font_size)));
+            }
+
+            let Some((font_id, font_size)) = font else {
+                continue;
+            };
+            let Some(metrics) = font_system.decoration_metrics(font_id) else {
+                continue;
+            };
+
+            // Mirrors cosmic-text's `render_decoration`: y from the baseline
+            // (`line_y`) minus the font's offset, thickness from the font.
+            let line = |y: f32, thickness: f32| {
+                Rectangle::new(
+                    Point::new(x_min, y),
+                    Size::new(x_max - x_min, thickness.max(1.0)),
+                ) * (1.0 / hint_factor)
+            };
+            let underline = metrics.underline.thickness * font_size;
+
+            match decoration {
+                Decoration::Underline => {
+                    bounds.push(line(
+                        run.line_y - metrics.underline.offset * font_size,
+                        underline,
+                    ));
+                }
+                Decoration::DoubleUnderline => {
+                    let y = run.line_y - metrics.underline.offset * font_size;
+                    bounds.push(line(y, underline));
+                    bounds.push(line(y + underline * 2.0, underline));
+                }
+                Decoration::Strikethrough => {
+                    let y = run.line_y - metrics.strikethrough.offset * font_size;
+                    bounds.push(line(y, metrics.strikethrough.thickness * font_size));
+                }
+                Decoration::Overline => {
+                    let y = (run.line_y - metrics.ascent * font_size).max(run.line_top);
+                    bounds.push(line(y, underline));
+                }
+            }
+        }
+
+        bounds
     }
 }
 
