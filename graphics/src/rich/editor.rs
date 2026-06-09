@@ -41,6 +41,7 @@ use crate::text;
 use cosmic_text::Edit as _;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::Range;
@@ -291,117 +292,69 @@ impl rich_editor::Editor for Editor {
         default_color: Color,
         f: &mut dyn FnMut(rich_editor::Decoration, Rectangle, Color),
     ) {
+        // Approach A — render-time decoration resolution.
+        //
+        // Decorations are no longer baked during shaping; we resolve them here
+        // from the live per-line `AttrsList` plus a per-`font_id` cache of
+        // font decoration metrics (filled lazily from the global font system
+        // on a miss). A decoration/color change is therefore a plain attrs
+        // mutation + redraw — no reshape — and this draw-time pass reflects it.
+        //
+        // We walk each run's glyphs in *visual* order and coalesce consecutive
+        // glyphs that resolve to the same `TextDecoration` into a segment. In
+        // RTL / bidi runs visual order ≠ byte order, so a single byte span may
+        // surface as several visual segments — each gets its own rect, which is
+        // exactly what we want.
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
         let scale = 1.0 / internal.hint_factor;
 
+        let mut metrics_cache: HashMap<
+            cosmic_text::fontdb::ID,
+            cosmic_text::FontDecorationMetrics,
+        > = HashMap::new();
+
         for run in buffer.layout_runs() {
-            for span in run.decorations {
-                let glyphs = run.glyphs.get(span.glyph_range.clone()).unwrap_or(&[][..]);
-                if glyphs.is_empty() {
-                    continue;
-                }
+            let Some(line) = buffer.lines.get(run.line_i) else {
+                continue;
+            };
+            let attrs_list = line.attrs_list();
 
-                let font_size = span.font_size;
-                let mut x_min = f32::INFINITY;
-                let mut x_max = f32::NEG_INFINITY;
-                for glyph in glyphs {
-                    x_min = x_min.min(glyph.x);
-                    x_max = x_max.max(glyph.x + glyph.w);
-                }
-                let width = x_max - x_min;
-                if width <= 0.0 {
-                    continue;
-                }
+            let mut segment: Option<DecorationSegment> = None;
+            for glyph in run.glyphs {
+                let td = attrs_list.text_decoration_at(glyph.start);
 
-                let data = &span.data;
-                let td = &data.text_decoration;
-                let span_color = span.color_opt.map(from_cosmic_color);
-
-                let resolve = |override_opt: Option<cosmic_text::Color>| -> Color {
-                    override_opt
-                        .map(from_cosmic_color)
-                        .or(span_color)
-                        .unwrap_or(default_color)
-                };
-
-                // Underline (Single or Double).
-                match td.underline {
-                    cosmic_text::UnderlineStyle::None => {}
-                    cosmic_text::UnderlineStyle::Single | cosmic_text::UnderlineStyle::Double => {
-                        let color = resolve(td.underline_color_opt);
-                        let thickness = (data.underline_metrics.thickness * font_size)
-                            .max(1.0)
-                            .ceil();
-                        let y = run.line_y - data.underline_metrics.offset * font_size;
-                        let rect = Rectangle {
-                            x: x_min,
-                            y,
-                            width,
-                            height: thickness,
-                        };
-                        match td.underline {
-                            cosmic_text::UnderlineStyle::Single => {
-                                f(rich_editor::Decoration::Underline, rect * scale, color);
-                            }
-                            cosmic_text::UnderlineStyle::Double => {
-                                f(
-                                    rich_editor::Decoration::DoubleUnderline,
-                                    rect * scale,
-                                    color,
-                                );
-                                let second = Rectangle {
-                                    x: x_min,
-                                    y: y + thickness * 2.0,
-                                    width,
-                                    height: thickness,
-                                };
-                                f(
-                                    rich_editor::Decoration::DoubleUnderline,
-                                    second * scale,
-                                    color,
-                                );
-                            }
-                            cosmic_text::UnderlineStyle::None => {}
-                        }
+                // Flush the open segment when the decoration changes or the run
+                // of glyphs sharing it ends.
+                let extend = matches!(
+                    &segment,
+                    Some(seg) if seg.text_decoration == td
+                );
+                if !extend {
+                    if let Some(seg) = segment.take() {
+                        seg.emit(&run, scale, default_color, f);
+                    }
+                    if td.has_decoration() {
+                        let metrics = *metrics_cache
+                            .entry(glyph.font_id)
+                            .or_insert_with(|| font_decoration_metrics(glyph.font_id));
+                        segment = Some(DecorationSegment::new(
+                            td,
+                            metrics,
+                            glyph.font_size,
+                            glyph.x,
+                            glyph.x + glyph.w,
+                        ));
+                        continue;
                     }
                 }
 
-                if td.strikethrough {
-                    let color = resolve(td.strikethrough_color_opt);
-                    let thickness = (data.strikethrough_metrics.thickness * font_size)
-                        .max(1.0)
-                        .ceil();
-                    let y = run.line_y - data.strikethrough_metrics.offset * font_size;
-                    f(
-                        rich_editor::Decoration::Strikethrough,
-                        Rectangle {
-                            x: x_min,
-                            y,
-                            width,
-                            height: thickness,
-                        } * scale,
-                        color,
-                    );
+                if let Some(seg) = segment.as_mut() {
+                    seg.extend(glyph.x, glyph.x + glyph.w);
                 }
-
-                if td.overline {
-                    let color = resolve(td.overline_color_opt);
-                    let thickness = (data.underline_metrics.thickness * font_size)
-                        .max(1.0)
-                        .ceil();
-                    let y = (run.line_y - data.ascent * font_size).max(run.line_top);
-                    f(
-                        rich_editor::Decoration::Overline,
-                        Rectangle {
-                            x: x_min,
-                            y,
-                            width,
-                            height: thickness,
-                        } * scale,
-                        color,
-                    );
-                }
+            }
+            if let Some(seg) = segment.take() {
+                seg.emit(&run, scale, default_color, f);
             }
         }
     }
@@ -1593,6 +1546,150 @@ fn from_cosmic_color(color: cosmic_text::Color) -> Color {
     Color::from_rgba8(color.r(), color.g(), color.b(), color.a() as f32 / 255.0)
 }
 
+/// Look up a font's decoration metrics through the global font system,
+/// loading the face on a miss. The caller caches the result per `font_id`,
+/// so this runs at most once per font per draw.
+fn font_decoration_metrics(font_id: cosmic_text::fontdb::ID) -> cosmic_text::FontDecorationMetrics {
+    text::font_system()
+        .write()
+        .ok()
+        .and_then(|mut fs| fs.raw().decoration_metrics(font_id))
+        .unwrap_or_default()
+}
+
+/// A run of visually-contiguous glyphs sharing one resolved
+/// [`cosmic_text::TextDecoration`], accumulated while walking a layout run.
+///
+/// Holds the x-extent (`x_min..x_max`) and the per-font metrics + font size
+/// needed to place the decoration lines at draw. [`Self::emit`] turns it into
+/// the underline / strikethrough / overline rects.
+struct DecorationSegment {
+    text_decoration: cosmic_text::TextDecoration,
+    metrics: cosmic_text::FontDecorationMetrics,
+    font_size: f32,
+    x_min: f32,
+    x_max: f32,
+}
+
+impl DecorationSegment {
+    fn new(
+        text_decoration: cosmic_text::TextDecoration,
+        metrics: cosmic_text::FontDecorationMetrics,
+        font_size: f32,
+        x_start: f32,
+        x_end: f32,
+    ) -> Self {
+        Self {
+            text_decoration,
+            metrics,
+            font_size,
+            x_min: x_start,
+            x_max: x_end,
+        }
+    }
+
+    fn extend(&mut self, x_start: f32, x_end: f32) {
+        self.x_min = self.x_min.min(x_start);
+        self.x_max = self.x_max.max(x_end);
+    }
+
+    fn emit(
+        &self,
+        run: &cosmic_text::LayoutRun<'_>,
+        scale: f32,
+        default_color: Color,
+        f: &mut dyn FnMut(rich_editor::Decoration, Rectangle, Color),
+    ) {
+        let width = self.x_max - self.x_min;
+        if width <= 0.0 {
+            return;
+        }
+        let font_size = self.font_size;
+        let td = &self.text_decoration;
+
+        let resolve = |override_opt: Option<cosmic_text::Color>| -> Color {
+            override_opt.map(from_cosmic_color).unwrap_or(default_color)
+        };
+
+        match td.underline {
+            cosmic_text::UnderlineStyle::None => {}
+            cosmic_text::UnderlineStyle::Single | cosmic_text::UnderlineStyle::Double => {
+                let color = resolve(td.underline_color_opt);
+                let thickness = (self.metrics.underline.thickness * font_size)
+                    .max(1.0)
+                    .ceil();
+                let y = run.line_y - self.metrics.underline.offset * font_size;
+                let rect = Rectangle {
+                    x: self.x_min,
+                    y,
+                    width,
+                    height: thickness,
+                };
+                match td.underline {
+                    cosmic_text::UnderlineStyle::Single => {
+                        f(rich_editor::Decoration::Underline, rect * scale, color);
+                    }
+                    cosmic_text::UnderlineStyle::Double => {
+                        f(
+                            rich_editor::Decoration::DoubleUnderline,
+                            rect * scale,
+                            color,
+                        );
+                        let second = Rectangle {
+                            x: self.x_min,
+                            y: y + thickness * 2.0,
+                            width,
+                            height: thickness,
+                        };
+                        f(
+                            rich_editor::Decoration::DoubleUnderline,
+                            second * scale,
+                            color,
+                        );
+                    }
+                    cosmic_text::UnderlineStyle::None => {}
+                }
+            }
+        }
+
+        if td.strikethrough {
+            let color = resolve(td.strikethrough_color_opt);
+            let thickness = (self.metrics.strikethrough.thickness * font_size)
+                .max(1.0)
+                .ceil();
+            let y = run.line_y - self.metrics.strikethrough.offset * font_size;
+            f(
+                rich_editor::Decoration::Strikethrough,
+                Rectangle {
+                    x: self.x_min,
+                    y,
+                    width,
+                    height: thickness,
+                } * scale,
+                color,
+            );
+        }
+
+        if td.overline {
+            let color = resolve(td.overline_color_opt);
+            let thickness = (self.metrics.underline.thickness * font_size)
+                .max(1.0)
+                .ceil();
+            let y = (run.line_y - self.metrics.ascent * font_size).max(run.line_top);
+            f(
+                rich_editor::Decoration::Overline,
+                Rectangle {
+                    x: self.x_min,
+                    y,
+                    width,
+                    height: thickness,
+                } * scale,
+                color,
+            );
+        }
+    }
+}
+
 /// Clamp `y` so it lands inside *some* slot rather than in a
 /// paragraph-spacing gap.
 ///
@@ -1688,6 +1785,7 @@ mod tests {
         // Trigger layout so buffer lines are shaped.
         ed.update(
             Size::new(200.0, 200.0),
+            Padding::ZERO,
             Font::default(),
             size,
             line_height,
@@ -2094,7 +2192,9 @@ mod tests {
         let selection = ed.selection();
         let rects = match selection {
             editor::Selection::Range(rects) => rects,
-            other => panic!("expected Selection::Range, got {other:?}"),
+            other @ editor::Selection::Caret(_) => {
+                panic!("expected Selection::Range, got {other:?}")
+            }
         };
         assert!(!rects.is_empty(), "expected at least one selection rect");
 
@@ -2127,7 +2227,9 @@ mod tests {
 
         let caret = match ed.selection() {
             editor::Selection::Caret(rect) => rect,
-            other => panic!("expected Selection::Caret, got {other:?}"),
+            other @ editor::Selection::Range(_) => {
+                panic!("expected Selection::Caret, got {other:?}")
+            }
         };
 
         assert!(
@@ -2151,7 +2253,9 @@ mod tests {
 
         let rects = match ed.selection() {
             editor::Selection::Range(rects) => rects,
-            other => panic!("expected Selection::Range, got {other:?}"),
+            other @ editor::Selection::Caret(_) => {
+                panic!("expected Selection::Range, got {other:?}")
+            }
         };
 
         // 16 * 1.5 = 24 line slot, glyph extent ≈ 16 * 1.15 = 18.4.
@@ -2183,6 +2287,7 @@ mod tests {
     fn reshape(ed: &mut Editor) {
         ed.update(
             Size::new(200.0, 200.0),
+            Padding::ZERO,
             Font::default(),
             Pixels(16.0),
             LineHeight::default(),
