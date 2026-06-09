@@ -34,6 +34,7 @@ where
     font_variations: Vec<crate::core::font::Variation>,
     class: Theme::Class<'a>,
     hovered_link: Option<usize>,
+    link_hovered_color: Option<Color>,
     on_link_click: Option<Box<dyn Fn(Link) -> Message + 'a>>,
 }
 
@@ -62,6 +63,7 @@ where
             font_variations: Vec::new(),
             class: Theme::default(),
             hovered_link: None,
+            link_hovered_color: None,
             on_link_click: None,
         }
     }
@@ -83,6 +85,16 @@ where
     /// Sets the default [`LineHeight`] of the [`Rich`] text.
     pub fn line_height(mut self, line_height: impl Into<LineHeight>) -> Self {
         self.line_height = line_height.into();
+        self
+    }
+
+    /// Sets the color a link's text takes while hovered.
+    ///
+    /// Applied as a reshape-free recolor of the hovered link's span, so it
+    /// updates on hover without re-laying-out the paragraph. Requires
+    /// [`Self::on_link_click`] to be set (hover is only tracked for links).
+    pub fn link_hovered_color(mut self, color: impl Into<Color>) -> Self {
+        self.link_hovered_color = Some(color.into());
         self
     }
 
@@ -228,6 +240,7 @@ struct State<Link, P: Paragraph> {
     spans: Vec<Span<'static, Link, P::Font>>,
     span_pressed: Option<usize>,
     paragraph: P,
+    tinted_span: Option<usize>,
 }
 
 impl<Link, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -246,6 +259,7 @@ where
             spans: Vec::new(),
             span_pressed: None,
             paragraph: Renderer::Paragraph::default(),
+            tinted_span: None,
         })
     }
 
@@ -336,7 +350,14 @@ where
                         .unwrap_or(self.line_height)
                         .to_absolute(size);
 
-                    let color = span.color.or(style.color).unwrap_or(defaults.text_color);
+                    let color = if is_hovered_link {
+                        self.link_hovered_color
+                    } else {
+                        None
+                    }
+                    .or(span.color)
+                    .or(style.color)
+                    .unwrap_or(defaults.text_color);
 
                     let baseline =
                         translation + Vector::new(0.0, size.0 + (line_height.0 - size.0) / 2.0);
@@ -420,6 +441,26 @@ where
 
         if was_hovered != self.hovered_link.is_some() {
             shell.request_redraw();
+        }
+
+        // Recolor the hovered link in place (reshape-free). The tinted span is
+        // tracked in persistent state so it survives view rebuilds and is
+        // restored when the pointer moves off.
+        if let Some(hover_color) = self.link_hovered_color {
+            let state = tree
+                .state
+                .downcast_mut::<State<Link, Renderer::Paragraph>>();
+
+            if state.tinted_span != self.hovered_link {
+                if let Some(previous) = state.tinted_span {
+                    state.paragraph.recolor_span(previous, None);
+                }
+                if let Some(hovered) = self.hovered_link {
+                    state.paragraph.recolor_span(hovered, Some(hover_color));
+                }
+                state.tinted_span = self.hovered_link;
+                shell.request_redraw();
+            }
         }
 
         match event {
