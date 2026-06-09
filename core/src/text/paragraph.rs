@@ -83,6 +83,14 @@ pub trait Paragraph: Sized + Default {
     /// Returns the distance to the given grapheme index in the [`Paragraph`].
     fn grapheme_position(&self, line: usize, index: usize) -> Option<Point>;
 
+    /// Recolors the glyphs of the [`Span`] at `index` in place, without
+    /// reshaping. `Some(color)` tints them; `None` restores the span's own
+    /// color. This is a render-time effect for transient per-span styling such
+    /// as a hovered link; the default implementation is a no-op.
+    fn recolor_span(&mut self, index: usize, color: Option<crate::Color>) {
+        let _ = (index, color);
+    }
+
     /// Returns the minimum width that can fit the contents of the [`Paragraph`].
     fn min_width(&self) -> f32 {
         self.min_bounds().width

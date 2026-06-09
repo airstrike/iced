@@ -487,6 +487,15 @@ impl core::text::Paragraph for Paragraph {
             (glyph.y - glyph.y_offset * glyph.font_size) / self.0.hint_factor,
         ))
     }
+
+    fn recolor_span(&mut self, index: usize, color: Option<core::Color>) {
+        // Spans are tagged with their index via `metadata(i)` in `with_spans`,
+        // so cosmic-text recolors the right glyphs in place without reshaping.
+        let internal = Arc::make_mut(&mut self.0);
+        let _ = internal
+            .buffer
+            .recolor_metadata(index, color.map(text::to_color));
+    }
 }
 
 impl Default for Paragraph {
