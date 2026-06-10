@@ -145,6 +145,18 @@ impl Length {
         matches!(self, Self::Fit)
     }
 
+    /// Returns `true` if the [`Length`] shrinks to its content.
+    pub fn is_shrink(&self) -> bool {
+        matches!(
+            self,
+            Length::Shrink
+                | Length::Bounded {
+                    with: Fluidity::Shrink,
+                    ..
+                }
+        )
+    }
+
     /// Returns the "fluid" variant of the [`Length`].
     ///
     /// Specifically:
