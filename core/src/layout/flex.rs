@@ -145,6 +145,13 @@ where
     // We can defer the layout of any elements that have a fixed size in the main axis,
     // allowing them to use the cross calculations of the next pass.
     if cross_compress && some_fill_cross {
+        // No fixed-cross sibling set `cross`, so every Fill-cross child would
+        // collapse to 0. Fall back to the offered cross max. Skip an infinite
+        // max_cross (e.g. a column inside a horizontal scrollable).
+        if cross == 0.0 && max_cross.is_finite() {
+            cross = max_cross;
+        }
+
         for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
             let (main_size, cross_size) = {
                 let size = child.as_widget().size();
