@@ -17,6 +17,19 @@ use crate::{Background, Border, Color, Em, Padding, Pixels, Point, Rectangle, Si
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 
+/// Which decoration line a rectangle represents, when a [`Paragraph`] hands
+/// back decoration bounds. Lets a widget draw underlines and strikethroughs
+/// in different colors, or opt out of a kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Decoration {
+    /// A line below the glyphs; two rectangles for a double underline.
+    Underline,
+    /// A line through the middle of the glyphs.
+    Strikethrough,
+    /// A line above the glyphs.
+    Overline,
+}
+
 /// A paragraph.
 #[derive(Debug, Clone)]
 pub struct Text<Content = String, Font = crate::Font> {
