@@ -37,4 +37,3 @@ iced_wgpu.workspace = true
 iced_wgpu.optional = true
 
 log.workspace = true
-thiserror.workspace = true

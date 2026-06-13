@@ -18,11 +18,8 @@ image = ["iced_core/image"]
 workspace = true
 
 [dependencies]
-bytes.workspace = true
 iced_core.workspace = true
 iced_futures.workspace = true
-
-thiserror.workspace = true
 
 sipper.workspace = true
 sipper.optional = true

@@ -2369,19 +2369,16 @@ dependencies = [
  "iced_tiny_skia",
  "iced_wgpu",
  "log",
- "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
 dependencies = [
- "bytes",
  "iced_core",
  "iced_futures",
  "iced_selector",
  "sipper",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2436,11 +2433,8 @@ dependencies = [
 name = "iced_wgpu"
 version = "0.15.0-dev"
 dependencies = [
- "bitflags 2.11.1",
  "bytemuck",
  "cryoglyph",
- "futures",
- "glam",
  "guillotiere",
  "iced_debug",
  "iced_graphics",
@@ -2483,7 +2477,6 @@ dependencies = [
  "rustc-hash 2.1.2",
  "sysinfo",
  "thiserror 2.0.18",
- "tracing",
  "wasm-bindgen-futures",
  "web-sys",
  "winit",
