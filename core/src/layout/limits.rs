@@ -50,7 +50,7 @@ impl Limits {
     /// Applies a width constraint to the current [`Limits`].
     pub fn width(mut self, width: impl Into<Length>) -> Limits {
         match width.into() {
-            Length::Shrink => {
+            Length::Shrink | Length::Fit => {
                 self.compression.width = true;
             }
             Length::Fixed(amount) => {
@@ -59,22 +59,6 @@ impl Limits {
                 self.min.width = new_width;
                 self.max.width = new_width;
                 self.compression.width = false;
-            }
-            Length::Bounded {
-                min,
-                max,
-                compression,
-            } => {
-                if let Some(min) = min {
-                    self.min.width = min.min(self.max.width).max(self.min.width);
-                }
-
-                if let Some(max) = max {
-                    self.max.width = max.min(self.max.width).max(self.min.width);
-                    self.compression.width = compression;
-                } else {
-                    self.compression.width |= compression;
-                }
             }
             Length::Fill | Length::FillPortion(_) => {}
         }
@@ -85,7 +69,7 @@ impl Limits {
     /// Applies a height constraint to the current [`Limits`].
     pub fn height(mut self, height: impl Into<Length>) -> Limits {
         match height.into() {
-            Length::Shrink => {
+            Length::Shrink | Length::Fit => {
                 self.compression.height = true;
             }
             Length::Fixed(amount) => {
@@ -94,22 +78,6 @@ impl Limits {
                 self.min.height = new_height;
                 self.max.height = new_height;
                 self.compression.height = false;
-            }
-            Length::Bounded {
-                min,
-                max,
-                compression,
-            } => {
-                if let Some(min) = min {
-                    self.min.height = min.min(self.max.height).max(self.min.height);
-                }
-
-                if let Some(max) = max {
-                    self.max.height = max.min(self.max.height).max(self.min.height);
-                    self.compression.height = compression;
-                } else {
-                    self.compression.height |= compression;
-                }
             }
             Length::Fill | Length::FillPortion(_) => {}
         }
@@ -186,18 +154,12 @@ impl Limits {
     ) -> Size {
         let width = match width.into() {
             Length::Fill | Length::FillPortion(_) if !self.compression.width => self.max.width,
-            Length::Bounded { compression, .. } if !compression && !self.compression.width => {
-                self.max.width
-            }
             Length::Fixed(amount) => amount.min(self.max.width).max(self.min.width),
             _ => intrinsic_size.width.min(self.max.width).max(self.min.width),
         };
 
         let height = match height.into() {
             Length::Fill | Length::FillPortion(_) if !self.compression.height => self.max.height,
-            Length::Bounded { compression, .. } if !compression && !self.compression.height => {
-                self.max.height
-            }
             Length::Fixed(amount) => amount.min(self.max.height).max(self.min.height),
             _ => intrinsic_size
                 .height

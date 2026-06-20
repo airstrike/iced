@@ -36,6 +36,7 @@ pub struct Column<'a, Message, Theme = crate::Theme, Renderer = crate::Renderer>
     padding: Padding,
     width: Length,
     height: Length,
+    max_width: f32,
     align: Alignment,
     clip: bool,
     children: Vec<Element<'a, Message, Theme, Renderer>>,
@@ -65,18 +66,13 @@ where
     }
 
     /// Creates a [`Column`] from an already allocated [`Vec`].
-    ///
-    /// Keep in mind that the [`Column`] will not inspect the [`Vec`], which means
-    /// it won't automatically adapt to the sizing strategy of its contents.
-    ///
-    /// If any of the children have a [`Length::Fill`] strategy, you will need to
-    /// call [`Column::width`] or [`Column::height`] accordingly.
     pub fn from_vec(children: Vec<Element<'a, Message, Theme, Renderer>>) -> Self {
         Self {
             spacing: 0.0,
             padding: Padding::ZERO,
-            width: Length::Shrink,
-            height: Length::Shrink,
+            width: Length::Fit,
+            height: Length::Fit,
+            max_width: f32::INFINITY,
             align: Alignment::Start,
             clip: false,
             children,
@@ -112,15 +108,8 @@ where
     }
 
     /// Sets the maximum width of the [`Column`].
-    ///
-    /// Folded into [`width`] as a [`Length::Bounded`] variant: when called
-    /// after `width(Fill)` or `width(Shrink)`, the cap propagates through
-    /// `Limits` cleanly and overrides any inherited cross-axis compression
-    /// from a `Shrink` ancestor.
-    ///
-    /// [`width`]: Self::width
     pub fn max_width(mut self, max_width: impl Into<Pixels>) -> Self {
-        self.width = self.width.max(max_width);
+        self.max_width = max_width.into().0;
         self
     }
 
@@ -140,11 +129,9 @@ where
     /// Adds an element to the [`Column`].
     pub fn push(mut self, child: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
         let child = child.into();
-        let child_size = child.as_widget().size_hint();
+        let child_size = child.as_widget().size();
 
         if !child_size.is_void() {
-            self.width = self.width.enclose(child_size.width);
-            self.height = self.height.enclose(child_size.height);
             self.children.push(child);
         }
 
@@ -193,12 +180,17 @@ impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Renderer: crate::core::Renderer,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
-    }
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut self.children);
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+        if self.width.is_fit() || self.height.is_fit() {
+            for child in &self.children {
+                let size = child.as_widget().size();
+
+                self.width = self.width.enclose(size.width);
+                self.height = self.height.enclose(size.height);
+            }
+        }
     }
 
     fn size(&self) -> Size<Length> {
@@ -214,10 +206,12 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
+        let limits = limits.max_width(self.max_width);
+
         layout::flex::resolve(
             layout::flex::Axis::Vertical,
             renderer,
-            limits,
+            &limits,
             self.width,
             self.height,
             self.padding,
@@ -386,11 +380,7 @@ impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Renderer: crate::core::Renderer,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.column.children()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         self.column.diff(tree);
     }
 

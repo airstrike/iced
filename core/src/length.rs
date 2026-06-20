@@ -3,7 +3,7 @@ use crate::Pixels;
 /// The strategy used to fill space in a specific dimension.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Length {
-    /// Fill all the remaining space.
+    /// Fill all the remaining space
     Fill,
 
     /// Fill a portion of the remaining space relative to other elements.
@@ -15,66 +15,18 @@ pub enum Length {
     /// `Length::Fill` is equivalent to `Length::FillPortion(1)`.
     FillPortion(u16),
 
-    /// Take the least amount of space.
+    /// Fill the least amount of space; compressing contents if possible.
     Shrink,
 
-    /// Take a fixed amount of space.
-    Fixed(f32),
+    /// Fill the minimum amount of space based on the intrinsic size of the
+    /// element; normally defined by its contents.
+    Fit,
 
-    /// Take a certain amount of space, with minimum and maximum bounds.
-    Bounded {
-        /// The minimum length to take.
-        min: Option<f32>,
-        /// The maximum length to take.
-        max: Option<f32>,
-        /// Whether the contents should be compressed.
-        compression: bool,
-    },
+    /// Fill a fixed amount of space
+    Fixed(f32),
 }
 
 impl Length {
-    /// Creates a bounded [`Length`] that must take at least the given minimum amount of
-    /// space.
-    pub fn min(self, min: impl Into<Pixels>) -> Self {
-        let min_v = min.into().0;
-        let (max, compression) = match self {
-            Length::FillPortion(_) => return self,
-            Length::Fixed(amount) => return Length::Fixed(amount.max(min_v)),
-            Length::Fill => (None, false),
-            Length::Shrink => (None, true),
-            Length::Bounded {
-                max, compression, ..
-            } => (max, compression),
-        };
-
-        Self::Bounded {
-            min: Some(min_v),
-            max,
-            compression,
-        }
-    }
-
-    /// Creates a bounded [`Length`] that can take up to the given maximum amount of
-    /// space.
-    pub fn max(self, max: impl Into<Pixels>) -> Self {
-        let max_v = max.into().0;
-        let (min, compression) = match self {
-            Length::FillPortion(_) => return self,
-            Length::Fixed(amount) => return Length::Fixed(amount.min(max_v)),
-            Length::Fill => (None, false),
-            Length::Shrink => (None, true),
-            Length::Bounded {
-                min, compression, ..
-            } => (min, compression),
-        };
-
-        Self::Bounded {
-            min,
-            max: Some(max_v),
-            compression,
-        }
-    }
-
     /// Returns the _fill factor_ of the [`Length`].
     ///
     /// The _fill factor_ is a relative unit describing how much of the
@@ -84,9 +36,7 @@ impl Length {
         match self {
             Length::Fill => 1,
             Length::FillPortion(factor) => *factor,
-            Length::Shrink => 0,
-            Length::Fixed(_) => 0,
-            Length::Bounded { .. } => 0,
+            Length::Shrink | Length::Fit | Length::Fixed(_) => 0,
         }
     }
 
@@ -96,19 +46,9 @@ impl Length {
         self.fill_factor() != 0
     }
 
-    /// Returns `true` if the [`Length`] compresses to its content's
-    /// intrinsic size: [`Length::Shrink`], or [`Length::Bounded`] with
-    /// `compression: true` (i.e. produced by `Shrink.max(N)` /
-    /// `Shrink.min(N)`).
-    pub fn compressing(&self) -> bool {
-        matches!(
-            self,
-            Length::Shrink
-                | Length::Bounded {
-                    compression: true,
-                    ..
-                }
-        )
+    /// Returns `true` if the [`Length`] is [`Fit`](Self::Fit).
+    pub fn is_fit(&self) -> bool {
+        matches!(self, Self::Fit)
     }
 
     /// Returns the "fluid" variant of the [`Length`].
@@ -119,7 +59,7 @@ impl Length {
     pub fn fluid(&self) -> Self {
         match self {
             Length::Fill | Length::FillPortion(_) => Length::Fill,
-            Length::Shrink | Length::Fixed(_) | Length::Bounded { .. } => Length::Shrink,
+            Length::Shrink | Length::Fit | Length::Fixed(_) => Length::Shrink,
         }
     }
 
@@ -128,7 +68,7 @@ impl Length {
     #[inline]
     pub fn enclose(self, other: Length) -> Self {
         match (self, other) {
-            (Length::Shrink, Length::Fill | Length::FillPortion(_)) => other,
+            (Length::Fit, Length::Fill | Length::FillPortion(_)) => other,
             _ => self,
         }
     }

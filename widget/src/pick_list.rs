@@ -410,7 +410,7 @@ where
             });
         }
 
-        let max_width = if self.width.compressing() {
+        let max_width = if matches!(self.width, Length::Shrink | Length::Fit) {
             state.options.resize_with(options.len(), Default::default);
 
             for (option, paragraph) in options.iter().zip(state.options.iter_mut()) {

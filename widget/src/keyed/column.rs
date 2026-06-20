@@ -37,6 +37,7 @@ where
     padding: Padding,
     width: Length,
     height: Length,
+    max_width: f32,
     align_items: Alignment,
     keys: Vec<Key>,
     children: Vec<Element<'a, Message, Theme, Renderer>>,
@@ -63,8 +64,9 @@ where
         Self {
             spacing: 0.0,
             padding: Padding::ZERO,
-            width: Length::Shrink,
-            height: Length::Shrink,
+            width: Length::Fit,
+            height: Length::Fit,
+            max_width: f32::INFINITY,
             align_items: Alignment::Start,
             keys,
             children,
@@ -114,15 +116,8 @@ where
     }
 
     /// Sets the maximum width of the [`Column`].
-    ///
-    /// Folded into [`width`] as a [`Length::Bounded`] variant: when called
-    /// after `width(Fill)` or `width(Shrink)`, the cap propagates through
-    /// `Limits` cleanly and overrides any inherited cross-axis compression
-    /// from a `Shrink` ancestor.
-    ///
-    /// [`width`]: Self::width
     pub fn max_width(mut self, max_width: impl Into<Pixels>) -> Self {
-        self.width = self.width.max(max_width);
+        self.max_width = max_width.into().0;
         self
     }
 
@@ -139,13 +134,12 @@ where
         child: impl Into<Element<'a, Message, Theme, Renderer>>,
     ) -> Self {
         let child = child.into();
-        let child_size = child.as_widget().size_hint();
 
-        self.width = self.width.enclose(child_size.width);
-        self.height = self.height.enclose(child_size.height);
+        if !child.as_widget().size().is_void() {
+            self.keys.push(key);
+            self.children.push(child);
+        }
 
-        self.keys.push(key);
-        self.children.push(child);
         self
     }
 
@@ -206,11 +200,7 @@ where
         })
     }
 
-    fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         let Tree {
             state, children, ..
         } = tree;
@@ -219,8 +209,8 @@ where
 
         tree::diff_children_custom_with_search(
             children,
-            &self.children,
-            |tree, child| child.as_widget().diff(tree),
+            &mut self.children,
+            |tree, child| child.as_widget_mut().diff(tree),
             |index| {
                 self.keys.get(index).or_else(|| self.keys.last()).copied()
                     != Some(state.keys[index])
@@ -230,6 +220,15 @@ where
 
         if state.keys != self.keys {
             state.keys.clone_from(&self.keys);
+        }
+
+        if self.width.is_fit() || self.height.is_fit() {
+            for child in &self.children {
+                let size = child.as_widget().size();
+
+                self.width = self.width.enclose(size.width);
+                self.height = self.height.enclose(size.height);
+            }
         }
     }
 
@@ -246,7 +245,10 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits.width(self.width).height(self.height);
+        let limits = limits
+            .max_width(self.max_width)
+            .width(self.width)
+            .height(self.height);
 
         layout::flex::resolve(
             layout::flex::Axis::Vertical,
