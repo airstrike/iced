@@ -108,8 +108,6 @@ where
     line_height: LineHeight,
     width: Length,
     height: Length,
-    min_height: f32,
-    max_height: f32,
     padding: Padding,
     wrapping: Wrapping,
     letter_spacing: crate::core::Em,
@@ -138,8 +136,6 @@ where
             line_height: LineHeight::default(),
             width: Length::Fill,
             height: Length::Shrink,
-            min_height: 0.0,
-            max_height: f32::INFINITY,
             padding: Padding::new(5.0),
             wrapping: Wrapping::default(),
             letter_spacing: crate::core::Em::default(),
@@ -182,18 +178,6 @@ where
     /// Sets the height of the [`TextEditor`].
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.height = height.into();
-        self
-    }
-
-    /// Sets the minimum height of the [`TextEditor`].
-    pub fn min_height(mut self, min_height: impl Into<Pixels>) -> Self {
-        self.min_height = min_height.into().0;
-        self
-    }
-
-    /// Sets the maximum height of the [`TextEditor`].
-    pub fn max_height(mut self, max_height: impl Into<Pixels>) -> Self {
-        self.max_height = max_height.into().0;
         self
     }
 
@@ -291,8 +275,6 @@ where
             line_height: self.line_height,
             width: self.width,
             height: self.height,
-            min_height: self.min_height,
-            max_height: self.max_height,
             padding: self.padding,
             wrapping: self.wrapping,
             letter_spacing: self.letter_spacing,
@@ -628,11 +610,7 @@ where
             state.highlighter_settings = self.highlighter_settings.clone();
         }
 
-        let limits = limits
-            .width(self.width)
-            .height(self.height)
-            .min_height(self.min_height)
-            .max_height(self.max_height);
+        let limits = limits.width(self.width).height(self.height);
 
         internal.editor.update(
             limits.shrink(self.padding).max(),
@@ -647,9 +625,11 @@ where
         );
 
         match self.height {
-            Length::Fill | Length::FillPortion(_) | Length::Fixed(_) => {
-                layout::Node::new(limits.max())
-            }
+            Length::Fill
+            | Length::FillPortion(_)
+            | Length::Fixed(_)
+            | Length::Bounded { .. }
+            | Length::Fluid(_) => layout::Node::new(limits.max()),
             Length::Shrink | Length::Fit => {
                 let min_bounds = internal.editor.min_bounds();
 
