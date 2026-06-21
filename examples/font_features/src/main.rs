@@ -214,7 +214,7 @@ fn sample_text(marked: &str, tag: font::Tag, on: bool) -> Element<'_, Message> {
 // ------ Sections ------
 
 fn hero(opsz: f32, ls: f32) -> Element<'static, Message> {
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         // calc(100vw / 8) = 12.5% of viewport width
         let font_size = size.width * 0.125;
 
@@ -390,7 +390,7 @@ fn weights(opsz: f32, ls: f32) -> Element<'static, Message> {
         ),
     ];
 
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         // Website uses font-size: 10vw for single-line weight samples
         let font_size = (size.width * 0.10).max(40.0);
 
@@ -536,7 +536,7 @@ fn paragraphs(opsz: f32, ls: f32) -> Element<'static, Message> {
         ),
     ];
 
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         // Website uses font-size: 6vw for multi-line samples
         let font_size = (size.width * 0.06).max(24.0);
 
@@ -641,7 +641,7 @@ spectators, or dedicated by a devout prince.";
         ..Font::new(FONT_NAME)
     };
 
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         use iced::widget::text::Span;
 
         let col1_spans: Vec<Span<'_>> = vec![

@@ -106,14 +106,14 @@ impl Gradient {
                     g.center = center;
                     g.radius = radius;
 
-                    g.add_stop(0.0, start).add_stop(1.0, end).into()
+                    gradient::Gradient::from(g.add_stop(0.0, start).add_stop(1.0, end)).into()
                 }
                 GradientType::Conic => {
                     let mut g = gradient::Conic::new();
                     g.center = center;
                     g.angle = angle;
 
-                    g.add_stop(0.0, start).add_stop(1.0, end).into()
+                    gradient::Gradient::from(g.add_stop(0.0, start).add_stop(1.0, end)).into()
                 }
             })
             .width(Fill)

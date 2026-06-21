@@ -362,7 +362,7 @@ fn hero(wght: f32, opsz: font::OpticalSize, vars: &[font::Variation]) -> Element
     let vars = vars.to_vec();
     let title_weight = to_weight(wght);
     let caption_weight = to_weight((wght - 200.0).max(100.0));
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         let title_size = (size.width * 0.14).max(48.0);
 
         column![
@@ -443,7 +443,7 @@ fn weights(opsz: font::OpticalSize, vars: &[font::Variation]) -> Element<'static
     ];
 
     let vars = vars.to_vec();
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         let sample_size = (size.width * 0.065).max(28.0);
 
         column(RAMP.iter().map(|(weight, label, sample)| {
@@ -467,7 +467,7 @@ fn weights(opsz: font::OpticalSize, vars: &[font::Variation]) -> Element<'static
 
 fn big_words(opsz: font::OpticalSize, vars: &[font::Variation]) -> Element<'static, Message> {
     let vars = vars.to_vec();
-    container(responsive(move |size| {
+    container(responsive(move |size| -> Element<'_, Message> {
         let huge = (size.width * 0.18).max(60.0);
         let large = (size.width * 0.12).max(48.0);
 
