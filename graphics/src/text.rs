@@ -263,16 +263,47 @@ impl PartialEq for Raw {
 
 /// Measures the dimensions of the given [`cosmic_text::Buffer`].
 pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
-    let (width, height, has_rtl) =
-        buffer
-            .layout_runs()
-            .fold((0.0, 0.0, false), |(width, height, has_rtl), run| {
-                (
-                    run.line_w.max(width),
-                    height + run.line_height,
-                    has_rtl || run.rtl,
-                )
-            });
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    let mut has_rtl = false;
+    let mut last_line_i: Option<usize> = None;
+
+    let mut first_top_overflow = 0.0_f32;
+    let mut last_bottom_overflow = 0.0_f32;
+    let mut is_first_run = true;
+
+    for run in buffer.layout_runs() {
+        if is_first_run {
+            let glyph_above_line = run.line_top - (run.line_y - run.max_ascent);
+            first_top_overflow = glyph_above_line.max(0.0);
+            is_first_run = false;
+        }
+        if last_line_i != Some(run.line_i) {
+            if let Some(prev_i) = last_line_i
+                && let Some(line) = buffer.lines.get(prev_i)
+            {
+                height += line.margin_bottom();
+            }
+            if let Some(line) = buffer.lines.get(run.line_i) {
+                height += line.margin_top();
+            }
+            last_line_i = Some(run.line_i);
+        }
+        width = width.max(run.line_w);
+        height += run.line_height;
+        has_rtl = has_rtl || run.rtl;
+
+        let glyph_below_line = (run.line_y + run.max_descent) - (run.line_top + run.line_height);
+        last_bottom_overflow = glyph_below_line.max(0.0);
+    }
+
+    if let Some(last_i) = last_line_i
+        && let Some(line) = buffer.lines.get(last_i)
+    {
+        height += line.margin_bottom();
+    }
+
+    height += first_top_overflow + last_bottom_overflow;
 
     (Size::new(width, height), has_rtl)
 }
@@ -473,6 +504,31 @@ pub fn hint_factor(_size: Pixels, _scale_factor: Option<f32>) -> Option<f32> {
     // }
 
     None // Disable all text hinting for now
+}
+
+/// Returns how far the first line's glyph ascenders extend above its
+/// line slot, or `0.0` when the slot fully contains the ascent (the
+/// common case). Pair with [`measure`] — the total height already
+/// includes this overflow; this tells you how much of it sits above
+/// the buffer's `(0, 0)`.
+pub fn visual_top_pad(buffer: &cosmic_text::Buffer) -> f32 {
+    let Some(first) = buffer.layout_runs().next() else {
+        return 0.0;
+    };
+    let glyph_top = first.line_y - first.max_ascent;
+    (first.line_top - glyph_top).max(0.0)
+}
+
+/// Returns how far the last visible line's glyph descenders extend
+/// below its line slot, or `0.0` when the slot fully contains the
+/// descent.
+pub fn visual_bottom_pad(buffer: &cosmic_text::Buffer) -> f32 {
+    let Some(last) = buffer.layout_runs().last() else {
+        return 0.0;
+    };
+    let glyph_bottom = last.line_y + last.max_descent;
+    let slot_bottom = last.line_top + last.line_height;
+    (glyph_bottom - slot_bottom).max(0.0)
 }
 
 /// A text renderer coupled to `iced_graphics`.

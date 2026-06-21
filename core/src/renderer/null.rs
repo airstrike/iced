@@ -292,6 +292,7 @@ impl text::rich_editor::Editor for () {
     fn update(
         &mut self,
         _new_bounds: Size,
+        _new_padding: crate::Padding,
         _new_font: Self::Font,
         _new_size: Pixels,
         _new_line_height: text::LineHeight,
@@ -340,6 +341,8 @@ impl text::rich_editor::Editor for () {
     fn paragraph_style_at(&self, _line: usize) -> text::rich_editor::paragraph::Style {
         text::rich_editor::paragraph::Style::default()
     }
+
+    fn scroll_by(&mut self, _pixels: f32) {}
 
     fn set_scrollable(&mut self, _scrollable: bool) {}
 }

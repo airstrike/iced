@@ -35,7 +35,7 @@ use crate::core::text::editor::{
 };
 use crate::core::text::rich_editor::{self, paragraph, span::Style};
 use crate::core::text::{Alignment, LineHeight, Wrapping};
-use crate::core::{Color, Em, Font, Pixels, Point, Rectangle, Size};
+use crate::core::{Color, Em, Font, Padding, Pixels, Point, Rectangle, Size};
 use crate::text;
 
 use cosmic_text::Edit as _;
@@ -502,10 +502,22 @@ impl rich_editor::Editor for Editor {
 
     fn min_bounds(&self) -> Size {
         let internal = self.internal();
+        let buffer = buffer_from_editor(&internal.document);
+        let (bounds, _has_rtl) = text::measure(buffer);
+        let pad = buffer.vertical_pad();
+        let mut bounds = bounds * (1.0 / internal.hint_factor);
+        bounds.height += (pad.top + pad.bottom) / internal.hint_factor;
+        bounds
+    }
 
-        let (bounds, _has_rtl) = text::measure(buffer_from_editor(&internal.document));
+    fn visual_top_pad(&self) -> f32 {
+        let internal = self.internal();
+        text::visual_top_pad(buffer_from_editor(&internal.document)) / internal.hint_factor
+    }
 
-        bounds * (1.0 / internal.hint_factor)
+    fn visual_bottom_pad(&self) -> f32 {
+        let internal = self.internal();
+        text::visual_bottom_pad(buffer_from_editor(&internal.document)) / internal.hint_factor
     }
 
     fn hint_factor(&self) -> Option<f32> {
@@ -517,6 +529,7 @@ impl rich_editor::Editor for Editor {
     fn update(
         &mut self,
         new_bounds: Size,
+        new_padding: Padding,
         new_font: Font,
         new_size: Pixels,
         new_line_height: LineHeight,
@@ -575,37 +588,17 @@ impl rich_editor::Editor for Editor {
                 );
 
                 for line in buffer.lines.iter_mut() {
-                    let old_list = line.attrs_list();
-                    let old_defaults = old_list.defaults();
+                    let old_defaults = line.attrs_list().defaults();
+                    let old_spans: Vec<_> = line
+                        .attrs_list()
+                        .spans()
+                        .into_iter()
+                        .map(|(range, span)| (range.clone(), span.as_attrs()))
+                        .collect();
                     let mut new_list = cosmic_text::AttrsList::new(&default_attrs);
-                    for (range, span_attrs) in old_list.spans() {
-                        let mut attrs = span_attrs.as_attrs();
-                        // For each field, if the span matched the OLD defaults
-                        // (i.e. it was inherited, not explicitly overridden),
-                        // update it to the NEW defaults so it continues to
-                        // inherit rather than being stuck on the old value.
-                        if attrs.color_opt == old_defaults.color_opt {
-                            attrs.color_opt = default_attrs.color_opt;
-                        }
-                        if attrs.family == old_defaults.family {
-                            attrs.family = default_attrs.family;
-                        }
-                        if attrs.weight == old_defaults.weight {
-                            attrs.weight = default_attrs.weight;
-                        }
-                        if attrs.style == old_defaults.style {
-                            attrs.style = default_attrs.style;
-                        }
-                        if attrs.metrics_opt == old_defaults.metrics_opt {
-                            attrs.metrics_opt = default_attrs.metrics_opt;
-                        }
-                        if attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
-                            attrs.letter_spacing_opt = default_attrs.letter_spacing_opt;
-                        }
-                        if attrs.optical_size == old_defaults.optical_size {
-                            attrs.optical_size = default_attrs.optical_size;
-                        }
-                        new_list.add_span(range.clone(), &attrs);
+                    for (range, mut attrs) in old_spans {
+                        rebase_attrs(&mut attrs, &old_defaults, &default_attrs);
+                        new_list.add_span(range, &attrs);
                     }
                     let _ = line.set_attrs_list(new_list);
                 }
@@ -652,6 +645,11 @@ impl rich_editor::Editor for Editor {
 
                 buffer.set_wrap(new_wrap);
             }
+
+            buffer.set_vertical_pad(cosmic_text::VerticalPad {
+                top: new_padding.top * internal.hint_factor,
+                bottom: new_padding.bottom * internal.hint_factor,
+            });
 
             if new_bounds != internal.bounds || hinting_changed {
                 log::trace!("Updating size of rich `Editor`...");
@@ -737,15 +735,17 @@ impl rich_editor::Editor for Editor {
                 }
 
                 // Rebuild AttrsList with new defaults, preserving spans
+                let old_defaults = buffer_line.attrs_list().defaults();
                 let old_spans: Vec<_> = buffer_line
                     .attrs_list()
                     .spans()
                     .into_iter()
-                    .map(|(range, attrs)| (range.clone(), attrs.as_attrs()))
+                    .map(|(range, span)| (range.clone(), span.as_attrs()))
                     .collect();
                 let mut new_list = cosmic_text::AttrsList::new(&defaults);
-                for (range, attrs) in &old_spans {
-                    new_list.add_span(range.clone(), attrs);
+                for (range, mut attrs) in old_spans {
+                    rebase_attrs(&mut attrs, &old_defaults, &defaults);
+                    new_list.add_span(range, &attrs);
                 }
                 let _ = buffer_line.set_attrs_list(new_list);
 
@@ -824,27 +824,20 @@ impl rich_editor::Editor for Editor {
     fn span_style_at(&self, line: usize, column: usize) -> Style {
         let internal = self.internal();
         let buffer = buffer_from_editor(&internal.document);
-        // Compare against global defaults so per-line custom attrs
-        // (e.g. font set on an empty paragraph) are always reported
-        // as explicit, not swallowed by a same-as-line-defaults diff.
-        let global_defaults = cosmic_text::Attrs::new();
-        buffer
-            .lines
-            .get(line)
-            .map(|bl| {
-                let span = if bl.text().is_empty() {
-                    bl.attrs_list().defaults()
-                } else {
-                    let idx = if column > 0 && column >= bl.text().len() {
-                        column - 1
-                    } else {
-                        column
-                    };
-                    bl.attrs_list().get_span(idx)
-                };
-                attrs_to_style(&span, &global_defaults, &internal.font_names)
-            })
-            .unwrap_or_default()
+        let Some(bl) = buffer.lines.get(line) else {
+            return Style::default();
+        };
+        if bl.text().is_empty() {
+            return Style::default();
+        }
+        let idx = if column > 0 && column >= bl.text().len() {
+            column - 1
+        } else {
+            column
+        };
+        let defaults = bl.attrs_list().defaults();
+        let span = bl.attrs_list().get_span(idx);
+        attrs_to_style(&span, &defaults, &internal.font_names)
     }
 
     fn paragraph_style_at(&self, line: usize) -> paragraph::Style {
@@ -867,7 +860,7 @@ impl rich_editor::Editor for Editor {
                 });
 
                 paragraph::Style {
-                    style: attrs_to_style(&defaults, &defaults, &internal.font_names),
+                    style: attrs_to_effective_style(&defaults, &internal.font_names),
                     alignment: bl.align().map(|a| match a {
                         cosmic_text::Align::Left => Alignment::Left,
                         cosmic_text::Align::Center => Alignment::Center,
@@ -881,6 +874,15 @@ impl rich_editor::Editor for Editor {
                 }
             })
             .unwrap_or_default()
+    }
+
+    fn scroll_by(&mut self, pixels: f32) {
+        self.with_internal_mut(|internal| {
+            let mut font_system = text::font_system().write().expect("Write font system");
+            internal
+                .document
+                .action(font_system.raw(), cosmic_text::Action::Scroll { pixels });
+        });
     }
 
     fn set_scrollable(&mut self, scrollable: bool) {
@@ -970,6 +972,40 @@ impl PartialEq for Weak {
             (Some(p1), Some(p2)) => p1 == p2,
             _ => false,
         }
+    }
+}
+
+fn rebase_attrs<'a>(
+    attrs: &mut cosmic_text::Attrs<'a>,
+    old_defaults: &cosmic_text::Attrs<'_>,
+    new_defaults: &cosmic_text::Attrs<'a>,
+) {
+    if attrs.color_opt == old_defaults.color_opt {
+        attrs.color_opt = new_defaults.color_opt;
+    }
+    if attrs.family == old_defaults.family {
+        attrs.family = new_defaults.family;
+    }
+    if attrs.weight == old_defaults.weight {
+        attrs.weight = new_defaults.weight;
+    }
+    if attrs.style == old_defaults.style {
+        attrs.style = new_defaults.style;
+    }
+    if attrs.stretch == old_defaults.stretch {
+        attrs.stretch = new_defaults.stretch;
+    }
+    if attrs.metrics_opt == old_defaults.metrics_opt {
+        attrs.metrics_opt = new_defaults.metrics_opt;
+    }
+    if attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
+        attrs.letter_spacing_opt = new_defaults.letter_spacing_opt;
+    }
+    if attrs.optical_size == old_defaults.optical_size {
+        attrs.optical_size = new_defaults.optical_size;
+    }
+    if attrs.text_decoration == old_defaults.text_decoration {
+        attrs.text_decoration = new_defaults.text_decoration;
     }
 }
 
@@ -1092,11 +1128,20 @@ fn attrs_to_style(
         None
     };
 
+    let bold = attrs.weight >= cosmic_text::Weight::BOLD;
+    let bold_default = defaults.weight >= cosmic_text::Weight::BOLD;
+    let italic = attrs.style == cosmic_text::Style::Italic;
+    let italic_default = defaults.style == cosmic_text::Style::Italic;
+    let underline = attrs.text_decoration.underline != cosmic_text::UnderlineStyle::None;
+    let underline_default = defaults.text_decoration.underline != cosmic_text::UnderlineStyle::None;
+    let strikethrough = attrs.text_decoration.strikethrough;
+    let strikethrough_default = defaults.text_decoration.strikethrough;
+
     Style {
-        bold: Some(attrs.weight >= cosmic_text::Weight::BOLD),
-        italic: Some(attrs.style == cosmic_text::Style::Italic),
-        underline: Some(attrs.text_decoration.underline != cosmic_text::UnderlineStyle::None),
-        strikethrough: Some(attrs.text_decoration.strikethrough),
+        bold: (bold != bold_default).then_some(bold),
+        italic: (italic != italic_default).then_some(italic),
+        underline: (underline != underline_default).then_some(underline),
+        strikethrough: (strikethrough != strikethrough_default).then_some(strikethrough),
         color: attrs
             .color_opt
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
@@ -1105,10 +1150,14 @@ fn attrs_to_style(
         } else {
             None
         },
-        size: attrs.metrics_opt.map(|m| {
-            let m: cosmic_text::Metrics = m.into();
-            m.font_size
-        }),
+        size: if attrs.metrics_opt != defaults.metrics_opt {
+            attrs.metrics_opt.map(|m| {
+                let m: cosmic_text::Metrics = m.into();
+                m.font_size
+            })
+        } else {
+            None
+        },
         font,
         optical_size: if attrs.optical_size != defaults.optical_size {
             Some(match attrs.optical_size {
@@ -1118,6 +1167,38 @@ fn attrs_to_style(
             })
         } else {
             None
+        },
+    }
+}
+
+fn attrs_to_effective_style(
+    attrs: &cosmic_text::Attrs<'_>,
+    font_names: &HashSet<&'static str>,
+) -> Style {
+    Style {
+        bold: Some(attrs.weight >= cosmic_text::Weight::BOLD),
+        italic: Some(attrs.style == cosmic_text::Style::Italic),
+        underline: Some(attrs.text_decoration.underline != cosmic_text::UnderlineStyle::None),
+        strikethrough: Some(attrs.text_decoration.strikethrough),
+        color: attrs
+            .color_opt
+            .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
+        letter_spacing: attrs.letter_spacing_opt.map(|ls| ls.0),
+        size: attrs.metrics_opt.map(|m| {
+            let m: cosmic_text::Metrics = m.into();
+            m.font_size
+        }),
+        font: match attrs.family {
+            cosmic_text::Family::SansSerif => None,
+            family => Some(Font {
+                family: from_family(family, font_names),
+                ..Font::default()
+            }),
+        },
+        optical_size: match attrs.optical_size {
+            cosmic_text::OpticalSize::None => None,
+            cosmic_text::OpticalSize::Auto => Some(font::OpticalSize::Auto),
+            cosmic_text::OpticalSize::Fixed(v) => Some(font::OpticalSize::Fixed(v.to_bits())),
         },
     }
 }
@@ -1259,6 +1340,7 @@ mod tests {
         // Trigger layout so buffer lines are shaped.
         ed.update(
             Size::new(200.0, 200.0),
+            Padding::ZERO,
             Font::default(),
             Pixels(16.0),
             LineHeight::default(),

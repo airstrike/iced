@@ -102,25 +102,35 @@ pub enum Number {
 }
 
 /// A decorative fill inside a paragraph's bounding box.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Fill {
-    /// The fill color.
-    pub color: Color,
+    /// The fill color. `None` = resolve from the widget style.
+    pub color: Option<Color>,
     /// `None` = full paragraph background (code block, callout).
     /// `Some(h)` = centered horizontal quad of height `h` (rule).
     pub height: Option<f32>,
+    /// Corner radius in logical pixels.
+    pub radius: f32,
+    /// Inset between the fill edge and the text, in logical pixels.
+    pub padding: crate::Padding,
 }
 
 /// A single border edge.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Border {
-    /// The border color.
-    pub color: Color,
+    /// The border color. `None` = resolve from the widget style.
+    pub color: Option<Color>,
     /// The border width in logical pixels.
     pub width: f32,
 }
 
-/// Four optional paragraph borders.
+/// Four optional paragraph borders, plus a per-side `from_text`
+/// inset matching Word's "Border and Shading Options → From Text"
+/// panel: the distance between each border and the text inside it.
+///
+/// Indent (`paragraph::Style::indent`) moves the whole paragraph
+/// rectangle — border *and* text together. `from_text` is the gap
+/// *inside* the rectangle between the border and the text.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Borders {
     /// Top border.
@@ -131,4 +141,8 @@ pub struct Borders {
     pub bottom: Option<Border>,
     /// Left border.
     pub left: Option<Border>,
+    /// Per-side gap between the border and the text it surrounds, in
+    /// logical pixels. Mirrors Word's `<w:pBdr w:space="…">` attribute
+    /// for each side. Default is all-zero — borders touch the text.
+    pub from_text: crate::Padding,
 }
