@@ -37,6 +37,7 @@ use crate::core::input_method;
 use crate::core::keyboard;
 use crate::core::keyboard::key;
 use crate::core::layout::{self, Layout};
+use crate::core::length::Sizing;
 use crate::core::mouse;
 use crate::core::renderer;
 use crate::core::text::editor::Editor as _;
@@ -628,9 +629,21 @@ where
             Length::Fill
             | Length::FillPortion(_)
             | Length::Fixed(_)
-            | Length::Bounded { .. }
+            | Length::Bounded {
+                sizing: Sizing::Fill(_),
+                ..
+            }
             | Length::Fluid(_) => layout::Node::new(limits.max()),
-            Length::Shrink | Length::Fit => {
+            // Content-driven heights, including bounded ones whose sizing fits
+            // or shrinks. The `min`/`max` bounds are already folded into
+            // `limits` above, so `limits.height(min_bounds.height)` clamps the
+            // content height to them.
+            Length::Shrink
+            | Length::Fit
+            | Length::Bounded {
+                sizing: Sizing::Fit | Sizing::Shrink,
+                ..
+            } => {
                 let min_bounds = internal.editor.min_bounds();
 
                 layout::Node::new(
