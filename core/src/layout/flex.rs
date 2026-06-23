@@ -220,6 +220,45 @@ where
     // We can defer the layout of any elements that have a fixed size in the main axis,
     // allowing them to use the cross calculations of the next pass.
     if cross_compress && some_fill_cross {
+        // No fixed-cross sibling set `cross`, so every Fill-cross child would
+        // collapse to 0. Seed it with the widest child's own content: lay each
+        // Fill-cross child out with the cross compressed (so it resolves to its
+        // intrinsic width) and keep the max. The stretch pass below then grows
+        // them all to that width -- so all-`Fill` siblings settle on the widest,
+        // not on the offered max. (Content is finite even if max_cross is not.)
+        //
+        // TODO: benchmark. This lays these children out a second time, and these
+        // nested all-Fill-no-anchor flexes compound it (~2^depth). It only fires
+        // when no content sibling set `cross`, so it's rareish. Maybe there's
+        // a cleverer way (cache the measured node, sort by content, lazy widths)
+        // to avoid the second pass? TBD.
+        if cross == 0.0 {
+            let content_compression = {
+                let (compress_x, compress_y) = axis.pack(main_compress, true);
+                Size::new(compress_x, compress_y)
+            };
+
+            for (i, child) in items.iter_mut().enumerate() {
+                let Category::CrossFluid = metas[i].category else {
+                    continue;
+                };
+
+                let (max_width, max_height) = axis.pack(available, max_cross);
+                let limits = Limits::with_compression(
+                    Size::ZERO,
+                    Size::new(max_width, max_height),
+                    content_compression,
+                );
+
+                let content = child
+                    .as_widget_mut()
+                    .layout(&mut trees[i], renderer, &limits)
+                    .size();
+
+                cross = cross.max(axis.cross(content));
+            }
+        }
+
         for (i, child) in items.iter_mut().enumerate() {
             let meta = metas[i];
 

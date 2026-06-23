@@ -1538,6 +1538,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
+name = "fit_shrink_propagation"
+version = "0.1.0"
+dependencies = [
+ "iced",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2267,6 +2274,7 @@ dependencies = [
  "iced_highlighter",
  "iced_renderer",
  "iced_runtime",
+ "iced_test",
  "iced_tester",
  "iced_wgpu",
  "iced_widget",
