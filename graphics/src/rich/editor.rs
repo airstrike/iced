@@ -1007,6 +1007,9 @@ fn rebase_attrs<'a>(
     if attrs.text_decoration == old_defaults.text_decoration {
         attrs.text_decoration = new_defaults.text_decoration;
     }
+    if attrs.padding == old_defaults.padding {
+        attrs.padding = new_defaults.padding;
+    }
 }
 
 fn style_to_attrs<'a>(
@@ -1064,6 +1067,12 @@ fn style_to_attrs<'a>(
         });
     }
 
+    if let Some(p) = style.padding {
+        attrs = attrs.padding(cosmic_text::SpanPadding::new(
+            p.top, p.bottom, p.left, p.right,
+        ));
+    }
+
     if let Some(font) = style.font {
         // Build new attrs from the font, then re-apply non-font style
         let mut font_attrs = text::to_attributes(font, Em::ZERO, &[], &[]);
@@ -1106,6 +1115,7 @@ fn style_to_attrs<'a>(
         font_attrs.text_decoration = attrs.text_decoration;
         font_attrs.letter_spacing_opt = attrs.letter_spacing_opt;
         font_attrs.optical_size = attrs.optical_size;
+        font_attrs.padding = attrs.padding;
 
         attrs = font_attrs;
     }
@@ -1168,6 +1178,17 @@ fn attrs_to_style(
         } else {
             None
         },
+        padding: if attrs.padding != defaults.padding {
+            let p = attrs.padding;
+            Some(Padding {
+                top: p.top(),
+                bottom: p.bottom(),
+                left: p.start(),
+                right: p.end(),
+            })
+        } else {
+            None
+        },
     }
 }
 
@@ -1199,6 +1220,17 @@ fn attrs_to_effective_style(
             cosmic_text::OpticalSize::None => None,
             cosmic_text::OpticalSize::Auto => Some(font::OpticalSize::Auto),
             cosmic_text::OpticalSize::Fixed(v) => Some(font::OpticalSize::Fixed(v.to_bits())),
+        },
+        padding: if attrs.padding != cosmic_text::SpanPadding::ZERO {
+            let p = attrs.padding;
+            Some(Padding {
+                top: p.top(),
+                bottom: p.bottom(),
+                left: p.start(),
+                right: p.end(),
+            })
+        } else {
+            None
         },
     }
 }
