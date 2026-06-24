@@ -19,4 +19,6 @@ pub struct Style {
     pub letter_spacing: Option<f32>,
     /// Optical sizing mode.
     pub optical_size: Option<crate::font::OpticalSize>,
+    /// Span padding (top, bottom, left/start, right/end).
+    pub padding: Option<crate::Padding>,
 }

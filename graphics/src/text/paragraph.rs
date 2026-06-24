@@ -224,10 +224,10 @@ impl core::text::Paragraph for Paragraph {
                     attrs
                 };
 
-                let attrs = attrs.padding(cosmic_text::SpanPadding {
-                    start: span.padding.left,
-                    end: span.padding.right,
-                });
+                let attrs = attrs.padding(cosmic_text::SpanPadding::new(
+                    span.padding.left,
+                    span.padding.right,
+                ));
 
                 let mut attrs = attrs.metadata(i);
                 if span.underline || span.link.is_some() {
