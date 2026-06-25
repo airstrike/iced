@@ -1302,8 +1302,13 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
                 .iter()
                 .take_while(|glyph| cursor.index > glyph.start)
                 .last()
-                .map(|g| g.x + g.w)
-                .unwrap_or_else(|| run.glyphs.first().map(|g| g.x).unwrap_or(run.x_offset));
+                .map(|g| g.x + g.w + g.padding.end())
+                .unwrap_or_else(|| {
+                    run.glyphs
+                        .first()
+                        .map(|g| g.x - g.padding.start())
+                        .unwrap_or(run.x_offset)
+                });
 
             return (x, run.line_top, run.line_height);
         }
