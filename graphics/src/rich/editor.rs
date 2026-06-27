@@ -264,13 +264,36 @@ impl rich_editor::Editor for Editor {
 
         for run in buffer.layout_runs() {
             if run.line_i == line {
+                // Compute per-span chip height: font line_height +
+                // vertical padding. Each chip sizes to its own span
+                // rather than stretching to the line's max.
+                let span_glyphs = run
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.start >= from && g.start < to);
+                let mut font_height = 0.0_f32;
+                let mut pad_top = 0.0_f32;
+                let mut pad_bottom = 0.0_f32;
+                for g in span_glyphs {
+                    let h = g.line_height_opt.unwrap_or(run.line_height);
+                    font_height = font_height.max(h);
+                    pad_top = pad_top.max(g.padding.top());
+                    pad_bottom = pad_bottom.max(g.padding.bottom());
+                }
+                let chip_height = if font_height > 0.0 {
+                    font_height + pad_top + pad_bottom
+                } else {
+                    run.line_height
+                };
+                let leading = run.line_height - chip_height;
+
                 for (x, w) in run.highlight(from_cursor, to_cursor) {
                     if w > 0.0 {
                         f(Rectangle {
                             x: x * scale,
                             width: w * scale,
-                            y: run.line_top * scale,
-                            height: run.line_height * scale,
+                            y: (run.line_top + leading / 2.0) * scale,
+                            height: chip_height * scale,
                         });
                     }
                 }
@@ -1299,11 +1322,11 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
                 .iter()
                 .take_while(|glyph| cursor.index > glyph.start)
                 .last()
-                .map(|g| g.x + g.w + g.padding_end)
+                .map(|g| g.x + g.w + g.padding.end())
                 .unwrap_or_else(|| {
                     run.glyphs
                         .first()
-                        .map(|g| g.x - g.padding_start)
+                        .map(|g| g.x - g.padding.start())
                         .unwrap_or(run.x_offset)
                 });
 
