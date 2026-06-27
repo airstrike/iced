@@ -341,7 +341,7 @@ pub struct Packed {
 pub fn pack(gradient: &core::Gradient, bounds: Rectangle) -> Packed {
     let (stops, direction, gradient_type) = match gradient {
         core::Gradient::Linear(linear) => {
-            let (start, end) = linear.angle.to_distance(&bounds);
+            let (start, end) = bounds.chord(linear.angle);
 
             (&linear.stops, [start.x, start.y, end.x, end.y], 0)
         }
