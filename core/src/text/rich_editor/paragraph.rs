@@ -18,6 +18,13 @@ pub struct Style {
     pub line_spacing: Option<Spacing>,
     /// Space before paragraph in logical pixels.
     pub space_before: Option<f32>,
+    /// Whether consecutive paragraphs sharing this style form one contiguous
+    /// block: interior `space_before`/`spacing_after` collapse to zero and any
+    /// fill/border is drawn continuously across the run (e.g. code fences,
+    /// multi-line quotes). The host editor interprets this; the layout engine
+    /// only stores it. Analogous to Word's "don't add space between paragraphs
+    /// of the same style".
+    pub contiguous: bool,
     /// Nesting depth (0-8).
     pub level: u8,
     /// List marker style.
