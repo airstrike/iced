@@ -217,6 +217,17 @@ impl core::text::Paragraph for Paragraph {
                     attrs
                 };
 
+                let attrs = if span.padding == crate::core::Padding::ZERO {
+                    attrs
+                } else {
+                    attrs.padding(cosmic_text::SpanPadding::new(
+                        span.padding.top * hint_factor,
+                        span.padding.bottom * hint_factor,
+                        span.padding.left * hint_factor,
+                        span.padding.right * hint_factor,
+                    ))
+                };
+
                 let mut attrs = attrs.metadata(i);
                 if span.underline || span.link.is_some() {
                     attrs.text_decoration.underline = cosmic_text::UnderlineStyle::Single;
