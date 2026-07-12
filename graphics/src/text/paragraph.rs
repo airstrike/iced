@@ -173,6 +173,10 @@ impl core::text::Paragraph for Paragraph {
         );
 
         buffer.set_wrap(text::to_wrap(text.wrapping));
+        buffer.set_ellipsize(text::to_ellipsize(
+            text.ellipsis,
+            text.bounds.height * hint_factor,
+        ));
 
         buffer.set_rich_text(
             text.content.iter().enumerate().map(|(i, span)| {
@@ -278,6 +282,10 @@ impl core::text::Paragraph for Paragraph {
             Some(new_bounds.width * paragraph.hint_factor),
             Some(new_bounds.height * paragraph.hint_factor),
         );
+        paragraph.buffer.set_ellipsize(text::to_ellipsize(
+            paragraph.ellipsis,
+            new_bounds.height * paragraph.hint_factor,
+        ));
         paragraph
             .buffer
             .shape_until_scroll(font_system.raw(), false);
