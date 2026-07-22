@@ -119,13 +119,7 @@ impl editor::Editor for Editor {
     fn line(&self, index: usize) -> Option<editor::Line<'_>> {
         self.buffer().lines.get(index).map(|line| editor::Line {
             text: Cow::Borrowed(line.text()),
-            ending: match line.ending() {
-                cosmic_text::LineEnding::Lf => editor::LineEnding::Lf,
-                cosmic_text::LineEnding::CrLf => editor::LineEnding::CrLf,
-                cosmic_text::LineEnding::Cr => editor::LineEnding::Cr,
-                cosmic_text::LineEnding::LfCr => editor::LineEnding::LfCr,
-                cosmic_text::LineEnding::None => editor::LineEnding::None,
-            },
+            ending: text::from_line_ending(line.ending()),
         })
     }
 
@@ -312,7 +306,7 @@ impl editor::Editor for Editor {
                             | Motion::DocumentEnd => {
                                 editor.action(
                                     font_system.raw(),
-                                    cosmic_text::Action::Motion(to_motion(motion)),
+                                    cosmic_text::Action::Motion(text::to_motion(motion)),
                                 );
                             }
                             // Other motions simply move the cursor to one end of the selection
@@ -324,7 +318,7 @@ impl editor::Editor for Editor {
                     } else {
                         editor.action(
                             font_system.raw(),
-                            cosmic_text::Action::Motion(to_motion(motion)),
+                            cosmic_text::Action::Motion(text::to_motion(motion)),
                         );
                     }
                 }
@@ -339,7 +333,7 @@ impl editor::Editor for Editor {
 
                     editor.action(
                         font_system.raw(),
-                        cosmic_text::Action::Motion(to_motion(motion)),
+                        cosmic_text::Action::Motion(text::to_motion(motion)),
                     );
 
                     // Deselect if selection matches cursor position
@@ -831,23 +825,6 @@ fn visual_lines_offset(line: usize, buffer: &cosmic_text::Buffer) -> i32 {
         .sum();
 
     visual_lines_offset as i32 * if scroll.line < line { 1 } else { -1 }
-}
-
-fn to_motion(motion: Motion) -> cosmic_text::Motion {
-    match motion {
-        Motion::Left => cosmic_text::Motion::Left,
-        Motion::Right => cosmic_text::Motion::Right,
-        Motion::Up => cosmic_text::Motion::Up,
-        Motion::Down => cosmic_text::Motion::Down,
-        Motion::WordLeft => cosmic_text::Motion::LeftWord,
-        Motion::WordRight => cosmic_text::Motion::RightWord,
-        Motion::Home => cosmic_text::Motion::Home,
-        Motion::End => cosmic_text::Motion::End,
-        Motion::PageUp => cosmic_text::Motion::PageUp,
-        Motion::PageDown => cosmic_text::Motion::PageDown,
-        Motion::DocumentStart => cosmic_text::Motion::BufferStart,
-        Motion::DocumentEnd => cosmic_text::Motion::BufferEnd,
-    }
 }
 
 fn buffer_from_editor<'a, 'b>(editor: &'a impl cosmic_text::Edit<'b>) -> &'a cosmic_text::Buffer
