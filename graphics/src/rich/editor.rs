@@ -1097,7 +1097,9 @@ fn attrs_to_style(attrs: &cosmic_text::Attrs<'_>, defaults: &cosmic_text::Attrs<
         italic: (italic != italic_default).then_some(italic),
         underline: (underline != underline_default).then_some(underline),
         strikethrough: (strikethrough != strikethrough_default).then_some(strikethrough),
-        color: attrs.color_opt.map(text::from_color),
+        color: (attrs.color_opt != defaults.color_opt)
+            .then(|| attrs.color_opt.map(text::from_color))
+            .flatten(),
         letter_spacing: (attrs.letter_spacing_opt != defaults.letter_spacing_opt)
             .then(|| attrs.letter_spacing_opt.map(|ls| ls.0))
             .flatten(),
