@@ -1,47 +1,16 @@
 //! Rich text editor — adapted from `text/editor.rs` without Highlighter.
-//!
-//! # TODO: Font name lifetime strategy
-//!
-//! iced's `font::Family::Name(&'static str)` requires a `'static` lifetime,
-//! but cosmic-text copies font names into `SmolStr` (via `FamilyOwned`).
-//! When reading attrs back from cosmic-text, we get `Family::Name(&str)`
-//! borrowed from the SmolStr — NOT the original `&'static str`.
-//!
-//! We explored several approaches:
-//!
-//! - **`Cow<'static, str>`**: Zero-cost for the forward path (`Borrowed`),
-//!   allocates once on readback (`Owned`). But `Cow` isn't `Copy`, so `Font`
-//!   and `Family` would lose `Copy`, rippling through all of iced.
-//!
-//! - **`Arc<str>`**: Same Copy problem as `Cow`, and allocates in both
-//!   directions (ref-counted).
-//!
-//! - **Global string interning** (`Mutex<HashSet<&'static str>>`): Keeps
-//!   `&'static str` and `Copy`, but requires locking on every readback.
-//!
-//! - **Local interner in `Internal`** (current approach): A `HashSet<&'static str>`
-//!   on `Internal` populated on the write path (`set_span_style`,
-//!   `set_paragraph_style`, default font). The read path (`style_at`,
-//!   `paragraph_style`) looks up names without mutation or locking. If a name
-//!   is missing, we panic — every font name entering through iced's API is
-//!   `&'static str` and should have been registered.
-//!
-//! The long-term fix is likely changing `Family::Name` to `Cow<'static, str>`
-//! and accepting the loss of `Copy` on `Font`, but that's a large cross-crate
-//! refactor best done in a dedicated PR.
 use crate::core::font;
 use crate::core::text::editor::{
     self, Action, Cursor, Direction, Edit, Motion, Position, Selection,
 };
 use crate::core::text::rich_editor::{self, paragraph, span::Style};
 use crate::core::text::{Alignment, LineHeight, Wrapping};
-use crate::core::{Color, Em, Font, Padding, Pixels, Point, Rectangle, Size};
+use crate::core::{Em, Font, Padding, Pixels, Point, Rectangle, Size};
 use crate::text;
 
 use cosmic_text::Edit as _;
 
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::fmt;
 use std::ops::Range;
 use std::sync::{self, Arc, RwLock};
@@ -64,9 +33,6 @@ struct Internal {
     line_height_ratio: f32,
     default_alignment: Alignment,
     default_style: Style,
-    /// Every `&'static str` font name that has entered the editor.
-    /// See module-level doc for the full rationale.
-    font_names: HashSet<&'static str>,
 }
 
 impl Editor {
@@ -160,13 +126,7 @@ impl rich_editor::Editor for Editor {
     fn line(&self, index: usize) -> Option<editor::Line<'_>> {
         self.buffer().lines.get(index).map(|line| editor::Line {
             text: Cow::Borrowed(line.text()),
-            ending: match line.ending() {
-                cosmic_text::LineEnding::Lf => editor::LineEnding::Lf,
-                cosmic_text::LineEnding::CrLf => editor::LineEnding::CrLf,
-                cosmic_text::LineEnding::Cr => editor::LineEnding::Cr,
-                cosmic_text::LineEnding::LfCr => editor::LineEnding::LfCr,
-                cosmic_text::LineEnding::None => editor::LineEnding::None,
-            },
+            ending: text::from_line_ending(line.ending()),
         })
     }
 
@@ -363,7 +323,7 @@ impl rich_editor::Editor for Editor {
                             | Motion::DocumentEnd => {
                                 editor.action(
                                     font_system.raw(),
-                                    cosmic_text::Action::Motion(to_motion(motion)),
+                                    cosmic_text::Action::Motion(text::to_motion(motion)),
                                 );
                             }
                             _ => editor.set_cursor(match motion.direction() {
@@ -374,7 +334,7 @@ impl rich_editor::Editor for Editor {
                     } else {
                         editor.action(
                             font_system.raw(),
-                            cosmic_text::Action::Motion(to_motion(motion)),
+                            cosmic_text::Action::Motion(text::to_motion(motion)),
                         );
                     }
                 }
@@ -389,7 +349,7 @@ impl rich_editor::Editor for Editor {
 
                     editor.action(
                         font_system.raw(),
-                        cosmic_text::Action::Motion(to_motion(motion)),
+                        cosmic_text::Action::Motion(text::to_motion(motion)),
                     );
 
                     // Deselect if selection matches cursor position
@@ -587,9 +547,6 @@ impl rich_editor::Editor for Editor {
                 || new_font_variations != internal.font_variations
             {
                 internal.font = new_font;
-                if let font::Family::Name(name) = new_font.family {
-                    let _ = internal.font_names.insert(name);
-                }
                 internal.letter_spacing = new_letter_spacing;
                 internal.font_features = new_font_features;
                 internal.font_variations = new_font_variations;
@@ -691,9 +648,6 @@ impl rich_editor::Editor for Editor {
 
     fn set_span_style(&mut self, line: usize, range: Range<usize>, style: &Style) {
         self.with_internal_mut(|internal| {
-            if let Some(font) = style.font {
-                internal.register_font(font);
-            }
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
@@ -720,9 +674,6 @@ impl rich_editor::Editor for Editor {
 
     fn set_paragraph_style(&mut self, line: usize, style: &paragraph::Style) {
         self.with_internal_mut(|internal| {
-            if let Some(font) = style.style.font {
-                internal.register_font(font);
-            }
             let buffer = buffer_mut_from_editor(&mut internal.document);
 
             // Read buffer font_size (unhinted) before taking a mutable borrow on the line.
@@ -860,7 +811,7 @@ impl rich_editor::Editor for Editor {
         };
         let defaults = bl.attrs_list().defaults();
         let span = bl.attrs_list().get_span(idx);
-        attrs_to_style(&span, &defaults, &internal.font_names)
+        attrs_to_style(&span, &defaults)
     }
 
     fn paragraph_style_at(&self, line: usize) -> paragraph::Style {
@@ -883,14 +834,8 @@ impl rich_editor::Editor for Editor {
                 });
 
                 paragraph::Style {
-                    style: attrs_to_effective_style(&defaults, &internal.font_names),
-                    alignment: bl.align().map(|a| match a {
-                        cosmic_text::Align::Left => Alignment::Left,
-                        cosmic_text::Align::Center => Alignment::Center,
-                        cosmic_text::Align::Right => Alignment::Right,
-                        cosmic_text::Align::Justified => Alignment::Justified,
-                        cosmic_text::Align::End => Alignment::Default,
-                    }),
+                    style: attrs_to_effective_style(&defaults),
+                    alignment: bl.align().map(text::from_align),
                     spacing_after: None,
                     line_height,
                     ..Default::default()
@@ -952,15 +897,6 @@ impl Default for Internal {
             line_height_ratio: 1.3,
             default_alignment: Alignment::Default,
             default_style: Style::default(),
-            font_names: HashSet::new(),
-        }
-    }
-}
-
-impl Internal {
-    fn register_font(&mut self, font: Font) {
-        if let font::Family::Name(name) = font.family {
-            let _ = self.font_names.insert(name);
         }
     }
 }
@@ -1083,11 +1019,7 @@ fn style_to_attrs<'a>(
     }
 
     if let Some(opsz) = style.optical_size {
-        attrs = attrs.optical_size(match opsz {
-            font::OpticalSize::Auto => cosmic_text::OpticalSize::Auto,
-            font::OpticalSize::Fixed(bits) => cosmic_text::OpticalSize::Fixed(f32::from_bits(bits)),
-            font::OpticalSize::None => cosmic_text::OpticalSize::None,
-        });
+        attrs = attrs.optical_size(text::to_optical_size(opsz));
     }
 
     if let Some(p) = style.padding {
@@ -1146,21 +1078,11 @@ fn style_to_attrs<'a>(
     attrs
 }
 
-fn attrs_to_style(
-    attrs: &cosmic_text::Attrs<'_>,
-    defaults: &cosmic_text::Attrs<'_>,
-    font_names: &HashSet<&'static str>,
-) -> Style {
-    // Only report an explicit font when the span differs from the line defaults.
-    let font = if attrs.family != defaults.family {
-        Some(Font {
-            family: from_family(attrs.family, font_names),
-            ..Font::default()
-        })
-    } else {
-        None
-    };
-
+/// The explicit overrides of a span relative to its line defaults.
+///
+/// Spans inherit the defaults by construction, so a field is only
+/// reported when it differs from them.
+fn attrs_to_style(attrs: &cosmic_text::Attrs<'_>, defaults: &cosmic_text::Attrs<'_>) -> Style {
     let bold = attrs.weight >= cosmic_text::Weight::BOLD;
     let bold_default = defaults.weight >= cosmic_text::Weight::BOLD;
     let italic = attrs.style == cosmic_text::Style::Italic;
@@ -1175,104 +1097,41 @@ fn attrs_to_style(
         italic: (italic != italic_default).then_some(italic),
         underline: (underline != underline_default).then_some(underline),
         strikethrough: (strikethrough != strikethrough_default).then_some(strikethrough),
-        color: attrs
-            .color_opt
-            .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
-        letter_spacing: if attrs.letter_spacing_opt != defaults.letter_spacing_opt {
-            attrs.letter_spacing_opt.map(|ls| ls.0)
-        } else {
-            None
-        },
-        size: if attrs.metrics_opt != defaults.metrics_opt {
-            attrs.metrics_opt.map(|m| {
-                let m: cosmic_text::Metrics = m.into();
-                m.font_size
-            })
-        } else {
-            None
-        },
-        font,
-        optical_size: if attrs.optical_size != defaults.optical_size {
-            Some(match attrs.optical_size {
-                cosmic_text::OpticalSize::Auto => font::OpticalSize::Auto,
-                cosmic_text::OpticalSize::Fixed(v) => font::OpticalSize::Fixed(v.to_bits()),
-                cosmic_text::OpticalSize::None => font::OpticalSize::None,
-            })
-        } else {
-            None
-        },
-        padding: if attrs.padding != defaults.padding {
-            let p = attrs.padding;
-            Some(Padding {
-                top: p.top(),
-                bottom: p.bottom(),
-                left: p.start(),
-                right: p.end(),
-            })
-        } else {
-            None
-        },
+        color: attrs.color_opt.map(text::from_color),
+        letter_spacing: (attrs.letter_spacing_opt != defaults.letter_spacing_opt)
+            .then(|| attrs.letter_spacing_opt.map(|ls| ls.0))
+            .flatten(),
+        size: (attrs.metrics_opt != defaults.metrics_opt)
+            .then(|| attrs.metrics_opt.map(text::from_metrics))
+            .flatten(),
+        font: (attrs.family != defaults.family).then(|| Font {
+            family: text::from_family(attrs.family),
+            ..Font::default()
+        }),
+        optical_size: (attrs.optical_size != defaults.optical_size)
+            .then(|| text::from_optical_size(attrs.optical_size)),
+        padding: (attrs.padding != defaults.padding).then(|| text::from_padding(attrs.padding)),
     }
 }
 
-fn attrs_to_effective_style(
-    attrs: &cosmic_text::Attrs<'_>,
-    font_names: &HashSet<&'static str>,
-) -> Style {
+/// The resolved style of some line defaults, with every boolean explicit.
+fn attrs_to_effective_style(attrs: &cosmic_text::Attrs<'_>) -> Style {
     Style {
         bold: Some(attrs.weight >= cosmic_text::Weight::BOLD),
         italic: Some(attrs.style == cosmic_text::Style::Italic),
         underline: Some(attrs.text_decoration.underline != cosmic_text::UnderlineStyle::None),
         strikethrough: Some(attrs.text_decoration.strikethrough),
-        color: attrs
-            .color_opt
-            .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
+        color: attrs.color_opt.map(text::from_color),
         letter_spacing: attrs.letter_spacing_opt.map(|ls| ls.0),
-        size: attrs.metrics_opt.map(|m| {
-            let m: cosmic_text::Metrics = m.into();
-            m.font_size
+        size: attrs.metrics_opt.map(text::from_metrics),
+        font: (attrs.family != cosmic_text::Family::SansSerif).then(|| Font {
+            family: text::from_family(attrs.family),
+            ..Font::default()
         }),
-        font: match attrs.family {
-            cosmic_text::Family::SansSerif => None,
-            family => Some(Font {
-                family: from_family(family, font_names),
-                ..Font::default()
-            }),
-        },
-        optical_size: match attrs.optical_size {
-            cosmic_text::OpticalSize::None => None,
-            cosmic_text::OpticalSize::Auto => Some(font::OpticalSize::Auto),
-            cosmic_text::OpticalSize::Fixed(v) => Some(font::OpticalSize::Fixed(v.to_bits())),
-        },
-        padding: if attrs.padding != cosmic_text::SpanPadding::ZERO {
-            let p = attrs.padding;
-            Some(Padding {
-                top: p.top(),
-                bottom: p.bottom(),
-                left: p.start(),
-                right: p.end(),
-            })
-        } else {
-            None
-        },
-    }
-}
-
-fn from_family(
-    family: cosmic_text::Family<'_>,
-    font_names: &HashSet<&'static str>,
-) -> font::Family {
-    match family {
-        cosmic_text::Family::Name(name) => {
-            font::Family::Name(font_names.get(name).copied().expect(
-                "Font name must have been registered via set_span_style or set_paragraph_style",
-            ))
-        }
-        cosmic_text::Family::SansSerif => font::Family::SansSerif,
-        cosmic_text::Family::Serif => font::Family::Serif,
-        cosmic_text::Family::Cursive => font::Family::Cursive,
-        cosmic_text::Family::Fantasy => font::Family::Fantasy,
-        cosmic_text::Family::Monospace => font::Family::Monospace,
+        optical_size: (attrs.optical_size != cosmic_text::OpticalSize::None)
+            .then(|| text::from_optical_size(attrs.optical_size)),
+        padding: (attrs.padding != cosmic_text::SpanPadding::ZERO)
+            .then(|| text::from_padding(attrs.padding)),
     }
 }
 
@@ -1347,23 +1206,6 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
     }
 
     (last_x, last_y, last_h)
-}
-
-fn to_motion(motion: Motion) -> cosmic_text::Motion {
-    match motion {
-        Motion::Left => cosmic_text::Motion::Left,
-        Motion::Right => cosmic_text::Motion::Right,
-        Motion::Up => cosmic_text::Motion::Up,
-        Motion::Down => cosmic_text::Motion::Down,
-        Motion::WordLeft => cosmic_text::Motion::LeftWord,
-        Motion::WordRight => cosmic_text::Motion::RightWord,
-        Motion::Home => cosmic_text::Motion::Home,
-        Motion::End => cosmic_text::Motion::End,
-        Motion::PageUp => cosmic_text::Motion::PageUp,
-        Motion::PageDown => cosmic_text::Motion::PageDown,
-        Motion::DocumentStart => cosmic_text::Motion::BufferStart,
-        Motion::DocumentEnd => cosmic_text::Motion::BufferEnd,
-    }
 }
 
 fn buffer_from_editor<'a, 'b>(editor: &'a impl cosmic_text::Edit<'b>) -> &'a cosmic_text::Buffer
