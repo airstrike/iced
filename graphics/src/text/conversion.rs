@@ -203,6 +203,16 @@ pub fn from_metrics(metrics: cosmic_text::CacheMetrics) -> f32 {
     metrics.font_size
 }
 
+/// Converts some [`Padding`] to a [`cosmic_text::SpanPadding`].
+pub fn to_padding(padding: Padding) -> cosmic_text::SpanPadding {
+    cosmic_text::SpanPadding {
+        start: padding.left,
+        end: padding.right,
+        top: padding.top,
+        bottom: padding.bottom,
+    }
+}
+
 /// Converts some [`cosmic_text::SpanPadding`] to a [`Padding`].
 pub fn from_padding(padding: cosmic_text::SpanPadding) -> Padding {
     Padding {
@@ -239,5 +249,40 @@ pub fn from_line_ending(ending: cosmic_text::LineEnding) -> LineEnding {
         cosmic_text::LineEnding::Cr => LineEnding::Cr,
         cosmic_text::LineEnding::LfCr => LineEnding::LfCr,
         cosmic_text::LineEnding::None => LineEnding::None,
+    }
+}
+
+/// Convert between [`cosmic_text`] and [`rich_editor`](crate::core::text::rich_editor)
+/// editing types.
+pub mod rich_editor {
+    use crate::core::text::rich_editor::{LineEnding, Motion};
+
+    /// Converts some [`Motion`] to a [`cosmic_text::Motion`].
+    pub fn to_motion(motion: Motion) -> cosmic_text::Motion {
+        match motion {
+            Motion::Left => cosmic_text::Motion::Left,
+            Motion::Right => cosmic_text::Motion::Right,
+            Motion::Up => cosmic_text::Motion::Up,
+            Motion::Down => cosmic_text::Motion::Down,
+            Motion::WordLeft => cosmic_text::Motion::LeftWord,
+            Motion::WordRight => cosmic_text::Motion::RightWord,
+            Motion::Home => cosmic_text::Motion::Home,
+            Motion::End => cosmic_text::Motion::End,
+            Motion::PageUp => cosmic_text::Motion::PageUp,
+            Motion::PageDown => cosmic_text::Motion::PageDown,
+            Motion::DocumentStart => cosmic_text::Motion::BufferStart,
+            Motion::DocumentEnd => cosmic_text::Motion::BufferEnd,
+        }
+    }
+
+    /// Converts some [`cosmic_text::LineEnding`] to a [`LineEnding`].
+    pub fn from_line_ending(ending: cosmic_text::LineEnding) -> LineEnding {
+        match ending {
+            cosmic_text::LineEnding::Lf => LineEnding::Lf,
+            cosmic_text::LineEnding::CrLf => LineEnding::CrLf,
+            cosmic_text::LineEnding::Cr => LineEnding::Cr,
+            cosmic_text::LineEnding::LfCr => LineEnding::LfCr,
+            cosmic_text::LineEnding::None => LineEnding::None,
+        }
     }
 }
