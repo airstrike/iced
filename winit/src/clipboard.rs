@@ -151,29 +151,112 @@ mod platform {
     }
 }
 
-// TODO: Wasm support
 #[cfg(target_arch = "wasm32")]
 mod platform {
     use super::*;
 
+    use std::sync::Arc;
+
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::js_sys;
+    use web_sys::wasm_bindgen::{JsCast, JsValue};
+
     /// A buffer for short-term storage and transfer within and between
     /// applications.
-    pub struct Clipboard;
+    pub struct Clipboard {
+        state: State,
+    }
+
+    enum State {
+        Connected { clipboard: web_sys::Clipboard },
+        Unavailable,
+    }
 
     impl Clipboard {
         /// Creates a new [`Clipboard`] for the given window.
         pub fn new() -> Self {
-            Self
+            // `navigator.clipboard` is only present in secure contexts
+            // (HTTPS or localhost).
+            let clipboard = web_sys::window()
+                .map(|window| window.navigator().clipboard())
+                .filter(|clipboard| !clipboard.is_undefined());
+
+            let state = match clipboard {
+                Some(clipboard) => State::Connected { clipboard },
+                None => State::Unavailable,
+            };
+
+            Clipboard { state }
         }
 
         /// Reads the current content of the [`Clipboard`] as text.
-        pub fn read(&self, _kind: Kind, callback: impl FnOnce(Result<Content, Error>)) {
-            callback(Err(Error::ClipboardUnavailable));
+        pub fn read(&self, kind: Kind, callback: impl FnOnce(Result<Content, Error>) + 'static) {
+            let State::Connected { clipboard } = &self.state else {
+                callback(Err(Error::ClipboardUnavailable));
+                return;
+            };
+
+            match kind {
+                Kind::Text => {
+                    let read = JsFuture::from(clipboard.read_text());
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let result = read
+                            .await
+                            .map(|text| Content::Text(text.as_string().unwrap_or_default()))
+                            .map_err(to_error);
+
+                        callback(result);
+                    });
+                }
+                kind => {
+                    log::warn!("unsupported clipboard kind: {kind:?}");
+
+                    callback(Err(Error::ContentNotAvailable));
+                }
+            }
         }
 
         /// Writes the given text contents to the [`Clipboard`].
-        pub fn write(&mut self, _content: Content, callback: impl FnOnce(Result<(), Error>)) {
-            callback(Err(Error::ClipboardUnavailable));
+        pub fn write(
+            &mut self,
+            content: Content,
+            callback: impl FnOnce(Result<(), Error>) + 'static,
+        ) {
+            let State::Connected { clipboard } = &self.state else {
+                callback(Err(Error::ClipboardUnavailable));
+                return;
+            };
+
+            match content {
+                Content::Text(text) => {
+                    let write = JsFuture::from(clipboard.write_text(&text));
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let result = write.await.map(|_| ()).map_err(to_error);
+
+                        callback(result);
+                    });
+                }
+                content => {
+                    log::warn!("unsupported clipboard content: {content:?}");
+
+                    callback(Err(Error::ClipboardUnavailable));
+                }
+            }
+        }
+    }
+
+    fn to_error(error: JsValue) -> Error {
+        // Clipboard rejections surface as `DOMException` (e.g.
+        // `NotAllowedError` when the user denies a permission prompt).
+        let description = error
+            .dyn_ref::<js_sys::Error>()
+            .map(|error| String::from(error.message()))
+            .unwrap_or_else(|| format!("{error:?}"));
+
+        Error::Unknown {
+            description: Arc::new(description),
         }
     }
 }
