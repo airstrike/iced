@@ -81,7 +81,13 @@ impl Modifiers {
         #[cfg(target_os = "macos")]
         let is_pressed = self.logo();
 
-        #[cfg(not(target_os = "macos"))]
+        // On the web there is no compile-time host OS: the same wasm
+        // binary serves macOS and PC browsers alike, so accept either
+        // platform's command convention.
+        #[cfg(target_arch = "wasm32")]
+        let is_pressed = self.logo() || self.control();
+
+        #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
         let is_pressed = self.control();
 
         is_pressed
@@ -104,7 +110,10 @@ impl Modifiers {
     /// This is relevant for macOS-specific actions (e.g. `⌘ + ArrowLeft` moves the cursor
     /// to the beginning of the line).
     pub fn macos_command(self) -> bool {
-        if cfg!(target_os = "macos") {
+        if cfg!(any(target_os = "macos", target_arch = "wasm32")) {
+            // On the web, treat the logo key as macOS command: macOS
+            // browsers gain the native bindings, and PC browsers never
+            // see logo-modified keys anyway (the OS reserves them).
             self.logo()
         } else {
             false
