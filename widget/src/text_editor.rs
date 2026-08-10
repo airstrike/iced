@@ -789,18 +789,10 @@ where
                             drag.scrolling = true;
                         }
                         if drag.scrolling {
-                            // Content tracks the finger 1:1: pixels
-                            // travelled over the line height, fractions
-                            // accumulated like wheel scrolling.
-                            let text_size =
-                                self.text_size.unwrap_or_else(|| renderer.default_size());
-                            let line_height = f32::from(self.line_height.to_absolute(text_size));
-                            let lines =
-                                (drag.position.y - position.y) / line_height + state.partial_scroll;
-                            state.partial_scroll = lines.fract();
-
-                            shell.publish(on_edit(Action::Scroll {
-                                lines: lines as i32,
+                            // Content tracks the finger 1:1, pixel for
+                            // pixel.
+                            shell.publish(on_edit(Action::ScrollBy {
+                                pixels: drag.position.y - position.y,
                             }));
                         }
                         drag.position = position;

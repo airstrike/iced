@@ -95,6 +95,12 @@ pub enum Action {
         /// The amount of lines to scroll.
         lines: i32,
     },
+    /// Scroll the [`Editor`] a certain amount of pixels — the
+    /// granularity touch scrolling needs to track a finger.
+    ScrollBy {
+        /// The amount of pixels to scroll.
+        pixels: f32,
+    },
 }
 
 impl Action {
