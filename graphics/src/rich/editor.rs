@@ -456,6 +456,32 @@ impl rich_editor::Editor for Editor {
                 }
                 Action::ScrollBy { pixels } => {
                     editor.action(font_system.raw(), cosmic_text::Action::Scroll { pixels });
+
+                    // cosmic-text clamps scroll at shape time by rolling
+                    // `scroll.line` backward, but it never trims a residual
+                    // `vertical` offset while `scroll.line` is 0 - a
+                    // sub-line drag past what the content allows would
+                    // stick, shifted, until some later reshape. Shape now
+                    // (pulling the regular clamp into this frame too) and
+                    // hand back any slack left under the last line.
+                    let buffer = buffer_mut_from_editor(editor);
+                    buffer.shape_until_scroll(font_system.raw(), false);
+
+                    let mut scroll = buffer.scroll();
+                    if scroll.line == 0 && scroll.vertical > 0.0 {
+                        let viewport = buffer.size().1.unwrap_or(f32::INFINITY);
+                        if let Some(bottom) = buffer
+                            .layout_runs()
+                            .last()
+                            .map(|run| run.line_top + run.line_height)
+                        {
+                            let slack = (viewport - bottom).min(scroll.vertical);
+                            if slack > 0.0 {
+                                scroll.vertical -= slack;
+                                buffer.set_scroll(scroll);
+                            }
+                        }
+                    }
                 }
             }
         });
