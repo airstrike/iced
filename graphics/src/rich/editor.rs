@@ -456,6 +456,9 @@ impl rich_editor::Editor for Editor {
                         },
                     );
                 }
+                Action::ScrollBy { pixels } => {
+                    editor.action(font_system.raw(), cosmic_text::Action::Scroll { pixels });
+                }
             }
         });
     }

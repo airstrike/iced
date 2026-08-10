@@ -541,6 +541,9 @@ impl editor::Editor for Editor {
 
                     buffer_mut_from_editor(editor).shape_until_scroll(&mut font_system.raw, false);
                 }
+                Action::ScrollBy { pixels } => {
+                    editor.action(font_system.raw(), cosmic_text::Action::Scroll { pixels });
+                }
             }
 
             if let Some(change) = editor.finish_change()
