@@ -45,6 +45,7 @@ use crate::core::text::highlighter::{self, Highlighter};
 use crate::core::text::{self, LineHeight, Text, Wrapping};
 use crate::core::theme;
 use crate::core::time::{Duration, Instant};
+use crate::core::touch;
 use crate::core::widget::operation;
 use crate::core::widget::{self, Widget};
 use crate::core::window;
@@ -501,10 +502,26 @@ pub struct State<Highlighter: text::Highlighter> {
     last_click: Option<mouse::Click>,
     drag_click: Option<mouse::click::Kind>,
     partial_scroll: f32,
+    touch_drag: Option<TouchDrag>,
     last_theme: RefCell<Option<String>>,
     highlighter: RefCell<Highlighter>,
     highlighter_settings: Highlighter::Settings,
     highlighter_format_address: usize,
+}
+
+/// An in-flight finger gesture: a tap until it travels past
+/// [`TouchDrag::THRESHOLD`], a scroll from then on.
+#[derive(Debug, Clone, Copy)]
+struct TouchDrag {
+    start: Point,
+    position: Point,
+    scrolling: bool,
+}
+
+impl TouchDrag {
+    /// How far a finger may travel (in logical pixels) and still count
+    /// as a tap.
+    const THRESHOLD: f32 = 8.0;
 }
 
 #[derive(Debug, Clone)]
@@ -573,6 +590,7 @@ where
             last_click: None,
             drag_click: None,
             partial_scroll: 0.0,
+            touch_drag: None,
             last_theme: RefCell::default(),
             highlighter: RefCell::new(Highlighter::new(&self.highlighter_settings)),
             highlighter_settings: self.highlighter_settings.clone(),
@@ -756,6 +774,70 @@ where
                         lines: lines as i32,
                     }));
                     shell.capture_event();
+                }
+                Update::TouchPressed(position) => {
+                    state.touch_drag = Some(TouchDrag {
+                        start: position,
+                        position,
+                        scrolling: false,
+                    });
+                    shell.capture_event();
+                }
+                Update::TouchMoved(position) => {
+                    if let Some(mut drag) = state.touch_drag {
+                        if !drag.scrolling && drag.start.distance(position) > TouchDrag::THRESHOLD {
+                            drag.scrolling = true;
+                        }
+                        if drag.scrolling {
+                            // Content tracks the finger 1:1: pixels
+                            // travelled over the line height, fractions
+                            // accumulated like wheel scrolling.
+                            let text_size =
+                                self.text_size.unwrap_or_else(|| renderer.default_size());
+                            let line_height = f32::from(self.line_height.to_absolute(text_size));
+                            let lines =
+                                (drag.position.y - position.y) / line_height + state.partial_scroll;
+                            state.partial_scroll = lines.fract();
+
+                            shell.publish(on_edit(Action::Scroll {
+                                lines: lines as i32,
+                            }));
+                        }
+                        drag.position = position;
+                        state.touch_drag = Some(drag);
+                        shell.capture_event();
+                    }
+                }
+                Update::TouchLifted(position) => {
+                    if let Some(drag) = state.touch_drag.take() {
+                        if !drag.scrolling {
+                            let bounds = layout.bounds();
+                            let cursor_position = position
+                                - Vector::new(
+                                    bounds.x + self.padding.left,
+                                    bounds.y + self.padding.top,
+                                );
+                            let click = mouse::Click::new(
+                                cursor_position,
+                                mouse::Button::Left,
+                                state.last_click,
+                            );
+                            let action = match click.kind() {
+                                mouse::click::Kind::Single => Action::Click(click.position()),
+                                mouse::click::Kind::Double => Action::SelectWord,
+                                mouse::click::Kind::Triple => Action::SelectLine,
+                            };
+
+                            state.focus = Some(Focus::now());
+                            state.last_click = Some(click);
+
+                            shell.publish(on_edit(action));
+                        }
+                        shell.capture_event();
+                    }
+                }
+                Update::TouchCancelled => {
+                    state.touch_drag = None;
                 }
                 Update::InputMethod(update) => match update {
                     Ime::Toggle(is_open) => {
@@ -1203,6 +1285,10 @@ enum Update<Message> {
     Drag(Point),
     Release,
     Scroll(f32),
+    TouchPressed(Point),
+    TouchMoved(Point),
+    TouchLifted(Point),
+    TouchCancelled,
     InputMethod(Ime),
     Binding(Binding<Message>),
 }
@@ -1268,6 +1354,32 @@ impl<Message> Update<Message> {
                         }
                         mouse::ScrollDelta::Pixels { y, .. } => -y / 4.0,
                     }))
+                }
+                _ => None,
+            },
+            // Touch: a finger drag scrolls (the mobile convention — mouse
+            // drags select), a still finger is a tap, resolved at lift so
+            // a scroll never places the cursor. Tap chaining runs through
+            // the same `mouse::Click` bookkeeping, so a double tap
+            // selects a word just like a double click.
+            Event::Touch(event) => match event {
+                touch::Event::FingerPressed { position, .. } => {
+                    if bounds.contains(*position) {
+                        Some(Update::TouchPressed(*position))
+                    } else if state.focus.is_some() {
+                        binding(Binding::Unfocus)
+                    } else {
+                        None
+                    }
+                }
+                touch::Event::FingerMoved { position, .. } if state.touch_drag.is_some() => {
+                    Some(Update::TouchMoved(*position))
+                }
+                touch::Event::FingerLifted { position, .. } if state.touch_drag.is_some() => {
+                    Some(Update::TouchLifted(*position))
+                }
+                touch::Event::FingerLost { .. } if state.touch_drag.is_some() => {
+                    Some(Update::TouchCancelled)
                 }
                 _ => None,
             },
