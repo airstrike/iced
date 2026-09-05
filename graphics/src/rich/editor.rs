@@ -1156,26 +1156,26 @@ fn empty_line_x(
     }
 }
 
-/// `line_height` comes from the matching layout run so it reflects
-/// per-line variable heights.
+/// The caret rectangle for `cursor` as `(x, top, height)` in buffer pixels.
+///
+/// `height` comes from the matching layout run so it reflects per-line
+/// variable heights. A cursor scrolled out of view has no layout run to
+/// measure against; its caret is placed just outside the viewport edge it
+/// left through, so consumers clip it away rather than drawing it at the
+/// origin.
 fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> (f32, f32, f32) {
-    for run in buffer.layout_runs() {
-        if run.line_i != cursor.line {
-            continue;
-        }
+    let mut first_start = None;
+    let mut last = None;
 
+    for run in buffer.layout_runs().filter(|run| run.line_i == cursor.line) {
         let start = run.glyphs.first().map(|g| g.start).unwrap_or(0);
         let end = run.glyphs.last().map(|g| g.end).unwrap_or(0);
 
-        // Check if cursor falls on this visual line
-        let on_this_line = if start > cursor.index {
-            false
-        } else {
-            match cursor.affinity {
+        let on_this_line = start <= cursor.index
+            && match cursor.affinity {
                 cosmic_text::Affinity::Before => cursor.index <= end,
                 cosmic_text::Affinity::After => cursor.index < end,
-            }
-        };
+            };
 
         if on_this_line {
             let x = run
@@ -1193,21 +1193,60 @@ fn caret_position(cursor: cosmic_text::Cursor, buffer: &cosmic_text::Buffer) -> 
 
             return (x, run.line_top, run.line_height);
         }
+
+        let _ = first_start.get_or_insert(start);
+        let x_end = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
+        last = Some((end, x_end, run.line_top, run.line_height));
     }
 
-    // Cursor is past the last run — use the end of the last run on the cursor's line
-    let mut last_x = 0.0;
-    let mut last_y = 0.0;
-    let mut last_h = buffer.metrics().line_height;
-    for run in buffer.layout_runs() {
-        if run.line_i == cursor.line {
-            last_x = run.glyphs.last().map(|g| g.x + g.w).unwrap_or(run.x_offset);
-            last_y = run.line_top;
-            last_h = run.line_height;
-        }
+    let line_height = buffer.metrics().line_height;
+    let above = (0.0, -line_height, line_height);
+    let below = (0.0, viewport_bottom(buffer), line_height);
+
+    let Some((last_end, last_x, last_top, last_height)) = last else {
+        // No visual line of the cursor's line is in view.
+        return if cursor.line < buffer.scroll().line {
+            above
+        } else {
+            below
+        };
+    };
+
+    if first_start.is_some_and(|start| cursor.index < start) {
+        // On a wrapped visual line scrolled off the top.
+        return above;
     }
 
-    (last_x, last_y, last_h)
+    // Past the last visible run: either the end of the line, where
+    // `Affinity::After` sits past the final glyph, or a wrapped visual
+    // line scrolled off the bottom.
+    let line_end = buffer
+        .lines
+        .get(cursor.line)
+        .and_then(cosmic_text::BufferLine::layout_opt)
+        .and_then(|layout| layout.last())
+        .and_then(|line| line.glyphs.last())
+        .map(|glyph| glyph.end);
+
+    if line_end.is_some_and(|end| end > last_end) {
+        below
+    } else {
+        (last_x, last_top, last_height)
+    }
+}
+
+/// The top of a caret placed just below the viewport.
+fn viewport_bottom(buffer: &cosmic_text::Buffer) -> f32 {
+    let last_run_bottom = buffer
+        .layout_runs()
+        .last()
+        .map(|run| run.line_top + run.line_height)
+        .unwrap_or(0.0);
+
+    buffer
+        .size()
+        .1
+        .map_or(last_run_bottom, |height| height.max(last_run_bottom))
 }
 
 fn buffer_from_editor<'a, 'b>(editor: &'a impl cosmic_text::Edit<'b>) -> &'a cosmic_text::Buffer
@@ -1241,7 +1280,12 @@ mod tests {
 
     fn editor(text: &str) -> Editor {
         let mut ed = Editor::with_text(text);
-        // Trigger layout so buffer lines are shaped.
+        layout(&mut ed);
+        ed
+    }
+
+    /// Lay out in a 200x200 viewport so buffer lines are shaped.
+    fn layout(ed: &mut Editor) {
         ed.update(
             Size::new(200.0, 200.0),
             Padding::ZERO,
@@ -1255,7 +1299,59 @@ mod tests {
             None,
             Style::default(),
         );
-        ed
+    }
+
+    fn numbered_lines(count: usize) -> String {
+        (0..count)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn caret(ed: &Editor) -> Rectangle {
+        match ed.selection() {
+            Selection::Caret(rect) => rect,
+            Selection::Range(_) => panic!("expected a caret"),
+        }
+    }
+
+    #[test]
+    fn caret_scrolled_above_the_viewport_is_placed_off_screen() {
+        let mut ed = editor(&numbered_lines(40));
+        assert!(caret(&ed).y >= 0.0, "caret starts in view");
+
+        // The cursor stays on line 0 while the view scrolls far past it.
+        ed.scroll_by(400.0);
+        layout(&mut ed);
+
+        let caret = caret(&ed);
+        assert!(
+            caret.y + caret.height <= 0.0,
+            "caret should be above the viewport: {caret:?}"
+        );
+    }
+
+    #[test]
+    fn caret_scrolled_below_the_viewport_is_placed_off_screen() {
+        let mut ed = editor(&numbered_lines(40));
+        ed.move_to(Cursor {
+            position: Position {
+                line: 39,
+                column: 0,
+            },
+            selection: None,
+        });
+        layout(&mut ed);
+
+        // Scroll back to the top; the cursor's line is now below the view.
+        ed.scroll_by(-10_000.0);
+        layout(&mut ed);
+
+        let caret = caret(&ed);
+        assert!(
+            caret.y >= ed.bounds().height,
+            "caret should be below the viewport: {caret:?}"
+        );
     }
 
     fn line_align(ed: &Editor, line: usize) -> Option<cosmic_text::Align> {
