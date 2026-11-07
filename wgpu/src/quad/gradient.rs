@@ -119,10 +119,10 @@ impl Pipeline {
                             4 => Uint32x4,
                             // Direction
                             5 => Float32x4,
-                            // Position
-                            6 => Float32x2,
-                            // Scale
-                            7 => Float32x2,
+                            // Gradient type
+                            6 => Uint32,
+                            // Position & Scale
+                            7 => Float32x4,
                             // Border color
                             8 => Float32x4,
                             // Border radius
