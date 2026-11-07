@@ -1,9 +1,11 @@
 //! Draw paragraphs.
 use crate::alignment;
+use crate::font;
 use crate::text::{
-    Alignment, Difference, Ellipsis, Hit, LineHeight, Shaping, Span, Target, Text, Wrapping,
+    Alignment, Decoration, Difference, Ellipsis, Hit, LineHeight, Shaping, Span, Target, Text,
+    Wrapping,
 };
-use crate::{Font, Pixels, Point, Rectangle, Size};
+use crate::{Em, Font, Pixels, Point, Rectangle, Size};
 
 /// A text paragraph.
 pub trait Paragraph: Sized + Default {
@@ -46,6 +48,15 @@ pub trait Paragraph: Sized + Default {
 
     /// Returns the [`Shaping`] strategy of the [`Paragraph`]>
     fn shaping(&self) -> Shaping;
+
+    /// Returns the letter spacing of the [`Paragraph`].
+    fn letter_spacing(&self) -> Em;
+
+    /// Returns the font features of the [`Paragraph`].
+    fn font_features(&self) -> &[font::Feature];
+
+    /// Returns the font variations of the [`Paragraph`].
+    fn font_variations(&self) -> &[font::Variation];
 
     /// Returns the available bounds used to layout the [`Paragraph`].
     fn bounds(&self) -> Size;
@@ -96,6 +107,13 @@ pub trait Paragraph: Sized + Default {
     ///
     // TODO: Make immutable
     fn copy(&mut self) -> Option<String>;
+
+    /// The bounds of the given `decoration` line for the span at `index`,
+    /// one rectangle per line the span occupies. Empty by default.
+    fn decoration_bounds(&self, index: usize, decoration: Decoration) -> Vec<Rectangle> {
+        let _ = (index, decoration);
+        Vec::new()
+    }
 
     /// Returns the minimum width that can fit the contents of the [`Paragraph`].
     fn min_width(&self) -> f32 {
@@ -203,6 +221,10 @@ impl<P: Paragraph> Plain<P> {
             shaping: self.raw.shaping(),
             wrapping: self.raw.wrapping(),
             ellipsis: self.raw.ellipsis(),
+            letter_spacing: self.raw.letter_spacing(),
+            font_features: self.raw.font_features().to_vec(),
+            font_variations: self.raw.font_variations().to_vec(),
+            weight: None, // reconstructed from raw, weight already applied to font
             hint_factor: self.raw.hint_factor(),
         }
     }

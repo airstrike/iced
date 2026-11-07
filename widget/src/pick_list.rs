@@ -163,6 +163,8 @@ where
     line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Font>,
     handle: Handle,
     class: <Theme as Catalog>::Class<'a>,
@@ -196,6 +198,8 @@ where
             line_height: None,
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::End,
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             font: None,
             handle: Handle::default(),
             class: <Theme as Catalog>::default(),
@@ -250,6 +254,24 @@ where
     /// Sets the [`text::Ellipsis`] strategy of the [`PickList`].
     pub fn ellipsis(mut self, ellipsis: text::Ellipsis) -> Self {
         self.ellipsis = ellipsis;
+        self
+    }
+
+    /// Sets the letter spacing of the [`PickList`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
+        self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`PickList`].
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`PickList`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -376,41 +398,44 @@ where
             shaping: self.shaping,
             wrapping: text::Wrapping::None,
             ellipsis: self.ellipsis,
+            letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
+            font_variations: Vec::new(),
+            weight: None,
             hint_factor: renderer.hint_factor(),
         };
 
         if let Some(placeholder) = &self.placeholder {
             let _ = state.placeholder.update(Text {
                 content: placeholder,
-                ..option_text
+                ..option_text.clone()
             });
         }
 
-        let max_width = match self.width {
-            Length::Shrink => {
-                state.options.resize_with(options.len(), Default::default);
+        let max_width = if matches!(self.width, Length::Shrink | Length::Fit) {
+            state.options.resize_with(options.len(), Default::default);
 
-                for (option, paragraph) in options.iter().zip(state.options.iter_mut()) {
-                    let label = (self.to_string)(option);
+            for (option, paragraph) in options.iter().zip(state.options.iter_mut()) {
+                let label = (self.to_string)(option);
 
-                    let _ = paragraph.update(Text {
-                        content: &label,
-                        ..option_text
-                    });
-                }
-
-                let labels_width = state.options.iter().fold(0.0, |width, paragraph| {
-                    f32::max(width, paragraph.min_width())
+                let _ = paragraph.update(Text {
+                    content: &label,
+                    ..option_text.clone()
                 });
-
-                labels_width.max(
-                    self.placeholder
-                        .as_ref()
-                        .map(|_| state.placeholder.min_width())
-                        .unwrap_or(0.0),
-                )
             }
-            _ => 0.0,
+
+            let labels_width = state.options.iter().fold(0.0, |width, paragraph| {
+                f32::max(width, paragraph.min_width())
+            });
+
+            labels_width.max(
+                self.placeholder
+                    .as_ref()
+                    .map(|_| state.placeholder.min_width())
+                    .unwrap_or(0.0),
+            )
+        } else {
+            0.0
         };
 
         let size = {
@@ -653,6 +678,10 @@ where
                     shaping,
                     wrapping: text::Wrapping::None,
                     ellipsis: text::Ellipsis::None,
+                    letter_spacing: crate::core::Em::default(),
+                    font_features: Vec::new(),
+                    font_variations: Vec::new(),
+                    weight: None,
                     hint_factor: None,
                 },
                 Point::new(
@@ -685,6 +714,10 @@ where
                     shaping: self.shaping,
                     wrapping: text::Wrapping::None,
                     ellipsis: self.ellipsis,
+                    letter_spacing: self.letter_spacing,
+                    font_features: self.font_features.clone(),
+                    font_variations: Vec::new(),
+                    weight: None,
                     hint_factor: renderer.hint_factor(),
                 },
                 Point::new(bounds.x + self.padding.left, bounds.center_y()),
@@ -752,7 +785,9 @@ where
             .padding(self.padding)
             .font(font)
             .ellipsis(self.ellipsis)
-            .shaping(self.shaping);
+            .shaping(self.shaping)
+            .letter_spacing(self.letter_spacing)
+            .font_features(self.font_features.clone());
 
             if let Some(text_size) = self.text_size {
                 menu = menu.text_size(text_size);

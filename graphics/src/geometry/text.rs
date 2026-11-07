@@ -1,7 +1,8 @@
 use crate::core;
 use crate::core::alignment;
+use crate::core::font;
 use crate::core::text::{Alignment, Ellipsis, LineHeight, Paragraph, Shaping, Wrapping};
-use crate::core::{Color, Font, Pixels, Point, Size, Vector};
+use crate::core::{Color, Em, Font, Pixels, Point, Size, Vector};
 use crate::geometry::Path;
 use crate::text;
 
@@ -44,6 +45,12 @@ pub struct Text {
     pub wrapping: Wrapping,
     /// The ellipsis strategy of the text.
     pub ellipsis: Ellipsis,
+    /// The letter spacing of the text.
+    pub letter_spacing: Em,
+    /// The font features of the text.
+    pub font_features: Vec<font::Feature>,
+    /// The font variation axis settings of the text.
+    pub font_variations: Vec<font::Variation>,
 }
 
 impl Text {
@@ -61,6 +68,10 @@ impl Text {
             shaping: self.shaping,
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
+            letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
+            font_variations: Vec::new(),
+            weight: None,
             hint_factor: None,
         });
 
@@ -170,6 +181,9 @@ impl Default for Text {
             shaping: Shaping::default(),
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
+            letter_spacing: Em::ZERO,
+            font_features: vec![],
+            font_variations: vec![],
         }
     }
 }

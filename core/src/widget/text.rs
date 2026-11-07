@@ -21,6 +21,7 @@
 //! }
 //! ```
 use crate::alignment;
+use crate::font;
 use crate::layout;
 use crate::mouse;
 use crate::renderer;
@@ -30,7 +31,9 @@ use crate::widget;
 use crate::widget::operation;
 use crate::widget::tree::{self, Tree};
 use crate::window;
-use crate::{Color, Event, Font, Layout, Length, Pixels, Point, Rectangle, Size, Theme, Widget};
+use crate::{
+    Color, Em, Event, Font, Layout, Length, Pixels, Point, Rectangle, Size, Theme, Widget,
+};
 
 pub use text::{Alignment, Ellipsis, LineHeight, Position, Shaping, Wrapping};
 
@@ -105,6 +108,17 @@ where
         self
     }
 
+    /// Sets the font [`Weight`] of the [`Text`] without changing the font family.
+    ///
+    /// This overrides the weight of whatever font is resolved (default or explicit),
+    /// allowing you to set weight without clobbering `font::set_defaults`.
+    ///
+    /// [`Weight`]: crate::font::Weight
+    pub fn weight(mut self, weight: font::Weight) -> Self {
+        self.format.weight = Some(weight);
+        self
+    }
+
     /// Sets the width of the [`Text`] boundaries.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.format.width = width.into();
@@ -158,6 +172,36 @@ where
     /// By default, it is `false`.
     pub fn selectable(mut self, selectable: bool) -> Self {
         self.selectable = selectable;
+        self
+    }
+
+    /// Sets the letter spacing of the [`Text`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<Em>) -> Self {
+        self.format.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](font::Feature) to the [`Text`].
+    pub fn font_feature(mut self, feature: impl Into<font::Feature>) -> Self {
+        self.format.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`Text`].
+    pub fn font_features(mut self, features: Vec<font::Feature>) -> Self {
+        self.format.font_features = features;
+        self
+    }
+
+    /// Adds a single font [`Variation`](font::Variation) to the [`Text`].
+    pub fn font_variation(mut self, variation: font::Variation) -> Self {
+        self.format.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Text`].
+    pub fn font_variations(mut self, variations: Vec<font::Variation>) -> Self {
+        self.format.font_variations = variations;
         self
     }
 
@@ -229,7 +273,7 @@ where
             renderer,
             limits,
             &self.fragment,
-            self.format,
+            self.format.clone(),
         );
     }
 
@@ -451,7 +495,7 @@ impl<P: Paragraph> operation::Text for Operand<'_, P> {
 ///
 /// Check out the methods of the [`Text`] widget
 /// to learn more about each field.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub struct Format {
     pub width: Length,
@@ -464,6 +508,12 @@ pub struct Format {
     pub shaping: Shaping,
     pub wrapping: Wrapping,
     pub ellipsis: Ellipsis,
+    pub letter_spacing: Em,
+    pub font_features: Vec<font::Feature>,
+    pub font_variations: Vec<font::Variation>,
+    /// Optional weight override — applied to the resolved font without
+    /// changing the font family, so it works with `font::set_defaults`.
+    pub weight: Option<font::Weight>,
 }
 
 impl Default for Format {
@@ -479,6 +529,10 @@ impl Default for Format {
             shaping: Shaping::default(),
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
+            weight: None,
         }
     }
 }
@@ -542,6 +596,10 @@ where
             shaping: format.shaping,
             wrapping: format.wrapping,
             ellipsis: format.ellipsis,
+            letter_spacing: format.letter_spacing,
+            font_features: format.font_features,
+            font_variations: format.font_variations,
+            weight: format.weight,
             hint_factor: renderer.hint_factor(),
         });
 

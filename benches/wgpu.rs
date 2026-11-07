@@ -4,7 +4,7 @@ use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use iced::alignment;
 use iced::mouse;
 use iced::widget::{canvas, scrollable, stack, text};
-use iced::{Color, Font, Length, Pixels, Point, Rectangle, Size, Theme, Widget};
+use iced::{Color, Em, Font, Length, Pixels, Point, Rectangle, Size, Theme, Widget};
 use iced_wgpu::Renderer;
 use iced_wgpu::wgpu;
 
@@ -193,6 +193,9 @@ fn scene<Message>(n: usize) -> impl Widget<Message, Theme, Renderer> {
                         wrapping: text::Wrapping::default(),
                         ellipsis: text::Ellipsis::default(),
                         max_width: f32::INFINITY,
+                        letter_spacing: Em::ZERO,
+                        font_features: Vec::new(),
+                        font_variations: Vec::new(),
                     });
                 }
             })]

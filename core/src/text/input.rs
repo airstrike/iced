@@ -37,6 +37,8 @@ pub struct Layout<'a> {
     pub alignment: Alignment,
     pub multiline: Option<Wrapping>,
     pub is_secure: bool,
+    pub letter_spacing: crate::Em,
+    pub font_features: &'a [crate::font::Feature],
 }
 
 impl<R: text::Renderer> Input<R> {
@@ -104,6 +106,8 @@ impl<R: text::Renderer> Input<R> {
             font,
             size,
             line_height,
+            layout.letter_spacing,
+            layout.font_features.to_vec(),
             layout.multiline.unwrap_or(text::Wrapping::None),
             layout.alignment,
             hint_factor,
@@ -123,6 +127,10 @@ impl<R: text::Renderer> Input<R> {
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
             ellipsis: text::Ellipsis::None,
+            letter_spacing: layout.letter_spacing,
+            font_features: layout.font_features.to_vec(),
+            font_variations: Vec::new(),
+            weight: None,
             hint_factor,
         });
 

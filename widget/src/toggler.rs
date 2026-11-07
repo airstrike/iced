@@ -89,6 +89,8 @@ where
     alignment: text::Alignment,
     text_shaping: text::Shaping,
     wrapping: text::Wrapping,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     spacing: f32,
     font: Option<Font>,
     class: Theme::Class<'a>,
@@ -122,6 +124,8 @@ where
             alignment: text::Alignment::Default,
             text_shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             spacing: Self::DEFAULT_SIZE / 2.0,
             font: None,
             class: Theme::default(),
@@ -192,6 +196,24 @@ where
     /// Sets the [`text::Wrapping`] strategy of the [`Toggler`].
     pub fn wrapping(mut self, wrapping: text::Wrapping) -> Self {
         self.wrapping = wrapping;
+        self
+    }
+
+    /// Sets the letter spacing of the [`Toggler`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
+        self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Toggler`].
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`Toggler`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -290,6 +312,10 @@ where
                     shaping: self.text_shaping,
                     wrapping: self.wrapping,
                     ellipsis: text::Ellipsis::None,
+                    letter_spacing: self.letter_spacing,
+                    font_features: self.font_features.clone(),
+                    font_variations: Vec::new(),
+                    weight: None,
                 },
             )
         } else {

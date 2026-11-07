@@ -15,7 +15,9 @@ use crate::core::shell;
 use crate::core::text;
 use crate::core::theme;
 use crate::core::time::{Duration, Instant};
-use crate::core::{Color, InputMethod, Padding, Point, Rectangle, Renderer, Size, Text, Vector};
+use crate::core::{
+    Color, Em, InputMethod, Padding, Point, Rectangle, Renderer, Size, Text, Vector,
+};
 use crate::graphics::Compositor;
 use crate::program::{self, Program};
 
@@ -469,6 +471,10 @@ where
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
+                letter_spacing: Em::ZERO,
+                font_features: Vec::new(),
+                font_variations: Vec::new(),
+                weight: None,
                 hint_factor: renderer.hint_factor(),
             });
 

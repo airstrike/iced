@@ -3,6 +3,7 @@ use crate::core::text::Alignment;
 use crate::core::{Rectangle, Size, Transformation, Vector};
 use crate::graphics::cache;
 use crate::graphics::color;
+use crate::graphics::rich;
 use crate::graphics::text::cache::{self as text_cache, Cache as BufferCache};
 use crate::graphics::text::{Editor, Paragraph, font_system, to_color};
 use crate::nudge;
@@ -443,6 +444,7 @@ fn prepare(
     layer_transformation: Transformation,
 ) -> Result<(), cryoglyph::PrepareError> {
     let mut font_system = font_system().write().expect("Write font system");
+    let version = font_system.version();
     let font_system = font_system.raw();
 
     enum Allocation {
@@ -466,6 +468,9 @@ fn prepare(
                 shaping,
                 wrapping,
                 ellipsis,
+                letter_spacing,
+                font_features,
+                font_variations,
                 align_x,
                 ..
             } => {
@@ -484,7 +489,11 @@ fn prepare(
                         shaping: *shaping,
                         wrapping: *wrapping,
                         ellipsis: *ellipsis,
+                        letter_spacing: *letter_spacing,
+                        font_features,
+                        font_variations,
                     },
+                    version,
                 );
 
                 Some(Allocation::Cache(key))
