@@ -64,6 +64,8 @@ pub trait Editor: Sized + Default {
         new_font: Font,
         new_size: Pixels,
         new_line_height: LineHeight,
+        new_letter_spacing: crate::Em,
+        new_font_features: Vec<crate::font::Feature>,
         new_wrapping: Wrapping,
         new_alignment: Alignment,
         new_hint_factor: Option<f32>,

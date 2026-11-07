@@ -3,7 +3,7 @@ use crate::core::border;
 use crate::core::layout;
 use crate::core::mouse;
 use crate::core::renderer;
-use crate::core::text::{Paragraph, Span, Target};
+use crate::core::text::{Decoration, Paragraph, Span, Target};
 use crate::core::widget;
 use crate::core::widget::operation;
 use crate::core::widget::text::{
@@ -32,6 +32,9 @@ where
     align_y: alignment::Vertical,
     wrapping: Wrapping,
     ellipsis: Ellipsis,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
+    font_variations: Vec<crate::core::font::Variation>,
     class: Theme::Class<'a>,
     on_link_click: Option<Box<dyn Fn(Link) -> Message + 'a>>,
     selectable: bool,
@@ -57,6 +60,9 @@ where
             align_y: alignment::Vertical::Top,
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
             class: Theme::default(),
             on_link_click: None,
             selectable: false,
@@ -130,6 +136,36 @@ where
     /// Sets the [`Ellipsis`] strategy of the [`Rich`] text.
     pub fn ellipsis(mut self, ellipsis: Ellipsis) -> Self {
         self.ellipsis = ellipsis;
+        self
+    }
+
+    /// Sets the letter spacing of the [`Rich`] text.
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
+        self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Rich`] text.
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`Rich`] text.
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
+    /// Adds a single font [`Variation`](crate::core::font::Variation) to the [`Rich`] text.
+    pub fn font_variation(mut self, variation: crate::core::font::Variation) -> Self {
+        self.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Rich`] text.
+    pub fn font_variations(mut self, variations: Vec<crate::core::font::Variation>) -> Self {
+        self.font_variations = variations;
         self
     }
 
@@ -257,6 +293,9 @@ where
             self.align_y,
             self.wrapping,
             self.ellipsis,
+            self.letter_spacing,
+            self.font_features.clone(),
+            self.font_variations.clone(),
         );
     }
 
@@ -342,48 +381,28 @@ where
             let is_hovered_link = self.on_link_click.is_some() && Some(index) == self.hovered_link;
 
             if span.underline || span.strikethrough || is_hovered_link {
-                let regions = state.paragraph.span_bounds(index);
-                let size = span.size.or(self.size).unwrap_or(renderer.text_size());
-
-                let line_height = span
-                    .line_height
-                    .or(self.line_height)
-                    .unwrap_or_else(|| renderer.line_height())
-                    .to_absolute(size);
-
                 let color = span.color.or(style.color).unwrap_or(defaults.text_color);
 
-                let baseline =
-                    translation + Vector::new(0.0, size.0 + (line_height.0 - size.0) / 2.0);
-
-                if span.underline || is_hovered_link {
-                    for bounds in &regions {
+                // Decoration bounds come from the font's own underline and
+                // strikeout metrics, in paragraph coordinates.
+                let mut draw = |decoration| {
+                    for bounds in state.paragraph.decoration_bounds(index, decoration) {
                         renderer.fill_quad(
                             renderer::Quad {
-                                bounds: Rectangle::new(
-                                    bounds.position() + baseline,
-                                    Size::new(bounds.width, 1.0),
-                                ),
+                                bounds: bounds + translation,
                                 ..Default::default()
                             },
                             color,
                         );
                     }
+                };
+
+                if span.underline || is_hovered_link {
+                    draw(Decoration::Underline);
                 }
 
                 if span.strikethrough {
-                    for bounds in &regions {
-                        renderer.fill_quad(
-                            renderer::Quad {
-                                bounds: Rectangle::new(
-                                    bounds.position() + baseline - Vector::new(0.0, size.0 / 2.0),
-                                    Size::new(bounds.width, 1.0),
-                                ),
-                                ..Default::default()
-                            },
-                            color,
-                        );
-                    }
+                    draw(Decoration::Strikethrough);
                 }
             }
         }
@@ -571,6 +590,9 @@ fn layout<Link, Renderer>(
     align_y: alignment::Vertical,
     wrapping: Wrapping,
     ellipsis: Ellipsis,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
+    font_variations: Vec<crate::core::font::Variation>,
 ) -> Size
 where
     Link: Clone,
@@ -594,6 +616,10 @@ where
             shaping: Shaping::Advanced,
             wrapping,
             ellipsis,
+            letter_spacing,
+            font_features: font_features.clone(),
+            font_variations: font_variations.clone(),
+            weight: None,
             hint_factor: renderer.hint_factor(),
         };
 
@@ -612,6 +638,10 @@ where
                 shaping: Shaping::Advanced,
                 wrapping,
                 ellipsis,
+                letter_spacing,
+                font_features: font_features.clone(),
+                font_variations: font_variations.clone(),
+                weight: None,
                 hint_factor: renderer.hint_factor(),
             }) {
                 core::text::Difference::None => {}

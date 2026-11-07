@@ -133,11 +133,11 @@ where
         // Shrink the widget to fit the resized image, if requested
         let final_size = Size {
             width: match self.width {
-                Length::Shrink => f32::min(raw_size.width, full_size.width),
+                Length::Shrink | Length::Fit => f32::min(raw_size.width, full_size.width),
                 _ => raw_size.width,
             },
             height: match self.height {
-                Length::Shrink => f32::min(raw_size.height, full_size.height),
+                Length::Shrink | Length::Fit => f32::min(raw_size.height, full_size.height),
                 _ => raw_size.height,
             },
         };

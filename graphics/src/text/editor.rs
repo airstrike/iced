@@ -1,8 +1,9 @@
 //! Draw and edit text.
+use crate::core::font;
 use crate::core::text::editor::{self, Action, Cursor, Direction, Edit, Motion, Selection};
 use crate::core::text::highlighter;
 use crate::core::text::{Alignment, LineHeight, Parser, Position, Wrapping};
-use crate::core::{Font, Pixels, Point, Size};
+use crate::core::{Em, Font, Pixels, Point, Size};
 use crate::text;
 
 use cosmic_text::Edit as _;
@@ -26,6 +27,8 @@ struct Internal {
     hint: bool,
     hint_factor: f32,
     version: text::Version,
+    letter_spacing: Em,
+    font_features: Vec<font::Feature>,
 }
 
 impl Editor {
@@ -601,6 +604,8 @@ impl editor::Editor for Editor {
         new_font: Font,
         new_size: Pixels,
         new_line_height: LineHeight,
+        new_letter_spacing: Em,
+        new_font_features: Vec<font::Feature>,
         new_wrapping: Wrapping,
         new_alignment: Alignment,
         new_hint_factor: Option<f32>,
@@ -622,16 +627,22 @@ impl editor::Editor for Editor {
                 internal.topmost_line_changed = Some(0);
             }
 
-            if new_font != internal.font {
-                log::trace!("Updating font of `Editor`...");
-
+            if new_font != internal.font
+                || new_letter_spacing != internal.letter_spacing
+                || new_font_features != internal.font_features
+            {
                 for line in buffer.lines.iter_mut() {
                     let _ = line.set_attrs_list(cosmic_text::AttrsList::new(&text::to_attributes(
                         new_font,
+                        new_letter_spacing,
+                        &new_font_features,
+                        &[],
                     )));
                 }
 
                 internal.font = new_font;
+                internal.letter_spacing = new_letter_spacing;
+                internal.font_features = new_font_features;
                 internal.topmost_line_changed = Some(0);
             }
 
@@ -719,7 +730,12 @@ impl editor::Editor for Editor {
 
             buffer.set_text(
                 new_text,
-                &text::to_attributes(internal.font),
+                &text::to_attributes(
+                    internal.font,
+                    internal.letter_spacing,
+                    &internal.font_features,
+                    &[],
+                ),
                 cosmic_text::Shaping::Advanced,
                 text::to_align(internal.alignment),
             );
@@ -788,7 +804,8 @@ impl editor::Editor for Editor {
 
         let mut font_system = text::font_system().write().expect("Write font system");
 
-        let attributes = text::to_attributes(font);
+        let attributes =
+            text::to_attributes(font, internal.letter_spacing, &internal.font_features, &[]);
 
         for line in &mut buffer_mut_from_editor(&mut internal.editor).lines
             [current_line..=last_visible_line]
@@ -876,6 +893,8 @@ impl Default for Internal {
             hint: false,
             hint_factor: 1.0,
             version: text::Version::default(),
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
         }
     }
 }
@@ -976,7 +995,7 @@ fn shape_until_cursor(
     let cursor = editor.cursor();
     let buffer = buffer_mut_from_editor(editor);
 
-    buffer.shape_until_cursor(font_system, cursor, false);
+    buffer.shape_until_cursor(font_system, cursor, false, true);
 
     if let Some((x, _)) = editor.cursor_position() {
         let buffer = buffer_mut_from_editor(editor);

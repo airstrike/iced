@@ -1,10 +1,11 @@
 //! Draw paragraphs.
 use crate::core;
 use crate::core::alignment;
+use crate::core::font;
 use crate::core::text::{
-    Alignment, Ellipsis, Hit, LineHeight, Shaping, Span, Target, Text, Wrapping,
+    Alignment, Decoration, Ellipsis, Hit, LineHeight, Shaping, Span, Target, Text, Wrapping,
 };
-use crate::core::{Font, Pixels, Point, Rectangle, Size};
+use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
 use crate::text;
 
 use std::fmt;
@@ -26,6 +27,9 @@ struct Internal {
     bounds: Size,
     min_bounds: Size,
     version: text::Version,
+    letter_spacing: Em,
+    font_features: Vec<font::Feature>,
+    font_variations: Vec<font::Variation>,
     hint: bool,
     hint_factor: f32,
     selection: Option<Selection>,
@@ -104,10 +108,24 @@ impl core::text::Paragraph for Paragraph {
             text.bounds.height * hint_factor,
         ));
 
+        let font = match text.weight {
+            Some(weight) => text.font.weight(weight),
+            None => text.font,
+        };
+
         buffer.set_text(
             text.content,
-            &text::to_attributes(text.font),
-            text::to_shaping(text.shaping, text.content),
+            &text::to_attributes(
+                font,
+                text.letter_spacing,
+                &text.font_features,
+                &text.font_variations,
+            ),
+            text::to_shaping(
+                text.shaping,
+                text.content,
+                !text.font_features.is_empty() || !text.font_variations.is_empty(),
+            ),
             None,
         );
         buffer.shape_until_scroll(font_system.raw(), false);
@@ -128,6 +146,9 @@ impl core::text::Paragraph for Paragraph {
             min_bounds,
             version: font_system.version(),
             selection: None,
+            letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
+            font_variations: text.font_variations,
         }))
     }
 
@@ -162,7 +183,24 @@ impl core::text::Paragraph for Paragraph {
 
         buffer.set_rich_text(
             text.content.iter().enumerate().map(|(i, span)| {
-                let attrs = text::to_attributes(span.font.unwrap_or(text.font));
+                let span_features = if span.font_features.is_empty() {
+                    &text.font_features
+                } else {
+                    &span.font_features
+                };
+
+                let span_variations = if span.font_variations.is_empty() {
+                    &text.font_variations
+                } else {
+                    &span.font_variations
+                };
+
+                let attrs = text::to_attributes(
+                    span.font.unwrap_or(text.font),
+                    span.letter_spacing.unwrap_or(text.letter_spacing),
+                    span_features,
+                    span_variations,
+                );
 
                 let attrs = match (span.size, span.line_height) {
                     (None, None) => attrs,
@@ -191,9 +229,20 @@ impl core::text::Paragraph for Paragraph {
                     end: span.padding.right,
                 });
 
-                (span.text.as_ref(), attrs.metadata(i))
+                let mut attrs = attrs.metadata(i);
+                if span.underline || span.link.is_some() {
+                    attrs.text_decoration.underline = cosmic_text::UnderlineStyle::Single;
+                }
+                attrs.text_decoration.strikethrough = span.strikethrough;
+
+                (span.text.as_ref(), attrs)
             }),
-            &text::to_attributes(text.font),
+            &text::to_attributes(
+                text.font,
+                text.letter_spacing,
+                &text.font_features,
+                &text.font_variations,
+            ),
             cosmic_text::Shaping::Advanced,
             None,
         );
@@ -216,6 +265,9 @@ impl core::text::Paragraph for Paragraph {
             min_bounds,
             version: font_system.version(),
             selection: None,
+            letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
+            font_variations: text.font_variations,
         }))
     }
 
@@ -260,6 +312,9 @@ impl core::text::Paragraph for Paragraph {
             || paragraph.shaping != text.shaping
             || paragraph.wrapping != text.wrapping
             || paragraph.ellipsis != text.ellipsis
+            || paragraph.letter_spacing != text.letter_spacing
+            || paragraph.font_features != text.font_features
+            || paragraph.font_variations != text.font_variations
             || paragraph.align_x != text.align_x
             || paragraph.align_y != text.align_y
             || paragraph.hint.then_some(paragraph.hint_factor)
@@ -309,6 +364,18 @@ impl core::text::Paragraph for Paragraph {
 
     fn shaping(&self) -> Shaping {
         self.0.shaping
+    }
+
+    fn letter_spacing(&self) -> Em {
+        self.0.letter_spacing
+    }
+
+    fn font_features(&self) -> &[font::Feature] {
+        &self.0.font_features
+    }
+
+    fn font_variations(&self) -> &[font::Variation] {
+        &self.0.font_variations
     }
 
     fn bounds(&self) -> Size {
@@ -573,6 +640,67 @@ impl core::text::Paragraph for Paragraph {
         editor.set_cursor(selection.end);
         editor.copy_selection()
     }
+
+    fn decoration_bounds(&self, index: usize, decoration: Decoration) -> Vec<Rectangle> {
+        let internal = self.internal();
+        let scale = 1.0 / self.0.hint_factor;
+        let mut bounds = Vec::new();
+
+        for run in internal.buffer.layout_runs() {
+            // Each span's glyphs carry their `Span` index as metadata (set in
+            // `with_spans`), mapping a decoration span to its `Span`.
+            for span in run.decorations.iter().filter(|span| {
+                run.glyphs
+                    .get(span.glyph_range.start)
+                    .is_some_and(|glyph| glyph.metadata == index)
+            }) {
+                let x_range = span.x_range(&run);
+                if x_range.is_empty() {
+                    continue;
+                }
+
+                let decorations = span.data.text_decoration;
+                let font_size = span.font_size;
+                let mut line = |y: f32, thickness: f32| {
+                    bounds.push(
+                        Rectangle::new(
+                            Point::new(x_range.start, y),
+                            Size::new(x_range.end - x_range.start, thickness.max(1.0)),
+                        ) * scale,
+                    );
+                };
+
+                match decoration {
+                    Decoration::Underline
+                        if decorations.underline != cosmic_text::UnderlineStyle::None =>
+                    {
+                        let metrics = span.data.underline_metrics;
+                        let y = run.line_y - metrics.offset * font_size;
+                        let thickness = metrics.thickness * font_size;
+                        line(y, thickness);
+
+                        if decorations.underline == cosmic_text::UnderlineStyle::Double {
+                            line(y + 2.0 * thickness.max(1.0), thickness);
+                        }
+                    }
+                    Decoration::Strikethrough if decorations.strikethrough => {
+                        let metrics = span.data.strikethrough_metrics;
+                        line(
+                            run.line_y - metrics.offset * font_size,
+                            metrics.thickness * font_size,
+                        );
+                    }
+                    Decoration::Overline if decorations.overline => {
+                        let y = (run.line_y - span.data.ascent * font_size).max(run.line_top);
+                        line(y, span.data.underline_metrics.thickness * font_size);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        bounds
+    }
 }
 
 impl Default for Paragraph {
@@ -624,6 +752,9 @@ impl Default for Internal {
             bounds: Size::ZERO,
             min_bounds: Size::ZERO,
             version: text::Version::default(),
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
             hint: false,
             hint_factor: 1.0,
             selection: None,
@@ -676,6 +807,10 @@ mod tests {
             shaping: Shaping::default(),
             wrapping: Wrapping::default(),
             ellipsis: Ellipsis::default(),
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
+            weight: None,
             hint_factor: None,
         };
 

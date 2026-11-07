@@ -4,7 +4,7 @@ use crate::renderer::{self, Renderer};
 use crate::svg;
 use crate::text::highlighter;
 use crate::text::{self, Text};
-use crate::{Background, Color, Font, Pixels, Point, Rectangle, Size, Transformation};
+use crate::{Background, Color, Em, Font, Pixels, Point, Rectangle, Size, Transformation};
 
 impl Renderer for () {
     fn start_layer(&mut self, _bounds: Rectangle) {}
@@ -127,6 +127,18 @@ impl text::Paragraph for () {
         text::Shaping::default()
     }
 
+    fn letter_spacing(&self) -> Em {
+        Em::ZERO
+    }
+
+    fn font_features(&self) -> &[crate::font::Feature] {
+        &[]
+    }
+
+    fn font_variations(&self) -> &[crate::font::Variation] {
+        &[]
+    }
+
     fn bounds(&self) -> Size {
         Size::ZERO
     }
@@ -212,6 +224,8 @@ impl text::Editor for () {
         _new_font: Font,
         _new_size: Pixels,
         _new_line_height: text::LineHeight,
+        _new_letter_spacing: Em,
+        _new_font_features: Vec<crate::font::Feature>,
         _new_wrapping: text::Wrapping,
         _new_alignment: text::Alignment,
         _new_hint_factor: Option<f32>,

@@ -3,6 +3,7 @@ use crate::core::renderer::Quad;
 use crate::core::{self, Background, Color, Point, Rectangle, Svg, Transformation};
 use crate::graphics::damage;
 use crate::graphics::layer;
+use crate::graphics::rich;
 use crate::graphics::text::{Editor, Paragraph, Text};
 use crate::graphics::{self, Image};
 
@@ -88,6 +89,9 @@ impl Layer {
             shaping: text.shaping,
             wrapping: text.wrapping,
             ellipsis: text.ellipsis,
+            letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
+            font_variations: text.font_variations,
             clip_bounds: clip_bounds * transformation,
         };
 
