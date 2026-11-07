@@ -67,6 +67,19 @@ struct Column_ {
     width: Length,
     align_x: alignment::Horizontal,
     align_y: alignment::Vertical,
+    fill_width: bool,
+    fill_height: bool,
+}
+
+impl Column_ {
+    /// Whether a cell of the given size spans the full band (content plus
+    /// padding) of this column, horizontally and vertically.
+    fn band(&self, cell: Size<Length>) -> (bool, bool) {
+        (
+            self.fill_width && cell.width.is_fill(),
+            self.fill_height && cell.height.is_fill(),
+        )
+    }
 }
 
 impl<'a, Message, Theme, Renderer> Table<'a, Message, Theme, Renderer>
@@ -102,6 +115,8 @@ where
                         width: column.width,
                         align_x: column.align_x,
                         align_y: column.align_y,
+                        fill_width: false,
+                        fill_height: false,
                     },
                     column.view,
                 )
@@ -269,23 +284,34 @@ where
             }
 
             let width_factor = width.fill_factor();
-            let height_factor = size.height.fill_factor();
 
-            if width_factor != 0 || height_factor != 0 || size.width.is_fill() {
+            // Detect fill columns from cell size hints
+            if size.width.is_fill() {
+                self.columns[column].fill_width = true;
+            }
+            if size.height.is_fill() {
+                self.columns[column].fill_height = true;
+            }
+
+            // Defer width-fluid cells to the second pass
+            if width_factor != 0 || size.width.is_fill() {
                 column_factors[column] = column_factors[column].max(width_factor);
 
-                row_factor = row_factor.max(height_factor);
+                row_factor = row_factor.max(size.height.fill_factor());
 
                 continue;
             }
 
+            // Lay out with a content-fitting height, so fill-height cells
+            // contribute their intrinsic height to the row metrics
             let limits = layout::Limits::with_flags(
                 Size::ZERO,
                 Size::new(available.width - x, available.height - y),
                 limits.compression,
                 limits.infinite,
             )
-            .width(width);
+            .width(width)
+            .height(Length::Fit);
 
             cell.layout(state, renderer, &limits);
             let size = limits.resolve(width, Length::Fit, state.size);
@@ -385,17 +411,62 @@ where
             );
 
             metrics.columns[column] = metrics.columns[column].max(size.width);
-            metrics.rows[row] = metrics.rows[row].max(size.height);
+            if !(self.columns[column].fill_height && height_factor != 0) {
+                metrics.rows[row] = metrics.rows[row].max(size.height);
+            }
 
             x += size.width + spacing_x;
         }
 
         // THIRD PASS
+        // Re-lay out fill cells with finalized dimensions. Fill cells get the
+        // full band (content + padding on both sides), so backgrounds and
+        // canvas widgets extend from separator to separator.
+        if self
+            .columns
+            .iter()
+            .any(|column| column.fill_width || column.fill_height)
+        {
+            for (i, (cell, state)) in self.cells.iter_mut().zip(&mut tree.children).enumerate() {
+                let column = i % columns;
+                let row = i / columns;
+                let (fill_width, fill_height) = self.columns[column].band(cell.size());
+
+                if !fill_width && !fill_height {
+                    continue;
+                }
+
+                let band = Size::new(
+                    metrics.columns[column]
+                        + if fill_width {
+                            self.padding_x * 2.0
+                        } else {
+                            0.0
+                        },
+                    metrics.rows[row]
+                        + if fill_height {
+                            self.padding_y * 2.0
+                        } else {
+                            0.0
+                        },
+                );
+
+                let mut limits = layout::Limits::new(Size::ZERO, band);
+
+                if !fill_width {
+                    limits = limits.width(self.columns[column].width);
+                }
+
+                cell.layout(state, renderer, &limits);
+            }
+        }
+
+        // FOURTH PASS
         // Position each cell
         let mut x = self.padding_x;
         let mut y = self.padding_y;
 
-        for (i, cell) in tree.children.iter_mut().enumerate() {
+        for (i, (cell, state)) in self.cells.iter().zip(&mut tree.children).enumerate() {
             let row = i / columns;
             let column = i % columns;
 
@@ -411,15 +482,32 @@ where
                 align_x, align_y, ..
             } = &self.columns[column];
 
-            let position = core::Vector::new(x, y);
+            let (fill_width, fill_height) = self.columns[column].band(cell.size());
 
-            let alignment = cell.size.align(
-                Size::new(metrics.columns[column], metrics.rows[row]),
+            let (cell_x, cell_width) = if fill_width {
+                (
+                    x - self.padding_x,
+                    metrics.columns[column] + self.padding_x * 2.0,
+                )
+            } else {
+                (x, metrics.columns[column])
+            };
+
+            let (cell_y, cell_height) = if fill_height {
+                (y - self.padding_y, metrics.rows[row] + self.padding_y * 2.0)
+            } else {
+                (y, metrics.rows[row])
+            };
+
+            let position = core::Vector::new(cell_x, cell_y);
+
+            let alignment = state.size.align(
+                Size::new(cell_width, cell_height),
                 Alignment::from(*align_x),
                 Alignment::from(*align_y),
             );
 
-            cell.translation = position + alignment;
+            state.translation = position + alignment;
 
             x += metrics.columns[column] + spacing_x;
         }
