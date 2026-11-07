@@ -450,6 +450,7 @@ fn prepare(
     enum Allocation {
         Paragraph(Paragraph),
         Editor(Editor),
+        RichEditor(rich::Editor),
         Cache(text_cache::KeyHash),
         Raw(Arc<cryoglyph::Buffer>),
     }
@@ -459,6 +460,7 @@ fn prepare(
         .map(|section| match section {
             Text::Paragraph { paragraph, .. } => paragraph.upgrade().map(Allocation::Paragraph),
             Text::Editor { editor, .. } => editor.upgrade().map(Allocation::Editor),
+            Text::RichEditor { editor, .. } => editor.upgrade().map(Allocation::RichEditor),
             Text::Cached {
                 content,
                 bounds,
@@ -540,6 +542,28 @@ fn prepare(
                     use crate::core::text::Editor as _;
 
                     let Some(Allocation::Editor(editor)) = allocation else {
+                        return None;
+                    };
+
+                    (
+                        editor.buffer(),
+                        editor.hint_factor(),
+                        *position,
+                        *color,
+                        *clip_bounds,
+                        *transformation,
+                    )
+                }
+                Text::RichEditor {
+                    position,
+                    color,
+                    clip_bounds,
+                    transformation,
+                    ..
+                } => {
+                    use crate::core::text::rich_editor::Editor as _;
+
+                    let Some(Allocation::RichEditor(editor)) = allocation else {
                         return None;
                     };
 
