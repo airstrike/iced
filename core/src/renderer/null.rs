@@ -256,6 +256,123 @@ impl text::Editor for () {
     }
 }
 
+impl text::rich_editor::Editor for () {
+    fn with_text(_text: &str) -> Self {}
+
+    fn is_empty(&self) -> bool {
+        true
+    }
+
+    fn cursor(&self) -> text::rich_editor::Cursor {
+        text::rich_editor::Cursor {
+            position: text::rich_editor::Position { line: 0, column: 0 },
+            selection: None,
+        }
+    }
+
+    fn selection(&self) -> text::rich_editor::Selection {
+        text::rich_editor::Selection::Caret(Rectangle::new(Point::ORIGIN, Size::ZERO))
+    }
+
+    fn copy(&self) -> Option<String> {
+        None
+    }
+
+    fn line(&self, _index: usize) -> Option<text::rich_editor::Line<'_>> {
+        None
+    }
+
+    fn line_count(&self) -> usize {
+        0
+    }
+
+    fn perform(&mut self, _action: text::rich_editor::Action) {}
+
+    fn move_to(&mut self, _cursor: text::rich_editor::Cursor) {}
+
+    fn bounds(&self) -> Size {
+        Size::ZERO
+    }
+
+    fn hint_factor(&self) -> Option<f32> {
+        None
+    }
+
+    fn min_bounds(&self) -> Size {
+        Size::ZERO
+    }
+
+    fn update(
+        &mut self,
+        _new_bounds: Size,
+        _new_padding: crate::Padding,
+        _new_font: Font,
+        _new_size: Pixels,
+        _new_line_height: text::LineHeight,
+        _new_letter_spacing: Em,
+        _new_font_features: Vec<crate::font::Feature>,
+        _new_font_variations: Vec<crate::font::Variation>,
+        _new_wrapping: text::Wrapping,
+        _new_hint_factor: Option<f32>,
+        _new_default_style: text::rich_editor::span::Style,
+    ) {
+    }
+
+    fn set_span_style(
+        &mut self,
+        _line: usize,
+        _range: std::ops::Range<usize>,
+        _style: &text::rich_editor::span::Style,
+    ) {
+    }
+
+    fn set_paragraph_style(&mut self, _line: usize, _style: &text::rich_editor::paragraph::Style) {}
+
+    fn align_x(&mut self, _alignment: text::Alignment) {}
+
+    fn set_margin_left(&mut self, _line: usize, _margin: f32) {}
+
+    fn set_paragraph_spacing(&mut self, _line: usize, _top: f32, _bottom: f32) {}
+
+    fn line_geometry(&self, _line: usize) -> Option<text::rich_editor::paragraph::Geometry> {
+        None
+    }
+
+    fn highlight_rect(
+        &self,
+        _line: usize,
+        _from: usize,
+        _to: usize,
+        _f: &mut dyn FnMut(Rectangle),
+    ) {
+    }
+
+    fn span_style_at(&self, _line: usize, _column: usize) -> text::rich_editor::span::Style {
+        text::rich_editor::span::Style::default()
+    }
+
+    fn paragraph_style_at(&self, _line: usize) -> text::rich_editor::paragraph::Style {
+        text::rich_editor::paragraph::Style::default()
+    }
+
+    fn scroll_by(&mut self, _pixels: f32) {}
+
+    fn set_scrollable(&mut self, _scrollable: bool) {}
+}
+
+impl text::rich_editor::Renderer for () {
+    type RichEditor = ();
+
+    fn fill_rich_editor(
+        &mut self,
+        _editor: &Self::RichEditor,
+        _position: Point,
+        _color: Color,
+        _clip_bounds: Rectangle,
+    ) {
+    }
+}
+
 impl image::Renderer for () {
     type Handle = image::Handle;
 
