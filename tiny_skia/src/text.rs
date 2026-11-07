@@ -91,6 +91,33 @@ impl Pipeline {
         );
     }
 
+    pub fn draw_rich_editor(
+        &mut self,
+        editor: &rich::editor::Weak,
+        position: Point,
+        color: Color,
+        pixels: &mut tiny_skia::PixmapMut<'_>,
+        clip_mask: Option<&tiny_skia::Mask>,
+        transformation: Transformation,
+    ) {
+        let Some(editor) = editor.upgrade() else {
+            return;
+        };
+
+        let mut font_system = font_system().write().expect("Write font system");
+
+        draw(
+            font_system.raw(),
+            &mut self.glyph_cache,
+            editor.buffer(),
+            position,
+            color,
+            pixels,
+            clip_mask,
+            transformation,
+        );
+    }
+
     pub fn draw_cached(
         &mut self,
         content: &str,

@@ -98,6 +98,25 @@ impl Layer {
         self.pending_text.push(editor);
     }
 
+    pub fn draw_rich_editor(
+        &mut self,
+        editor: &rich::Editor,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+        transformation: Transformation,
+    ) {
+        let editor = Text::RichEditor {
+            editor: editor.downgrade(),
+            position,
+            color,
+            clip_bounds,
+            transformation,
+        };
+
+        self.pending_text.push(editor);
+    }
+
     pub fn draw_text(
         &mut self,
         text: crate::core::Text,

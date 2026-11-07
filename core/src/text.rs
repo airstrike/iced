@@ -5,6 +5,7 @@ pub mod highlighter;
 pub mod input;
 pub mod paragraph;
 pub mod parser;
+pub mod rich_editor;
 
 pub use editor::Editor;
 pub use highlighter::Highlighter;
