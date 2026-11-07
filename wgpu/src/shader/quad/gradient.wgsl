@@ -6,8 +6,8 @@ struct GradientVertexInput {
     @location(3) @interpolate(flat) colors_4: vec4<u32>,
     @location(4) @interpolate(flat) offsets: vec4<u32>,
     @location(5) direction: vec4<f32>,
-    @location(6) pos: vec2<f32>,
-    @location(7) scale: vec2<f32>,
+    @location(6) @interpolate(flat) gradient_type: u32,
+    @location(7) position_and_scale: vec4<f32>,
     @location(8) border_color: vec4<f32>,
     @location(9) border_radius: vec4<f32>,
     @location(10) border_width: f32,
@@ -25,21 +25,25 @@ struct GradientVertexOutput {
     @location(4) @interpolate(flat) colors_4: vec4<u32>,
     @location(5) @interpolate(flat) offsets: vec4<u32>,
     @location(6) direction: vec4<f32>,
-    @location(7) pos: vec2<f32>,
-    @location(8) scale: vec2<f32>,
-    @location(9) border_color: vec4<f32>,
-    @location(10) border_radius: vec4<f32>,
-    @location(11) border_width: f32,
-    @location(12) shadow_color: vec4<f32>,
-    @location(13) shadow_offset: vec2<f32>,
-    @location(14) shadow_blur_radius: f32,
+    @location(7) @interpolate(flat) gradient_type: u32,
+    @location(8) pos: vec2<f32>,
+    @location(9) scale: vec2<f32>,
+    @location(10) border_color: vec4<f32>,
+    @location(11) border_radius: vec4<f32>,
+    @location(12) border_width: f32,
+    @location(13) shadow_color: vec4<f32>,
+    @location(14) shadow_offset: vec2<f32>,
+    @location(15) shadow_blur_radius: f32,
 }
 
 @vertex
 fn gradient_vs_main(input: GradientVertexInput) -> GradientVertexOutput {
     var out: GradientVertexOutput;
 
-    var bounds = shadow_expanded_bounds(input.pos, input.scale, input.shadow_offset, input.shadow_blur_radius) * globals.scale;
+    let in_pos = input.position_and_scale.xy;
+    let in_scale = input.position_and_scale.zw;
+
+    var bounds = shadow_expanded_bounds(in_pos, in_scale, input.shadow_offset, input.shadow_blur_radius) * globals.scale;
     var pos: vec2<f32> = bounds.xy;
     var scale: vec2<f32> = bounds.zw;
 
@@ -51,7 +55,7 @@ fn gradient_vs_main(input: GradientVertexInput) -> GradientVertexOutput {
         scale_snap = round(pos + scale + nudge) - pos - pos_snap - scale;
     }
 
-    var min_border_radius = min(input.scale.x, input.scale.y) * 0.5;
+    var min_border_radius = min(in_scale.x, in_scale.y) * 0.5;
     var border_radius: vec4<f32> = vec4<f32>(
         min(input.border_radius.x, min_border_radius),
         min(input.border_radius.y, min_border_radius),
@@ -73,8 +77,9 @@ fn gradient_vs_main(input: GradientVertexInput) -> GradientVertexOutput {
     out.colors_4 = input.colors_4;
     out.offsets = input.offsets;
     out.direction = input.direction * globals.scale;
-    out.pos = input.pos * globals.scale + pos_snap;
-    out.scale = input.scale * globals.scale + scale_snap;
+    out.gradient_type = input.gradient_type;
+    out.pos = in_pos * globals.scale + pos_snap;
+    out.scale = in_scale * globals.scale + scale_snap;
     out.border_color = premultiply(input.border_color);
     out.border_radius = border_radius * globals.scale;
     out.border_width = input.border_width * globals.scale;
@@ -93,16 +98,32 @@ fn random(coords: vec2<f32>) -> f32 {
 fn gradient(
     raw_position: vec2<f32>,
     direction: vec4<f32>,
+    gradient_type: u32,
     colors: array<vec4<f32>, 8>,
     offsets: array<f32, 8>,
     last_index: i32
 ) -> vec4<f32> {
-    let start = direction.xy;
-    let end = direction.zw;
+    var coord_offset: f32;
 
-    let v1 = end - start;
-    let v2 = raw_position - start;
-    let coord_offset = dot(v1, v2) / dot(v1, v1);
+    if (gradient_type == 1u) {
+        let center = direction.xy;
+        let radius = direction.z;
+        coord_offset = distance(raw_position, center) / radius;
+    } else if (gradient_type == 2u) {
+        let center = direction.xy;
+        let start = direction.z;
+        var angle = atan2(raw_position.y - center.y, raw_position.x - center.x) + 1.570796327 - start;
+        angle = angle - floor(angle / 6.283185307) * 6.283185307;
+        coord_offset = angle / 6.283185307;
+    } else {
+        let start = direction.xy;
+        let end = direction.zw;
+
+        let v1 = end - start;
+        let v2 = raw_position - start;
+        let unit = normalize(v1);
+        coord_offset = dot(unit, v2) / length(v1);
+    }
 
     //need to store these as a var to use dynamic indexing in a loop
     //this is already added to wgsl spec but not in wgpu yet
@@ -170,7 +191,7 @@ fn gradient_fs_main(input: GradientVertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    var mixed_color: vec4<f32> = gradient(input.position.xy, input.direction, colors, offsets, last_index);
+    var mixed_color: vec4<f32> = gradient(input.position.xy, input.direction, input.gradient_type, colors, offsets, last_index);
 
     var dist: f32 = rounded_box_sdf(
         -(input.position.xy - input.pos - input.scale / 2.0) * 2.0,
