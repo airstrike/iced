@@ -38,7 +38,6 @@ mod text;
 mod triangle;
 
 #[cfg(any(feature = "image", feature = "svg"))]
-#[path = "image/mod.rs"]
 mod image;
 
 #[cfg(not(any(feature = "image", feature = "svg")))]

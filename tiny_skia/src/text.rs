@@ -1,6 +1,7 @@
 use crate::core::alignment;
 use crate::core::text::{Alignment, Ellipsis, Shaping, Wrapping};
-use crate::core::{Color, Font, Pixels, Point, Rectangle, Transformation};
+use crate::core::{Color, Em, Font, Pixels, Point, Rectangle, Transformation};
+use crate::graphics::rich;
 use crate::graphics::text::cache::{self, Cache};
 use crate::graphics::text::editor;
 use crate::graphics::text::font_system;
@@ -103,6 +104,9 @@ impl Pipeline {
         shaping: Shaping,
         wrapping: Wrapping,
         ellipsis: Ellipsis,
+        letter_spacing: Em,
+        font_features: &[crate::core::font::Feature],
+        font_variations: &[crate::core::font::Variation],
         pixels: &mut tiny_skia::PixmapMut<'_>,
         clip_mask: Option<&tiny_skia::Mask>,
         transformation: Transformation,
@@ -110,6 +114,7 @@ impl Pipeline {
         let line_height = f32::from(line_height);
 
         let mut font_system = font_system().write().expect("Write font system");
+        let version = font_system.version();
         let font_system = font_system.raw();
 
         let key = cache::Key {
@@ -122,9 +127,12 @@ impl Pipeline {
             wrapping,
             ellipsis,
             align_x,
+            letter_spacing,
+            font_features,
+            font_variations,
         };
 
-        let (_, entry) = self.cache.get_mut().allocate(font_system, key);
+        let (_, entry) = self.cache.get_mut().allocate(font_system, key, version);
 
         let width = entry.min_bounds.width;
         let height = entry.min_bounds.height;

@@ -36,6 +36,8 @@ where
     line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Font>,
     class: &'a <Theme as Catalog>::Class<'b>,
 }
@@ -72,6 +74,8 @@ where
             line_height: None,
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::default(),
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             font: None,
             class,
         }
@@ -116,6 +120,24 @@ where
     /// Sets the [`text::Ellipsis`] strategy of the [`Menu`].
     pub fn ellipsis(mut self, ellipsis: text::Ellipsis) -> Self {
         self.ellipsis = ellipsis;
+        self
+    }
+
+    /// Sets the letter spacing of the [`Menu`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
+        self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`Menu`].
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`Menu`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
         self
     }
 
@@ -216,6 +238,8 @@ where
             line_height,
             shaping,
             ellipsis,
+            letter_spacing,
+            font_features,
             class,
             height,
             width,
@@ -232,6 +256,8 @@ where
             line_height,
             shaping,
             ellipsis,
+            letter_spacing,
+            font_features,
             padding,
             class,
         })
@@ -372,6 +398,8 @@ where
     line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     font: Option<Font>,
     class: &'a <Theme as Catalog>::Class<'b>,
 }
@@ -626,6 +654,10 @@ where
                     shaping: self.shaping,
                     wrapping: text::Wrapping::None,
                     ellipsis: self.ellipsis,
+                    letter_spacing: self.letter_spacing,
+                    font_features: self.font_features.clone(),
+                    font_variations: Vec::new(),
+                    weight: None,
                     hint_factor: renderer.hint_factor(),
                 },
                 Point::new(bounds.x + self.padding.left, bounds.center_y()),

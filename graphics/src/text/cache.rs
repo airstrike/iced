@@ -1,5 +1,6 @@
 //! Cache text.
-use crate::core::{Font, Size};
+use crate::core::font;
+use crate::core::{Em, Font, Size};
 use crate::text;
 
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
@@ -12,6 +13,7 @@ pub struct Cache {
     entries: FxHashMap<KeyHash, Entry>,
     aliases: FxHashMap<KeyHash, KeyHash>,
     recently_used: FxHashSet<KeyHash>,
+    version: text::Version,
 }
 
 impl Cache {
@@ -30,7 +32,15 @@ impl Cache {
         &mut self,
         font_system: &mut cosmic_text::FontSystem,
         key: Key<'_>,
+        version: text::Version,
     ) -> (KeyHash, &mut Entry) {
+        if version != self.version {
+            self.entries.clear();
+            self.aliases.clear();
+            self.recently_used.clear();
+            self.version = version;
+        }
+
         let hash = key.hash(FxHasher::default());
 
         if let Some(hash) = self.aliases.get(&hash) {
@@ -53,8 +63,17 @@ impl Cache {
 
             buffer.set_text(
                 key.content,
-                &text::to_attributes(key.font),
-                text::to_shaping(key.shaping, key.content),
+                &text::to_attributes(
+                    key.font,
+                    key.letter_spacing,
+                    key.font_features,
+                    key.font_variations,
+                ),
+                text::to_shaping(
+                    key.shaping,
+                    key.content,
+                    !key.font_features.is_empty() || !key.font_variations.is_empty(),
+                ),
                 None,
             );
             buffer.shape_until_scroll(font_system, false);
@@ -117,6 +136,12 @@ pub struct Key<'a> {
     pub shaping: text::Shaping,
     /// The alignment of the text.
     pub align_x: text::Alignment,
+    /// The letter spacing of the text.
+    pub letter_spacing: Em,
+    /// The font features of the text.
+    pub font_features: &'a [font::Feature],
+    /// The font variations of the text.
+    pub font_variations: &'a [font::Variation],
     /// The wrapping strategy of the text.
     pub wrapping: text::Wrapping,
     /// The ellipsis strategy of the text.
@@ -124,7 +149,7 @@ pub struct Key<'a> {
 }
 
 impl Key<'_> {
-    fn hash<H: Hasher>(self, mut hasher: H) -> KeyHash {
+    fn hash<H: Hasher>(&self, mut hasher: H) -> KeyHash {
         self.content.hash(&mut hasher);
         self.size.to_bits().hash(&mut hasher);
         self.line_height.to_bits().hash(&mut hasher);
@@ -133,6 +158,9 @@ impl Key<'_> {
         self.bounds.height.to_bits().hash(&mut hasher);
         self.shaping.hash(&mut hasher);
         self.align_x.hash(&mut hasher);
+        self.letter_spacing.0.to_bits().hash(&mut hasher);
+        self.font_features.hash(&mut hasher);
+        self.font_variations.hash(&mut hasher);
 
         hasher.finish()
     }

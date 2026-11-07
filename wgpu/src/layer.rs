@@ -4,6 +4,7 @@ use crate::graphics::Mesh;
 use crate::graphics::color;
 use crate::graphics::layer;
 use crate::graphics::mesh;
+use crate::graphics::rich;
 use crate::graphics::text::{Editor, Paragraph};
 use crate::image::{self, Image};
 use crate::primitive::{self, Primitive};
@@ -117,6 +118,9 @@ impl Layer {
             shaping: text.shaping,
             wrapping: text.wrapping,
             ellipsis: text.ellipsis,
+            letter_spacing: text.letter_spacing,
+            font_features: text.font_features,
+            font_variations: text.font_variations,
             clip_bounds: clip_bounds * transformation,
         };
 
@@ -362,6 +366,7 @@ impl graphics::Layer for Layer {
     }
 }
 
+#[allow(clippy::default_constructed_unit_structs)]
 impl Default for Layer {
     fn default() -> Self {
         Self {
@@ -370,6 +375,7 @@ impl Default for Layer {
             triangles: triangle::Batch::default(),
             primitives: primitive::Batch::default(),
             text: text::Batch::default(),
+            #[allow(clippy::default_constructed_unit_structs)]
             images: image::Batch::default(),
             pending_meshes: Vec::new(),
             pending_text: Vec::new(),

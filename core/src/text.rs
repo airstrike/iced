@@ -13,13 +13,27 @@ pub use paragraph::Paragraph;
 pub use parser::Parser;
 
 use crate::alignment;
-use crate::{Background, Border, Color, Font, Padding, Pixels, Point, Rectangle, Size};
+use crate::font;
+use crate::{Background, Border, Color, Em, Font, Padding, Pixels, Point, Rectangle, Size};
 
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 
+/// Which decoration line a rectangle represents, when a [`Paragraph`] hands
+/// back decoration bounds. Lets a widget draw underlines and strikethroughs
+/// in different colors, or opt out of a kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Decoration {
+    /// A line below the glyphs; two rectangles for a double underline.
+    Underline,
+    /// A line through the middle of the glyphs.
+    Strikethrough,
+    /// A line above the glyphs.
+    Overline,
+}
+
 /// A paragraph.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Text<Content = String> {
     /// The content of the paragraph.
     pub content: Content,
@@ -51,6 +65,19 @@ pub struct Text<Content = String> {
     /// The [`Ellipsis`] strategy of the [`Text`].
     pub ellipsis: Ellipsis,
 
+    /// The letter spacing of the [`Text`].
+    pub letter_spacing: Em,
+
+    /// The OpenType font features of the [`Text`].
+    pub font_features: Vec<font::Feature>,
+
+    /// The font variation axis settings of the [`Text`].
+    pub font_variations: Vec<font::Variation>,
+
+    /// Optional weight override. When set, overrides the weight of `font`
+    /// without changing the font family.
+    pub weight: Option<font::Weight>,
+
     /// The scale factor that may be used to internally scale the layout
     /// calculation of the [`Paragraph`] and leverage metrics hinting.
     ///
@@ -77,6 +104,10 @@ impl<Content> Text<Content> {
             shaping: self.shaping,
             wrapping: self.wrapping,
             ellipsis: self.ellipsis,
+            letter_spacing: self.letter_spacing,
+            font_features: self.font_features.clone(),
+            font_variations: self.font_variations.clone(),
+            weight: self.weight,
             hint_factor: self.hint_factor,
         }
     }
@@ -425,6 +456,12 @@ pub struct Span<'a, Link = ()> {
     pub underline: bool,
     /// Whether the [`Span`] should be struck through or not.
     pub strikethrough: bool,
+    /// The letter spacing of the [`Span`].
+    pub letter_spacing: Option<Em>,
+    /// The OpenType font features of the [`Span`].
+    pub font_features: Vec<font::Feature>,
+    /// The font variation axis settings of the [`Span`].
+    pub font_variations: Vec<font::Variation>,
 }
 
 /// A text highlight.
@@ -569,6 +606,36 @@ impl<'a, Link> Span<'a, Link> {
         self
     }
 
+    /// Sets the letter spacing of the [`Span`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<Em>) -> Self {
+        self.letter_spacing = Some(letter_spacing.into());
+        self
+    }
+
+    /// Adds a single font [`Feature`](font::Feature) to the [`Span`].
+    pub fn font_feature(mut self, feature: impl Into<font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`Span`].
+    pub fn font_features(mut self, features: Vec<font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
+    /// Adds a single font [`Variation`](font::Variation) to the [`Span`].
+    pub fn font_variation(mut self, variation: font::Variation) -> Self {
+        self.font_variations.push(variation);
+        self
+    }
+
+    /// Sets the font variations of the [`Span`].
+    pub fn font_variations(mut self, variations: Vec<font::Variation>) -> Self {
+        self.font_variations = variations;
+        self
+    }
+
     /// Turns the [`Span`] into a static one.
     pub fn to_static(self) -> Span<'static, Link> {
         Span {
@@ -582,6 +649,9 @@ impl<'a, Link> Span<'a, Link> {
             padding: self.padding,
             underline: self.underline,
             strikethrough: self.strikethrough,
+            letter_spacing: self.letter_spacing,
+            font_features: self.font_features,
+            font_variations: self.font_variations,
         }
     }
 }
@@ -599,6 +669,9 @@ impl<Link> Default for Span<'_, Link> {
             padding: Padding::default(),
             underline: false,
             strikethrough: false,
+            letter_spacing: None,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
         }
     }
 }
@@ -616,6 +689,9 @@ impl<Link> PartialEq for Span<'_, Link> {
             && self.line_height == other.line_height
             && self.font == other.font
             && self.color == other.color
+            && self.letter_spacing == other.letter_spacing
+            && self.font_features == other.font_features
+            && self.font_variations == other.font_variations
     }
 }
 

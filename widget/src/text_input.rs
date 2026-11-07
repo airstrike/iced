@@ -91,6 +91,8 @@ where
     padding: Padding,
     size: Option<Pixels>,
     line_height: Option<text::LineHeight>,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
     alignment: text::Alignment,
     multiline: Option<text::Wrapping>,
     on_input: Option<Box<dyn Fn(String) -> Message + 'a>>,
@@ -125,6 +127,8 @@ where
             padding: DEFAULT_PADDING,
             size: None,
             line_height: None,
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
             alignment: text::Alignment::Default,
             multiline: None,
             on_input: None,
@@ -225,6 +229,24 @@ where
         self
     }
 
+    /// Sets the letter spacing of the [`TextInput`].
+    pub fn letter_spacing(mut self, letter_spacing: impl Into<crate::core::Em>) -> Self {
+        self.letter_spacing = letter_spacing.into();
+        self
+    }
+
+    /// Adds a single font [`Feature`](crate::core::font::Feature) to the [`TextInput`].
+    pub fn font_feature(mut self, feature: impl Into<crate::core::font::Feature>) -> Self {
+        self.font_features.push(feature.into());
+        self
+    }
+
+    /// Sets the font features of the [`TextInput`].
+    pub fn font_features(mut self, features: Vec<crate::core::font::Feature>) -> Self {
+        self.font_features = features;
+        self
+    }
+
     /// Sets the horizontal alignment of the [`TextInput`].
     pub fn align_x(mut self, alignment: impl Into<text::Alignment>) -> Self {
         self.alignment = alignment.into();
@@ -307,6 +329,8 @@ where
                 alignment: self.alignment,
                 multiline: self.multiline,
                 is_secure: self.is_secure,
+                letter_spacing: self.letter_spacing,
+                font_features: &self.font_features,
             },
         );
     }
