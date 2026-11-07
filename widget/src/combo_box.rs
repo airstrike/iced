@@ -149,6 +149,9 @@ where
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
     input_class: <Theme as text_input::Catalog>::Class<'a>,
+    letter_spacing: crate::core::Em,
+    font_features: Vec<crate::core::font::Feature>,
+    align_x: text::Alignment,
     menu_class: <Theme as menu::Catalog>::Class<'a>,
     menu_height: Length,
     last_status: Option<text_input::Status>,
@@ -186,6 +189,9 @@ where
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::End,
             input_class: <Theme as Catalog>::default_input(),
+            letter_spacing: crate::core::Em::default(),
+            font_features: Vec::new(),
+            align_x: text::Alignment::Default,
             menu_class: <Theme as Catalog>::default_menu(),
             menu_height: Length::Fit,
             last_status: None,
@@ -249,6 +255,12 @@ where
     /// Sets the width of the [`ComboBox`].
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
+        self
+    }
+
+    /// Sets the horizontal alignment of the [`ComboBox`] input text.
+    pub fn align_x(mut self, alignment: impl Into<text::Alignment>) -> Self {
+        self.align_x = alignment.into();
         self
     }
 
@@ -447,9 +459,11 @@ where
                 font: self.font,
                 size: self.size,
                 line_height: self.line_height,
-                alignment: text::Alignment::Default,
+                alignment: self.align_x,
                 multiline: None,
                 is_secure: false,
+                letter_spacing: self.letter_spacing,
+                font_features: &self.font_features,
             },
         );
     }
