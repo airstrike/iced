@@ -235,6 +235,42 @@ where
     // We can defer the layout of any elements that have a fixed size in the main axis,
     // allowing them to use the cross calculations of the next pass.
     if cross_dynamic && some_fill_cross {
+        // No fixed-cross sibling set `cross`, so every Fill-cross child would
+        // collapse to 0. Seed it with the widest child's own content: lay each
+        // Fill-cross child out with the cross compressed (so it resolves to its
+        // intrinsic width) and keep the max. The pass below then grows them all
+        // to that width, so all-`Fill` siblings settle on the widest, not on
+        // the offered max. (Content is finite even if `max_cross` is not.)
+        //
+        // TODO: benchmark. This lays these children out a second time, and
+        // nested all-Fill-no-anchor flexes compound it (~2^depth). It only
+        // fires when no content sibling set `cross`, so it's rareish.
+        if cross == 0.0 {
+            let content_compression = {
+                let (compress_x, compress_y) = axis.pack(main_compress, true);
+                Size::new(compress_x, compress_y)
+            };
+
+            for (i, child) in items.iter_mut().enumerate() {
+                let Category::CrossFluid = cache.metas[i].category else {
+                    continue;
+                };
+
+                let (max_width, max_height) = axis.pack(available, max_cross);
+
+                let child_limits = Limits::with_flags(
+                    Size::ZERO,
+                    Size::new(max_width, max_height),
+                    content_compression,
+                    cross_infinite,
+                );
+
+                child.layout(&mut children[i], renderer, &child_limits);
+
+                cross = cross.max(axis.cross(children[i].size));
+            }
+        }
+
         for (i, child) in items.iter_mut().enumerate() {
             let meta = cache.metas[i];
 
