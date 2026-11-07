@@ -1,0 +1,11 @@
+[package]
+name = "typography"
+version = "0.1.0"
+authors = ["Andy Terra <tech@andyterra.com>"]
+edition = "2024"
+publish = false
+
+[dependencies]
+iced.workspace = true
+iced.features = ["tokio"]
+reqwest = { version = "0.12", features = ["rustls-tls"] }
