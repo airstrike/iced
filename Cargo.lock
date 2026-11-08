@@ -998,16 +998,17 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.19.0"
+source = "git+https://github.com/airstrike/cosmic-text?branch=span-padding#133d91c09e5ac48858811c0677f3d6144e517bea"
 dependencies = [
  "bitflags 2.11.1",
- "fontdb",
+ "fontdb 0.24.0",
  "harfrust",
  "linebender_resource_handle",
  "log",
  "rangemap",
  "rustc-hash 2.1.2",
  "self_cell",
- "skrifa",
+ "skrifa 0.44.0",
  "smol_str 0.3.6",
  "swash",
  "sys-locale",
@@ -1599,6 +1600,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "font-types"
+version = "0.12.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835ae9d781464a79026cde387f9cbc650c9a4909d7cf7e658b127e3c35d2f35d"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "font_features"
 version = "0.1.0"
 dependencies = [
@@ -1629,6 +1639,19 @@ dependencies = [
  "slotmap",
  "tinyvec",
  "ttf-parser",
+]
+
+[[package]]
+name = "fontdb"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2660c5e9157bf76d2db1294e4a9feba604ef610819a3b591088d0d8392a3290f"
+dependencies = [
+ "fontconfig-parser",
+ "log",
+ "memmap2",
+ "slotmap",
+ "tinyvec",
 ]
 
 [[package]]
@@ -2021,14 +2044,13 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-version = "0.5.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9da2e5ae821f6e96664977bf974d6d6a2d6682f9ccee23e62ec1d134246845f9"
+checksum = "c03d949a14aa089bbb282f7dd76a498a7f684428e4257202efc119ec010376f9"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
- "core_maths",
- "read-fonts",
+ "read-fonts 0.41.0",
  "smallvec",
 ]
 
@@ -4771,8 +4793,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b634fabf032fab15307ffd272149b622260f55974d9fad689292a5d33df02e5"
 dependencies = [
  "bytemuck",
- "core_maths",
- "font-types",
+ "font-types 0.11.3",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "046a7d674daf459825b32f5062056d6882db0d2f5a479fbd76ccfc870ac18709"
+dependencies = [
+ "bytemuck",
+ "font-types 0.12.7",
+ "once_cell",
 ]
 
 [[package]]
@@ -5376,7 +5408,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fbdfe3d2475fbd7ddd1f3e5cf8288a30eb3e5f95832829570cd88115a7434ac"
 dependencies = [
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.37.0",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.41.0",
 ]
 
 [[package]]
@@ -5623,7 +5665,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "842f3cd369c2ba38966204f983eaa5e54a8e84a7d7159ed36ade2b6c335aae64"
 dependencies = [
- "skrifa",
+ "skrifa 0.40.0",
  "yazi",
  "zeno",
 ]
@@ -6415,7 +6457,7 @@ dependencies = [
  "base64",
  "data-url",
  "flate2",
- "fontdb",
+ "fontdb 0.23.0",
  "imagesize",
  "kurbo 0.13.0",
  "log",

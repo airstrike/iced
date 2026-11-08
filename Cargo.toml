@@ -277,4 +277,4 @@ useless_conversion = "deny"
 broken_intra_doc_links = "forbid"
 
 [patch.crates-io]
-cosmic-text = { path = "../cosmic-text" }
+cosmic-text = { git = "https://github.com/airstrike/cosmic-text", branch = "span-padding" }

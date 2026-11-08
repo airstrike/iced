@@ -1052,9 +1052,12 @@ fn style_to_attrs<'a>(
     }
 
     if let Some(p) = style.padding {
-        attrs = attrs.padding(cosmic_text::SpanPadding::new(
-            p.top, p.bottom, p.left, p.right,
-        ));
+        attrs = attrs.padding(cosmic_text::SpanPadding {
+            start: p.left,
+            end: p.right,
+            top: p.top,
+            bottom: p.bottom,
+        });
     }
 
     if let Some(font) = style.font {

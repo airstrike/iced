@@ -224,12 +224,12 @@ impl core::text::Paragraph for Paragraph {
                 let attrs = if span.padding == crate::core::Padding::ZERO {
                     attrs
                 } else {
-                    attrs.padding(cosmic_text::SpanPadding::new(
-                        span.padding.top * hint_factor,
-                        span.padding.bottom * hint_factor,
-                        span.padding.left * hint_factor,
-                        span.padding.right * hint_factor,
-                    ))
+                    attrs.padding(cosmic_text::SpanPadding {
+                        start: span.padding.left * hint_factor,
+                        end: span.padding.right * hint_factor,
+                        top: span.padding.top * hint_factor,
+                        bottom: span.padding.bottom * hint_factor,
+                    })
                 };
 
                 let mut attrs = attrs.metadata(i);
