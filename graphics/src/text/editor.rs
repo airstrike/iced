@@ -196,7 +196,20 @@ impl editor::Editor for Editor {
                     .get(cursor.line)
                     .expect("Cursor line should be present");
 
-                let layout = line.layout_opt().expect("Line layout should be cached");
+                // A line outside the shaped viewport, as when the widget
+                // just shrank, has no layout yet: its caret is off-screen,
+                // at the start of the line. Not cached, so the next call
+                // places it once the line is shaped.
+                let Some(layout) = line.layout_opt() else {
+                    return Selection::Caret(Rectangle::new(
+                        Point::new(
+                            0.0,
+                            (visual_lines_offset as f32 * line_height - buffer.scroll().vertical)
+                                / internal.hint_factor,
+                        ),
+                        Size::new(1.0, line_height / internal.hint_factor),
+                    ));
+                };
 
                 let mut lines = layout.iter().enumerate();
 
