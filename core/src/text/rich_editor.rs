@@ -77,7 +77,7 @@ pub trait Editor: Sized + Default {
 
     /// Returns the number of logical pixels the LAST visible line's
     /// glyph bottom extends below its slot bottom — the bottom-side
-    /// counterpart of [`visual_top_pad`].
+    /// counterpart of [`Self::visual_top_pad`].
     ///
     /// Widgets whose allocation matches `min_bounds().height` already
     /// reserve room for this overflow (it's baked into the measure).
