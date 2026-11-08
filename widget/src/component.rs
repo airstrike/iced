@@ -490,9 +490,11 @@ where
             }
         }
 
+        // The view is rebuilt in `diff`, which only runs when the
+        // interface is rebuilt.
         self.is_outdated.set(true);
 
-        shell.invalidate_layout();
+        shell.invalidate_widgets();
         shell.request_redraw();
     }
 
