@@ -966,13 +966,10 @@ mod tests {
         window: Option<window::Id>,
     ) -> Option<window::Id> {
         let menu = program.menu(state, window);
-        let menu::Entry::Item(item) = &menu.menus()[0].entries()[0] else {
-            panic!("target menu item")
-        };
-        let Some(menu::Action::Message(produce)) = item.action() else {
-            panic!("target message")
-        };
-        let Message(Tick::Program(target)) = produce() else {
+        let (_, dispatch) = menu.into_parts();
+        let Some(menu::Output::Message(Message(Tick::Program(target)))) =
+            dispatch.activate(&[0, 0])
+        else {
             panic!("mapped program message")
         };
         target

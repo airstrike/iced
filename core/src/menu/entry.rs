@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use super::{Item, Menu};
+use super::{Item, Menu, description, dispatch};
 
 /// An entry in a native menu.
 #[derive(Debug)]
@@ -26,15 +24,23 @@ impl<Message> From<Menu<Message>> for Entry<Message> {
 }
 
 impl<Message> Entry<Message> {
-    pub(super) fn map_with<Other>(self, f: Rc<dyn Fn(Message) -> Other>) -> Entry<Other>
-    where
-        Message: 'static,
-        Other: 'static,
-    {
+    pub(super) fn into_parts(self) -> (description::Entry, dispatch::Entry<Message>) {
         match self {
-            Self::Item(item) => Entry::Item(item.map(move |message| f(message))),
-            Self::Submenu(menu) => Entry::Submenu(menu.map_with(f)),
-            Self::Separator => Entry::Separator,
+            Self::Item(item) => {
+                let (description, action) = item.into_parts();
+                (
+                    description::Entry::Item(description),
+                    dispatch::Entry::Item(action),
+                )
+            }
+            Self::Submenu(menu) => {
+                let (description, dispatch) = menu.into_parts();
+                (
+                    description::Entry::Submenu(description),
+                    dispatch::Entry::Menu(dispatch),
+                )
+            }
+            Self::Separator => (description::Entry::Separator, dispatch::Entry::Separator),
         }
     }
 }

@@ -59,23 +59,26 @@ fn macro_converts_mixed_entries_once_and_preserves_lazy_nonclone_messages() {
         (message.0.get(), mapped.get())
     });
     let [
-        menu::Entry::Item(item),
-        menu::Entry::Separator,
-        menu::Entry::Submenu(nested),
+        menu::description::Entry::Item(item),
+        menu::description::Entry::Separator,
+        menu::description::Entry::Submenu(nested),
     ] = menu.entries()
     else {
         panic!("the macro preserves mixed entry order");
     };
     assert!(!item.is_enabled());
     assert!(item.is_checked());
-    let menu::Entry::Item(item) = &nested.entries()[0] else {
+    let menu::description::Entry::Item(item) = &nested.entries()[0] else {
         panic!("the custom conversion produces an item");
     };
-    let Some(menu::Action::Message(produce)) = item.action() else {
-        panic!("the item retains its message factory");
-    };
-    assert_eq!(produce(), (7, 1));
-    assert_eq!(produce(), (7, 2));
+    assert_eq!(item.action(), Some(menu::description::Action::Message));
+    let (_, dispatch) = menu.into_parts();
+    for expected in 1..=2 {
+        let Some(menu::Output::Message(message)) = dispatch.activate(&[2, 0]) else {
+            panic!("the item retains its message factory");
+        };
+        assert_eq!(message, (7, expected));
+    }
 }
 
 #[test]
@@ -89,7 +92,10 @@ fn function_and_macro_share_an_import_and_accept_generated_or_empty_entries() {
     let empty: menu::Menu<Message> = menu!["Empty"];
     assert!(empty.entries().is_empty());
     let separator_only: menu::Menu<Message> = menu!["Group", menu::separator()];
-    assert!(matches!(separator_only.entries(), [menu::Entry::Separator]));
+    assert!(matches!(
+        separator_only.entries(),
+        [menu::description::Entry::Separator]
+    ));
 }
 
 #[test]
@@ -97,13 +103,11 @@ fn application_callbacks_accept_single_menus_arrays_and_vectors() {
     let single = iced::application(|| 0, update, view).menu(|_| menu!["File", Custom]);
     let (mut state, _) = single.boot();
     let bar = Program::menu(&single, &state, None);
-    let menu::Entry::Item(item) = &bar.menus()[0].entries()[0] else {
-        panic!("the single menu is converted into a bar");
-    };
-    let Some(menu::Action::Message(produce)) = item.action() else {
+    let (_, dispatch) = bar.into_parts();
+    let Some(menu::Output::Message(message)) = dispatch.activate(&[0, 0]) else {
         panic!("the converted menu retains its application command");
     };
-    let _ = single.update(&mut state, produce());
+    let _ = single.update(&mut state, message);
     assert_eq!(state, 7);
 
     let array =

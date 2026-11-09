@@ -82,7 +82,7 @@ fn identical_presentation_does_not_cache_an_old_factory() {
     });
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
     let make = |value| {
-        super::Branch::from_menu(
+        lower(
             menu::Menu::new("Same").push(menu::item("Same").on_press_with(move || value)),
             true,
             &scope,
@@ -138,7 +138,7 @@ fn inherited_then_first_enabled_shortcuts_win_and_disabled_ancestors_are_inert()
                 .on_press(())
                 .shortcut(Modifiers::LOGO, 'q'),
         );
-    let mut branch = super::Branch::from_menu(menu, true, &scope, &send);
+    let mut branch = lower(menu, true, &scope, &send);
     branch.claim_shortcuts(&mut HashSet::from([inherited]));
     let crate::menu::branch::Entry::Submenu(disabled) = &branch.entries[0] else {
         panic!("the first entry is a submenu");
@@ -178,7 +178,7 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
         window: Some(window),
         is_current: Box::new(|| true),
     });
-    let branch = super::Branch::from_menu(menu(), true, &scope, &send);
+    let branch = lower(menu(), true, &scope, &send);
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the Edit menu contains an item");
     };
@@ -188,7 +188,7 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
     );
 
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let branch = super::Branch::from_menu(menu(), true, &scope, &send);
+    let branch = lower(menu(), true, &scope, &send);
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the Edit menu contains an item");
     };
@@ -223,7 +223,7 @@ fn lowering_owns_factories_until_the_native_snapshot_is_released() {
         }
     });
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    let branch = lower(menu, true, &scope, &send);
     assert!(output.borrow().is_empty());
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the menu contains the factory item");
@@ -237,6 +237,97 @@ fn lowering_owns_factories_until_the_native_snapshot_is_released() {
     assert!(weak.upgrade().is_none());
 }
 
+fn lower<Message: 'static>(
+    menu: crate::core::menu::Menu<Message>,
+    enabled: bool,
+    scope: &Rc<Scope>,
+    send: &Rc<dyn Fn(crate::runtime::Action<Message>)>,
+) -> super::Branch {
+    let (description, dispatch) = menu.into_parts();
+    let binding = Rc::new(crate::menu::binding::Binding::new(
+        dispatch,
+        Rc::clone(scope),
+        Rc::clone(send),
+    ));
+    super::Branch::from_menu(&description, enabled, &binding, &mut Vec::new())
+}
+
+#[test]
+fn retained_native_targets_keep_one_mapper_and_their_originating_dispatch() {
+    use crate::core::menu;
+    use crate::runtime::Action;
+    use std::cell::RefCell;
+
+    let output = Rc::new(RefCell::new(Vec::new()));
+    let send: Rc<dyn Fn(Action<(u8, u32)>)> = Rc::new({
+        let output = Rc::clone(&output);
+        move |action| {
+            if let Action::Output(value) = action {
+                output.borrow_mut().push(value);
+            }
+        }
+    });
+    let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
+    let capture = Rc::new(());
+    let weak = Rc::downgrade(&capture);
+    let count = Cell::new(0);
+    let source = crate::core::menu![
+        "Root",
+        menu::item("First").on_press(1_u8),
+        menu::Menu::new("Nested").push(menu::item("Second").on_press(2_u8)),
+    ]
+    .map(move |message| {
+        let _keep_alive = &capture;
+        count.set(count.get() + 1);
+        (message, count.get())
+    });
+    let old = lower(source, true, &scope, &send);
+    let crate::menu::branch::Entry::Item(first) = &old.entries[0] else {
+        panic!("the first entry is an item");
+    };
+    let crate::menu::branch::Entry::Submenu(nested) = &old.entries[1] else {
+        panic!("the second entry is a submenu");
+    };
+    let crate::menu::branch::Entry::Item(second) = &nested.entries[0] else {
+        panic!("the submenu contains an item");
+    };
+    let retained_first = Rc::clone(first.callback.as_ref().expect("the item is enabled"));
+    let retained_second = Rc::clone(second.callback.as_ref().expect("the item is enabled"));
+    retained_first.invoke();
+    retained_second.invoke();
+    drop(old);
+    assert!(
+        weak.upgrade().is_some(),
+        "native targets retain the original dispatcher"
+    );
+
+    let replacement = lower(
+        menu::Menu::new("Root").push(menu::item("First").on_press((99, 0))),
+        true,
+        &scope,
+        &send,
+    );
+    let crate::menu::branch::Entry::Item(replacement) = &replacement.entries[0] else {
+        panic!("the replacement contains an item");
+    };
+    replacement
+        .callback
+        .as_ref()
+        .expect("enabled replacement")
+        .invoke();
+    retained_first.invoke();
+    retained_second.retire();
+    retained_second.invoke();
+    assert_eq!(*output.borrow(), [(1, 1), (2, 2), (99, 0), (1, 3)]);
+    drop(retained_first);
+    assert!(weak.upgrade().is_some());
+    drop(retained_second);
+    assert!(
+        weak.upgrade().is_none(),
+        "releasing the last target releases the owned mapper"
+    );
+}
+
 #[test]
 fn mapped_menu_roles_reach_the_native_snapshot() {
     use crate::core::menu;
@@ -247,7 +338,7 @@ fn mapped_menu_roles_reach_the_native_snapshot() {
         .map(u16::from);
     let send: Rc<dyn Fn(Action<u16>)> = Rc::new(|_| {});
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    let branch = lower(menu, true, &scope, &send);
     assert_eq!(branch.role, Some(menu::Role::Help));
     assert_eq!(branch.title, "Support");
 }
@@ -262,7 +353,7 @@ fn mapped_item_icons_reach_the_native_snapshot() {
         .map(u16::from);
     let send: Rc<dyn Fn(Action<u16>)> = Rc::new(|_| {});
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    let branch = lower(menu, true, &scope, &send);
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the menu contains one item");
     };

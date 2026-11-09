@@ -10,6 +10,8 @@ mod macos;
 mod other;
 
 #[cfg(target_os = "macos")]
+mod binding;
+#[cfg(target_os = "macos")]
 mod branch;
 #[cfg(target_os = "macos")]
 mod callback;

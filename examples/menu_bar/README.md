@@ -121,9 +121,17 @@ File → New Counter opens another counter. Closing every window keeps the daemo
 running: File → New Counter remains available. Quit from the normal macOS
 application menu.
 
-Descriptions own their actions and move into the runtime; native handles stay in
-the shell. `on_press`
-accepts a cloneable message; `on_press_with` creates a fresh message on activation
+Menus own their actions and move into the runtime; native handles stay in
+the shell. Mapping a menu owns one adapter around its actions, so a mapper can
+capture state without implementing `Clone`. Factories and mappers only run on
+activation. Low-level runtimes use `into_parts()` to separate message-free
+presentation from its originating `Dispatch`; native targets retain that dispatch
+along with the selected entry path. `entries()` and `menus()` inspect these
+message-free descriptions; they no longer expose message factories. The consuming
+`IntoIterator` implementations are replaced by `into_parts()`, because splitting
+mapped children into separate owners would require sharing or cloning the mapper.
+
+`on_press` accepts a cloneable message; `on_press_with` creates a fresh message on activation
 without requiring `Message: Clone`.
 
 Native menu bars are currently implemented only on macOS. Requesting a nonempty

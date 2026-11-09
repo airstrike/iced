@@ -1,5 +1,4 @@
-use super::Action;
-use super::Icon;
+use super::{Action, Icon, description};
 use crate::edit;
 use crate::keyboard::{Key, Modifiers};
 use crate::menu::shortcut::{self, Shortcut};
@@ -145,6 +144,24 @@ impl<Message> Item<Message> {
     /// Consumes the item and transfers its action to a runtime.
     pub fn into_action(self) -> Option<Action<Message>> {
         self.action
+    }
+
+    pub(super) fn into_parts(self) -> (description::Item, Option<Action<Message>>) {
+        let action = self.action.as_ref().map(|action| match action {
+            Action::Message(_) => description::Action::Message,
+            Action::Edit(command) => description::Action::Edit(*command),
+        });
+        (
+            description::Item {
+                title: self.title,
+                enabled: self.enabled,
+                checked: self.checked,
+                shortcut: self.shortcut,
+                icon: self.icon,
+                action,
+            },
+            self.action,
+        )
     }
 
     /// Transforms emitted messages lazily, preserving semantic edit actions.

@@ -6,6 +6,7 @@ use crate::Proxy;
 use crate::core::{menu, window};
 use crate::runtime::Action;
 
+use super::binding::Binding;
 use super::branch::Branch;
 use super::scope::Scope;
 
@@ -29,10 +30,13 @@ impl Snapshot {
         let scope = Rc::new(Scope::capture(window, focus));
         let proxy = proxy.clone();
         let send: Rc<dyn Fn(Action<Message>)> = Rc::new(move |action| proxy.send_action(action));
+        let (menus, dispatch) = bar.into_parts();
+        let binding = Rc::new(Binding::new(dispatch, scope, send));
         Self {
-            roots: bar
-                .into_iter()
-                .map(|menu| Branch::from_menu(menu, true, &scope, &send))
+            roots: menus
+                .iter()
+                .enumerate()
+                .map(|(index, menu)| Branch::from_menu(menu, true, &binding, &mut vec![index]))
                 .collect(),
         }
     }

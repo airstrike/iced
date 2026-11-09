@@ -32,13 +32,11 @@ fn menus(state: &u32) -> menu::Bar<Message> {
 
 fn activate<P: Program<State = u32, Message = Message>>(program: &P, state: &mut u32) {
     let bar = program.menu(state, None);
-    let menu::Entry::Item(item) = &bar.menus()[0].entries()[0] else {
-        panic!("item")
-    };
-    let Some(menu::Action::Message(produce)) = item.action() else {
+    let (_, dispatch) = bar.into_parts();
+    let Some(menu::Output::Message(message)) = dispatch.activate(&[0, 0]) else {
         panic!("factory")
     };
-    let _ = program.update(state, produce());
+    let _ = program.update(state, message);
 }
 
 #[test]
@@ -125,13 +123,10 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
     let program = iced_devtools::attach(program);
     let (mut state, _) = program.boot();
     let live_bar = program.menu(&state, None);
-    let menu::Entry::Item(live_item) = &live_bar.menus()[0].entries()[0] else {
-        panic!("item")
-    };
-    let Some(menu::Action::Message(live_factory)) = live_item.action() else {
+    let (_, live_dispatch) = live_bar.into_parts();
+    let Some(menu::Output::Message(queued)) = live_dispatch.activate(&[0, 0]) else {
         panic!("factory")
     };
-    let queued = live_factory();
 
     let _ = program.update(
         &mut state,
@@ -141,19 +136,17 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
     assert_eq!(*state.state(), 1);
     let bar = program.menu(&state, None);
     assert!(bar.menus().iter().all(|menu| !menu.is_enabled()));
-    let menu::Entry::Item(item) = &bar.menus()[0].entries()[0] else {
-        panic!("item")
-    };
-    let Some(menu::Action::Message(produce)) = item.action() else {
-        panic!("factory")
-    };
-    assert!(matches!(produce(), iced_devtools::Event::Discard));
-    let menu::Entry::Item(item) = &bar.menus()[1].entries()[0] else {
+    let (menus, dispatch) = bar.into_parts();
+    assert!(matches!(
+        dispatch.activate(&[0, 0]),
+        Some(menu::Output::Message(iced_devtools::Event::Discard))
+    ));
+    let menu::description::Entry::Item(item) = &menus[1].entries()[0] else {
         panic!("edit item")
     };
     assert!(matches!(
         item.action(),
-        Some(menu::Action::Edit(iced::edit::Command::Cut))
+        Some(menu::description::Action::Edit(iced::edit::Command::Cut))
     ));
     let _ = program.update(
         &mut state,
@@ -169,7 +162,7 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
             .menu(&state, None)
             .menus()
             .iter()
-            .all(menu::Menu::is_enabled)
+            .all(menu::description::Menu::is_enabled)
     );
 }
 
@@ -180,11 +173,9 @@ fn tester_forwards_the_program_menu_without_requiring_clone_or_sync_messages() {
     let (state, _) = program.boot();
     let bar = program.menu(&state, None);
     assert_eq!(bar.menus()[0].title(), "42");
-    let menu::Entry::Item(item) = &bar.menus()[0].entries()[0] else {
-        panic!("item")
-    };
-    let Some(menu::Action::Message(produce)) = item.action() else {
-        panic!("factory")
-    };
-    let _ = produce();
+    let (_, dispatch) = bar.into_parts();
+    assert!(matches!(
+        dispatch.activate(&[0, 0]),
+        Some(menu::Output::Message(_))
+    ));
 }

@@ -13,7 +13,7 @@ pub(super) struct Example {
 }
 
 enum Window {
-    Counter(counter::State),
+    Counter(Box<counter::State>),
     About,
 }
 
@@ -47,9 +47,10 @@ impl Example {
             ..window::Settings::default()
         });
 
-        let _ = self
-            .windows
-            .insert(id, Window::Counter(counter::State::new(self.next_counter)));
+        let _ = self.windows.insert(
+            id,
+            Window::Counter(Box::new(counter::State::new(self.next_counter))),
+        );
 
         open.discard()
     }
@@ -162,20 +163,32 @@ impl Example {
 mod tests {
     use super::*;
 
-    fn activate(bar: &menu::Bar<Message>, title: &str) -> Message {
-        bar.menus()
+    fn activate(
+        (menus, dispatch): &(Vec<menu::description::Menu>, menu::Dispatch<Message>),
+        title: &str,
+    ) -> Message {
+        let path = menus
             .iter()
-            .flat_map(menu::Menu::entries)
-            .find_map(|entry| match entry {
-                menu::Entry::Item(item) if item.title() == title && item.is_enabled() => {
-                    match item.action()? {
-                        menu::Action::Message(factory) => Some(factory()),
-                        menu::Action::Edit(_) => None,
-                    }
-                }
-                _ => None,
+            .enumerate()
+            .find_map(|(menu, description)| {
+                description
+                    .entries()
+                    .iter()
+                    .enumerate()
+                    .find_map(|(entry, item)| match item {
+                        menu::description::Entry::Item(item)
+                            if item.title() == title && item.is_enabled() =>
+                        {
+                            Some([menu, entry])
+                        }
+                        _ => None,
+                    })
             })
-            .expect("the example declares this enabled application command")
+            .expect("the example declares this enabled application command");
+        let Some(menu::Output::Message(message)) = dispatch.activate(&path) else {
+            panic!("the command emits an application message")
+        };
+        message
     }
 
     #[test]
@@ -184,14 +197,14 @@ mod tests {
         let second = window::Id::unique();
         let mut example = Example {
             windows: BTreeMap::from([
-                (first, Window::Counter(counter::State::new(1))),
-                (second, Window::Counter(counter::State::new(1))),
+                (first, Window::Counter(Box::new(counter::State::new(1)))),
+                (second, Window::Counter(Box::new(counter::State::new(1)))),
             ]),
             next_counter: 2,
         };
 
-        let first_menu = example.menu(Some(first));
-        let second_menu = example.menu(Some(second));
+        let first_menu = example.menu(Some(first)).into_parts();
+        let second_menu = example.menu(Some(second)).into_parts();
         let message = activate(&first_menu, "Increase by 1");
 
         assert!(matches!(message, Message::Counter(id, _) if id == first));
@@ -214,12 +227,12 @@ mod tests {
     #[test]
     fn zero_windows_keep_new_counter_available() {
         let example = Example::default();
-        let menu = example.menu(None);
+        let menu = example.menu(None).into_parts();
 
         assert!(matches!(
             activate(&menu, "New Counter"),
             Message::NewCounter
         ));
-        assert!(menu.menus().iter().all(|menu| menu.title() != "Edit"));
+        assert!(menu.0.iter().all(|menu| menu.title() != "Edit"));
     }
 }

@@ -94,13 +94,11 @@ fn decorators_preserve_menus_presets_settings_and_lazy_nonclone_messages() {
     assert_eq!(seen_window.get(), Some(window));
     assert_eq!(menus.menus()[0].title(), "1");
     assert_eq!(calls.get(), 0);
-    let menu::Entry::Item(item) = &menus.menus()[0].entries()[0] else {
-        panic!("item")
-    };
-    let Some(menu::Action::Message(produce)) = item.action() else {
+    let (_, dispatch) = menus.into_parts();
+    let Some(menu::Output::Message(message)) = dispatch.activate(&[0, 0]) else {
         panic!("factory")
     };
-    let _ = instance.update(produce());
+    let _ = instance.update(message);
     assert_eq!(calls.get(), 1);
     assert_eq!(instance.menu(None).menus()[0].title(), "2");
     assert_eq!(seen_window.get(), None);

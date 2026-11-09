@@ -1,33 +1,23 @@
-use std::rc::Rc;
-
-use super::{Entry, Role};
+use super::{Dispatch, Entry, Role, description};
 
 /// A named menu containing items, separators, and nested menus.
 #[derive(Debug)]
 pub struct Menu<Message> {
-    title: String,
-    entries: Vec<Entry<Message>>,
-    enabled: bool,
-    role: Option<Role>,
-}
-
-impl<Message> IntoIterator for Menu<Message> {
-    type Item = Entry<Message>;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.entries.into_iter()
-    }
+    description: description::Menu,
+    dispatch: Dispatch<Message>,
 }
 
 impl<Message> Menu<Message> {
     /// Creates an empty, enabled menu with the given title.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
-            title: title.into(),
-            entries: Vec::new(),
-            enabled: true,
-            role: None,
+            description: description::Menu {
+                title: title.into(),
+                entries: Vec::new(),
+                enabled: true,
+                role: None,
+            },
+            dispatch: Dispatch::default(),
         }
     }
 
@@ -41,19 +31,23 @@ impl<Message> Menu<Message> {
 
     /// Appends entries from an iterator, preserving their order.
     pub fn extend(mut self, entries: impl IntoIterator<Item = impl Into<Entry<Message>>>) -> Self {
-        self.entries.extend(entries.into_iter().map(Into::into));
+        for entry in entries {
+            self = self.push(entry);
+        }
         self
     }
 
     /// Appends an entry to the menu.
     pub fn push(mut self, entry: impl Into<Entry<Message>>) -> Self {
-        self.entries.push(entry.into());
+        let (description, dispatch) = entry.into().into_parts();
+        self.description.entries.push(description);
+        self.dispatch.push(dispatch);
         self
     }
 
     /// Sets whether this menu and its descendants can be activated.
     pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
+        self.description.enabled = enabled;
         self
     }
 
@@ -63,56 +57,50 @@ impl<Message> Menu<Message> {
     /// Roles on nested menus and later declarations of the same role are ignored.
     /// Native menus currently support macOS only.
     pub fn role(mut self, role: Role) -> Self {
-        self.role = Some(role);
+        self.description.role = Some(role);
         self
     }
 
     /// Returns the native role assigned to this menu, if any.
     pub fn native_role(&self) -> Option<Role> {
-        self.role
+        self.description.native_role()
     }
 
     /// Returns the menu title.
     pub fn title(&self) -> &str {
-        &self.title
+        self.description.title()
     }
 
-    /// Returns the entries in display order.
-    pub fn entries(&self) -> &[Entry<Message>] {
-        &self.entries
+    /// Returns the message-independent entries in display order.
+    ///
+    /// For runtime lowering, use [`Self::into_parts`] instead of consuming entries
+    /// individually: a mapped menu owns one mapper shared by its action dispatch.
+    pub fn entries(&self) -> &[description::Entry] {
+        self.description.entries()
     }
 
     /// Returns whether this menu permits activation of its descendants.
     pub fn is_enabled(&self) -> bool {
-        self.enabled
+        self.description.is_enabled()
+    }
+
+    /// Separates presentation from its originating action dispatch for a runtime.
+    pub fn into_parts(self) -> (description::Menu, Dispatch<Message>) {
+        (self.description, self.dispatch)
     }
 
     /// Transforms emitted messages lazily, preserving semantic edit actions.
-    pub fn map<Other>(self, f: impl Fn(Message) -> Other + 'static) -> Menu<Other>
-    where
-        Message: 'static,
-        Other: 'static,
-    {
-        self.map_with(Rc::new(f))
-    }
-
-    pub(super) fn map_with<Other>(self, f: Rc<dyn Fn(Message) -> Other>) -> Menu<Other>
+    ///
+    /// One adapter owns the mapper around the original menu. Mapping does not
+    /// visit item factories, and the mapper does not need to implement `Clone`.
+    pub fn map<Other>(self, mapper: impl Fn(Message) -> Other + 'static) -> Menu<Other>
     where
         Message: 'static,
         Other: 'static,
     {
         Menu {
-            title: self.title,
-            enabled: self.enabled,
-            role: self.role,
-            entries: self
-                .entries
-                .into_iter()
-                .map(|entry| {
-                    let f = Rc::clone(&f);
-                    entry.map_with(f)
-                })
-                .collect(),
+            description: self.description,
+            dispatch: self.dispatch.map(mapper),
         }
     }
 }
