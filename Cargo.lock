@@ -2457,6 +2457,9 @@ dependencies = [
  "iced_runtime",
  "log",
  "mundy",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rustc-hash 2.1.3",
  "sysinfo",
  "thiserror 2.0.21",
@@ -3145,6 +3148,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "menu_bar"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "iced_test",
 ]
 
 [[package]]

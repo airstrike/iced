@@ -11,6 +11,7 @@ mod time_machine;
 
 use crate::core::border;
 use crate::core::keyboard;
+use crate::core::menu;
 use crate::core::theme::{self, Theme};
 use crate::core::time::seconds;
 use crate::core::window;
@@ -98,6 +99,35 @@ where
     #[inline]
     fn title(&self, state: &Self::State, window: window::Id) -> String {
         state.title(&self.program, window)
+    }
+
+    #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        let rewinding = state.time_machine.is_rewinding();
+        let menus = self
+            .program
+            .menu(state.state(), window)
+            .map(move |message| {
+                if rewinding {
+                    Event::Discard
+                } else {
+                    Event::Menu(message)
+                }
+            });
+
+        if rewinding {
+            // Semantic editing bypasses message mapping, so disabled ancestors
+            // also protect the historical widget tree from native edit actions.
+            menu::Bar::new(
+                menus
+                    .menus()
+                    .iter()
+                    .cloned()
+                    .map(|menu| menu.enabled(false)),
+            )
+        } else {
+            menus
+        }
     }
 
     #[inline]
@@ -270,7 +300,8 @@ where
                     Task::none()
                 }
             },
-            Event::Program(message) => {
+            Event::Menu(_) if self.time_machine.is_rewinding() => Task::none(),
+            Event::Program(message) | Event::Menu(message) => {
                 self.time_machine.push(&message);
 
                 if self.time_machine.is_rewinding() {
@@ -409,6 +440,7 @@ where
 pub enum Event<T> {
     Message(Message),
     Program(T),
+    Menu(T),
     Command(debug::Command),
     Discard,
 }
@@ -420,7 +452,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Message(message) => message.fmt(f),
-            Self::Program(message) => message.fmt(f),
+            Self::Program(message) | Self::Menu(message) => message.fmt(f),
             Self::Command(command) => command.fmt(f),
             Self::Discard => f.write_str("Discard"),
         }

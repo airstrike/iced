@@ -519,6 +519,11 @@ impl<P: Program + 'static> Emulator<P> {
         }
     }
 
+    /// Returns the virtual window ID used by the emulated program's view and events.
+    pub fn window(&self) -> window::Id {
+        self.window
+    }
+
     /// Returns a reference to the state of the [`Emulator`].
     pub fn state(&self) -> &P::State {
         &self.state

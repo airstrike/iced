@@ -30,6 +30,7 @@ pub mod clipboard;
 pub mod conversion;
 
 mod error;
+mod menu;
 mod proxy;
 mod window;
 
@@ -484,6 +485,9 @@ async fn run_instance<P>(
 
     let mut window_manager = window::Manager::new();
     let mut is_window_opening = !is_daemon;
+    let mut menus = menu::Manager::new(proxy.clone(), window_manager.focus_tracker());
+    let mut menu_window = None;
+    menus.refresh(program.menu(None), None);
 
     let mut compositor = None;
     let mut events = Vec::new();
@@ -1008,6 +1012,12 @@ async fn run_instance<P>(
                             continue;
                         }
 
+                        if let winit::event::WindowEvent::Focused(focused) = &window_event
+                            && let Some((id, _)) = window_manager.get_mut_alias(window_id)
+                        {
+                            window_manager.focus(id, *focused);
+                        }
+
                         let Some((id, window)) = window_manager.get_mut_alias(window_id) else {
                             continue;
                         };
@@ -1063,15 +1073,43 @@ async fn run_instance<P>(
                         }
                     }
                     event::Event::AboutToWait => {
+                        // AppKit can deliver this from a nested run loop. The
+                        // native backend checks the mode before flushing menus.
+                        menus.flush();
+                        let focused = window_manager.focused();
+                        let mut menu_changed = menu_window != focused
+                            || events.iter().any(|(_, event)| {
+                                matches!(
+                                    event,
+                                    core::Event::Window(
+                                        window::Event::Opened { .. } | window::Event::Closed
+                                    )
+                                )
+                            });
+
                         if actions > 0 {
                             proxy.free_slots(actions);
                             actions = 0;
                         }
 
                         if events.is_empty() && messages.is_empty() && window_manager.is_idle() {
+                            if menu_changed {
+                                menu_window = focused;
+                                menus.refresh(
+                                    program.menu(menu_window),
+                                    menu_window.and_then(|id| {
+                                        window_manager.get(id).map(|window| (id, &window.raw))
+                                    }),
+                                );
+                            }
                             continue;
                         }
 
+                        // A native action may have been queued before a focus or
+                        // close transition in this same batch.
+                        events.retain(|(id, event)| {
+                            !matches!(event, core::Event::Edit(_)) || focused == Some(*id)
+                        });
                         let mut uis_stale = false;
 
                         for (id, window) in window_manager.iter_mut() {
@@ -1150,6 +1188,7 @@ async fn run_instance<P>(
                         }
 
                         if !messages.is_empty() || uis_stale {
+                            menu_changed = true;
                             let cached_interfaces: FxHashMap<_, _> =
                                 ManuallyDrop::into_inner(user_interfaces)
                                     .into_iter()
@@ -1188,6 +1227,16 @@ async fn run_instance<P>(
                             for (_id, window) in window_manager.iter_mut() {
                                 window.raw.request_redraw();
                             }
+                        }
+
+                        if menu_changed || menu_window != window_manager.focused() {
+                            menu_window = window_manager.focused();
+                            menus.refresh(
+                                program.menu(menu_window),
+                                menu_window.and_then(|id| {
+                                    window_manager.get(id).map(|window| (id, &window.raw))
+                                }),
+                            );
                         }
 
                         if let Some(redraw_at) = window_manager.redraw_at() {
@@ -1768,7 +1817,9 @@ fn run_action<'a, P, C>(
             backend::Action::Configure(_, _) => {}
         },
         Action::Event { window, event } => {
-            events.push((window, event));
+            if !matches!(event, core::Event::Edit(_)) || window_manager.focused() == Some(window) {
+                events.push((window, event));
+            }
         }
         Action::Tick => {
             for (_id, window) in window_manager.iter_mut() {

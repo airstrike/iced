@@ -88,6 +88,7 @@ A bunch of simpler examples exist:
 - [`events`](events), a log of native events displayed using a conditional `Subscription`.
 - [`geometry`](geometry), a custom widget showcasing how to draw geometry with the `Mesh2D` primitive in [`iced_wgpu`](../wgpu).
 - [`integration`](integration), a demonstration of how to integrate Iced in an existing [`wgpu`] application.
+- [`menu_bar`](menu_bar), native macOS menus with per-window counters, text editing, and a daemon fallback menu.
 - [`pane_grid`](pane_grid), a grid of panes that can be split, resized, and reorganized.
 - [`pick_list`](pick_list), a dropdown list of selectable options.
 - [`pokedex`](pokedex), an application that displays a random Pokédex entry (sprite included!) by using the [PokéAPI].

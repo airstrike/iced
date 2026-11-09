@@ -1,5 +1,7 @@
+mod focus;
 mod state;
 
+pub use focus::Focus;
 use state::State;
 
 pub use crate::core::window::{Event, Id, RedrawRequest, Settings};
@@ -31,6 +33,7 @@ where
     C: Compositor<Renderer = P::Renderer>,
     P::Theme: theme::Base,
 {
+    focus: focus::Focus,
     aliases: BTreeMap<winit::window::WindowId, Id>,
     entries: BTreeMap<Id, Window<P, C>>,
 }
@@ -43,6 +46,7 @@ where
 {
     pub fn new() -> Self {
         Self {
+            focus: focus::Focus::default(),
             aliases: BTreeMap::new(),
             entries: BTreeMap::new(),
         }
@@ -59,6 +63,9 @@ where
         exit_on_close_request: bool,
         system_theme: theme::Mode,
     ) -> &mut Window<P, C> {
+        if window.has_focus() {
+            self.focus.update(id, true);
+        }
         let state = State::new(program, id, &window, system_theme);
         let mut surface = compositor.create_surface(window.clone());
         let surface_size = state.physical_size();
@@ -104,6 +111,22 @@ where
         self.entries
             .get_mut(&id)
             .expect("Get window that was just inserted")
+    }
+
+    pub fn focus_tracker(&self) -> Focus {
+        self.focus.clone()
+    }
+
+    pub fn focused(&self) -> Option<Id> {
+        self.focus.get().filter(|id| {
+            self.entries
+                .get(id)
+                .is_some_and(|window| window.raw.has_focus())
+        })
+    }
+
+    pub fn focus(&mut self, id: Id, focused: bool) {
+        self.focus.update(id, focused);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -154,6 +177,7 @@ where
 
     pub fn remove(&mut self, id: Id) -> Option<Window<P, C>> {
         let window = self.entries.remove(&id)?;
+        self.focus.update(id, false);
         let _ = self.aliases.remove(&window.raw.id());
 
         Some(window)

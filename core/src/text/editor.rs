@@ -1,5 +1,6 @@
 //! Edit text.
 use crate::clipboard;
+use crate::edit;
 use crate::input_method;
 use crate::keyboard;
 use crate::keyboard::key;
@@ -529,75 +530,89 @@ impl State {
                     is_focused: self.is_focused(),
                 };
 
-                fn apply_binding<Message>(
-                    binding: Binding<Message>,
-                    editor: &impl Editor,
-                    state: &mut State,
-                ) -> Option<Update<Message>> {
-                    let action = |action| Update::Action(action);
-                    let edit = |edit| action(Action::Edit(edit));
+                self.apply_binding(editor, key_binding(key_press)?)
+            }
+            Event::Edit(command) => {
+                let focus = self.focus.as_ref()?;
 
-                    match binding {
-                        Binding::Unfocus => {
-                            state.focus = None;
-                            state.is_dragging = false;
-
-                            None
-                        }
-                        Binding::Copy => {
-                            let selection = editor.copy()?;
-
-                            Some(Update::Copy(selection))
-                        }
-                        Binding::Cut => {
-                            let selection = editor.copy()?;
-
-                            Some(Update::Sequence(vec![
-                                Update::Copy(selection),
-                                edit(Edit::Backspace),
-                            ]))
-                        }
-                        Binding::Paste => Some(Update::Paste),
-                        Binding::Undo => Some(edit(Edit::Undo)),
-                        Binding::Redo => Some(edit(Edit::Redo)),
-                        Binding::Move(motion) => Some(action(Action::Move(motion))),
-                        Binding::Select(motion) => Some(action(Action::Select(motion))),
-                        Binding::SelectWord => Some(action(Action::SelectWord)),
-                        Binding::SelectLine => Some(action(Action::SelectLine)),
-                        Binding::SelectAll => Some(action(Action::SelectAll)),
-                        Binding::Insert(c) => Some(edit(Edit::Insert(c))),
-                        Binding::Enter => Some(edit(Edit::Enter)),
-                        Binding::Backspace => Some(edit(Edit::Backspace)),
-                        Binding::BackspaceWord => Some(edit(Edit::BackspaceWord)),
-                        Binding::BackspaceLine => Some(edit(Edit::BackspaceLine)),
-                        Binding::Delete => Some(action(Action::Edit(Edit::Delete))),
-                        Binding::DeleteWord => Some(edit(Edit::DeleteWord)),
-                        Binding::DeleteLine => Some(edit(Edit::DeleteLine)),
-                        Binding::Sequence(sequence) => {
-                            let updates: Vec<_> = sequence
-                                .into_iter()
-                                .flat_map(|binding| apply_binding(binding, editor, state))
-                                .collect();
-
-                            if updates.is_empty() {
-                                return None;
-                            }
-
-                            Some(Update::Sequence(updates))
-                        }
-                        Binding::Custom(message) => Some(Update::Custom(message)),
-                    }
+                if !focus.is_window_focused {
+                    return None;
                 }
 
-                let update = apply_binding(key_binding(key_press)?, editor, self);
+                let binding = match command {
+                    edit::Command::Copy => Binding::Copy,
+                    edit::Command::Cut => Binding::Cut,
+                    edit::Command::Paste => Binding::Paste,
+                    edit::Command::SelectAll => Binding::SelectAll,
+                };
 
-                if let Some(focus) = &mut self.focus {
-                    focus.updated_at = Instant::now();
-                }
-
-                update
+                self.apply_binding(editor, binding)
             }
             _ => None,
+        }
+    }
+
+    fn apply_binding<Message>(
+        &mut self,
+        editor: &impl Editor,
+        binding: Binding<Message>,
+    ) -> Option<Update<Message>> {
+        if let Some(focus) = &mut self.focus {
+            focus.updated_at = Instant::now();
+        }
+
+        let action = |action| Update::Action(action);
+        let edit = |edit| action(Action::Edit(edit));
+
+        match binding {
+            Binding::Unfocus => {
+                self.focus = None;
+                self.is_dragging = false;
+
+                None
+            }
+            Binding::Copy => {
+                let selection = editor.copy()?;
+
+                Some(Update::Copy(selection))
+            }
+            Binding::Cut => {
+                let selection = editor.copy()?;
+
+                Some(Update::Sequence(vec![
+                    Update::Copy(selection),
+                    edit(Edit::Backspace),
+                ]))
+            }
+            Binding::Paste => Some(Update::Paste),
+            Binding::Undo => Some(edit(Edit::Undo)),
+            Binding::Redo => Some(edit(Edit::Redo)),
+            Binding::Move(motion) => Some(action(Action::Move(motion))),
+            Binding::Select(motion) => Some(action(Action::Select(motion))),
+            Binding::SelectWord => Some(action(Action::SelectWord)),
+            Binding::SelectLine => Some(action(Action::SelectLine)),
+            Binding::SelectAll => Some(action(Action::SelectAll)),
+            Binding::Insert(c) => Some(edit(Edit::Insert(c))),
+            Binding::Enter => Some(edit(Edit::Enter)),
+            Binding::Backspace => Some(edit(Edit::Backspace)),
+            Binding::BackspaceWord => Some(edit(Edit::BackspaceWord)),
+            Binding::BackspaceLine => Some(edit(Edit::BackspaceLine)),
+            Binding::Delete => Some(action(Action::Edit(Edit::Delete))),
+            Binding::DeleteWord => Some(edit(Edit::DeleteWord)),
+            Binding::DeleteLine => Some(edit(Edit::DeleteLine)),
+            Binding::Sequence(sequence) => {
+                let updates: Vec<_> = sequence
+                    .into_iter()
+                    .flat_map(|binding| self.apply_binding(editor, binding))
+                    .collect();
+
+                if updates.is_empty() {
+                    return None;
+                }
+
+                Some(Update::Sequence(updates))
+            }
+            Binding::Custom(message) => Some(Update::Custom(message)),
         }
     }
 

@@ -32,6 +32,7 @@
 //! ```
 use crate::backend;
 use crate::core::Widget;
+use crate::menu;
 use crate::message;
 use crate::program::{self, Program};
 use crate::shell;
@@ -393,6 +394,30 @@ impl<P: Program> Application<P> {
         }
     }
 
+    /// Sets the native menu logic of the [`Application`].
+    ///
+    /// Menus refresh after messages and focus changes settle. Native menus are
+    /// currently supported on macOS; other platforms support only an empty bar.
+    pub fn menu(
+        self,
+        f: impl Fn(&P::State) -> menu::Bar<P::Message>,
+    ) -> Application<
+        impl Program<
+            State = P::State,
+            Message = P::Message,
+            Theme = P::Theme,
+            Renderer = P::Renderer,
+            Executor = P::Executor,
+        >,
+    > {
+        Application {
+            raw: program::with_menu(self.raw, move |state, _window| f(state)),
+            settings: self.settings,
+            window: self.window,
+            presets: self.presets,
+        }
+    }
+
     /// Sets the subscription logic of the [`Application`].
     pub fn subscription(
         self,
@@ -509,6 +534,11 @@ impl<P: Program> Program for Application<P> {
         window: window::Id,
     ) -> impl Widget<P::Message, P::Theme, P::Renderer> + 'a {
         self.raw.view(state, window)
+    }
+
+    #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        self.raw.menu(state, window)
     }
 
     #[inline]
@@ -762,6 +792,20 @@ fn with_title<P: Program>(
         }
 
         #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
+        }
+
+        #[inline]
         fn theme(&self, state: &Self::State, window: window::Id) -> Option<Self::Theme> {
             self.program.theme(state, window)
         }
@@ -850,6 +894,20 @@ fn with_theme<P: Program>(
         }
 
         #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
+        }
+
+        #[inline]
         fn subscription(&self, state: &Self::State) -> Subscription<Self::Message> {
             self.program.subscription(state)
         }
@@ -926,6 +984,20 @@ fn with_scale_factor<P: Program>(
             window: window::Id,
         ) -> impl Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
             self.program.view(state, window)
+        }
+
+        #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
         }
 
         #[inline]

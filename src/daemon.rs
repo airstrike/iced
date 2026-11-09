@@ -1,6 +1,7 @@
 //! Create and run daemons that run in the background.
 use crate::application;
 use crate::core;
+use crate::menu;
 use crate::message;
 use crate::program::{self, Program};
 use crate::shell;
@@ -199,6 +200,36 @@ impl<P: Program> Daemon<P> {
         }
     }
 
+    /// Sets the native menu logic of the [`Daemon`].
+    ///
+    /// The callback receives `Some(id)` for the current key iced window, using
+    /// the same [`window::Id`] as the window's view and events. It receives `None`
+    /// whenever no iced window has focus, including when no windows are open.
+    /// Return the complete set of custom menus for that state; menus from other
+    /// windows are not implicitly merged. The platform's application menu is
+    /// preserved.
+    ///
+    /// Menus refresh after messages and focus changes settle. Native menus are
+    /// currently supported on macOS; other platforms support only an empty bar.
+    pub fn menu(
+        self,
+        f: impl Fn(&P::State, Option<window::Id>) -> menu::Bar<P::Message>,
+    ) -> Daemon<
+        impl Program<
+            State = P::State,
+            Message = P::Message,
+            Theme = P::Theme,
+            Renderer = P::Renderer,
+            Executor = P::Executor,
+        >,
+    > {
+        Daemon {
+            raw: program::with_menu(self.raw, f),
+            settings: self.settings,
+            presets: self.presets,
+        }
+    }
+
     /// Sets the subscription logic of the [`Daemon`].
     pub fn subscription(
         self,
@@ -315,6 +346,11 @@ impl<P: Program> Program for Daemon<P> {
         window: window::Id,
     ) -> impl core::Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
         self.raw.view(state, window)
+    }
+
+    #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        self.raw.menu(state, window)
     }
 
     #[inline]
@@ -489,6 +525,16 @@ where
     }
 
     #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        self.program.menu(state, window)
+    }
+
+    #[inline]
+    fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+        self.program.presets()
+    }
+
+    #[inline]
     fn title(&self, state: &Self::State, window: window::Id) -> String {
         self.title.title(state, window)
     }
@@ -565,6 +611,16 @@ where
     }
 
     #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        self.program.menu(state, window)
+    }
+
+    #[inline]
+    fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+        self.program.presets()
+    }
+
+    #[inline]
     fn title(&self, state: &Self::State, window: window::Id) -> String {
         self.program.title(state, window)
     }
@@ -638,6 +694,16 @@ where
         window: window::Id,
     ) -> impl core::Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
         self.program.view(state, window)
+    }
+
+    #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        self.program.menu(state, window)
+    }
+
+    #[inline]
+    fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+        self.program.presets()
     }
 
     #[inline]

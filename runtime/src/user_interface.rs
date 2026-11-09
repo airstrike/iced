@@ -1,4 +1,5 @@
 //! Implement your own event loop to drive a user interface.
+use crate::core::edit;
 use crate::core::event::{self, Event};
 use crate::core::keyboard;
 use crate::core::layout;
@@ -404,16 +405,18 @@ where
                 (Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)), _) => {
                     self.selection = None;
                 }
-                (
-                    Event::Keyboard(keyboard::Event::KeyPressed {
-                        key,
-                        modifiers,
-                        repeat: false,
-                        ..
-                    }),
-                    event::Status::Ignored,
-                ) if matches!(key.as_ref(), keyboard::Key::Character("c"))
-                    && modifiers.command() =>
+                (_, event::Status::Ignored)
+                    if matches!(event, Event::Edit(edit::Command::Copy))
+                        || matches!(
+                            event,
+                            Event::Keyboard(keyboard::Event::KeyPressed {
+                                key,
+                                modifiers,
+                                repeat: false,
+                                ..
+                            }) if matches!(key.as_ref(), keyboard::Key::Character("c"))
+                                && modifiers.command()
+                        ) =>
                 {
                     let mut copy = operation::text::copy();
                     self.operate(renderer, &mut operation::black_box(&mut copy));

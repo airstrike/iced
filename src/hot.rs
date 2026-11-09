@@ -2,6 +2,7 @@
 //!
 //! This module is only available when the `hot` feature is enabled.
 use crate::core::Widget;
+use crate::menu;
 use crate::program::Program;
 use crate::theme;
 use crate::window;
@@ -71,6 +72,11 @@ impl<P: Program> Program for Hot<P> {
     }
 
     #[inline]
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        debug::hot(|| self.program.menu(state, window))
+    }
+
+    #[inline]
     fn subscription(&self, state: &Self::State) -> Subscription<Self::Message> {
         debug::hot(|| self.program.subscription(state))
     }
@@ -93,5 +99,32 @@ impl<P: Program> Program for Hot<P> {
     #[inline]
     fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
         self.program.presets()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::widget;
+
+    #[test]
+    fn hot_wrapper_forwards_state_and_key_window_to_menu() {
+        fn view(_: &u32, _: window::Id) -> impl crate::widget::Widget<u32> {
+            widget::space()
+        }
+
+        let program = crate::daemon(|| 7_u32, |_: &mut u32, _: u32| {}, view)
+            .theme(crate::Theme::Dark)
+            .menu(|state, window| {
+                menu::bar([menu::submenu(format!("{state}: {window:?}"))
+                    .push(menu::item("Change").on_press(9))])
+            });
+        let program = Hot::new(program);
+        let window = window::Id::unique();
+        assert_eq!(
+            program.menu(&7, Some(window)).menus()[0].title(),
+            format!("7: {:?}", Some(window))
+        );
+        assert_eq!(program.menu(&8, None).menus()[0].title(), "8: None");
     }
 }

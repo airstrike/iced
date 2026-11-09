@@ -15,6 +15,7 @@ use crate::core::Alignment::Center;
 use crate::core::Length::Fill;
 use crate::core::alignment::Horizontal::Right;
 use crate::core::border;
+use crate::core::menu;
 use crate::core::mouse;
 use crate::core::theme;
 use crate::core::window;
@@ -91,6 +92,23 @@ where
         window: window::Id,
     ) -> impl Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
         state.view(&self.program, window).map(Message)
+    }
+
+    fn menu(&self, state: &Self::State, window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        let menus = match &state.state {
+            State::Empty => menu::Bar::default(),
+            State::Idle { state } => self.program.menu(state, window),
+            State::Asserting {
+                state,
+                window: asserted_window,
+                ..
+            } => self.program.menu(state, window.map(|_| *asserted_window)),
+            State::Recording { emulator } | State::Playing { emulator, .. } => self
+                .program
+                .menu(emulator.state(), window.map(|_| emulator.window())),
+        };
+
+        menus.map(|message| Message(Tick::Program(message)))
     }
 
     fn theme(&self, state: &Self::State, window: window::Id) -> Option<Theme> {
@@ -885,4 +903,152 @@ where
         .height(Fill)
         .align_y(Center),
     ]
+}
+
+#[cfg(all(test, debug_assertions, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    use std::cell::Cell;
+
+    struct Definition {
+        viewed_window: Cell<Option<window::Id>>,
+    }
+
+    impl Program for Definition {
+        type State = ();
+        type Message = Option<window::Id>;
+        type Theme = Theme;
+        type Renderer = ();
+        type Executor = futures::backend::native::thread_pool::Executor;
+
+        fn name() -> &'static str {
+            "menu_routing"
+        }
+
+        fn settings(&self) -> Settings {
+            Settings::default()
+        }
+
+        fn window(&self) -> Option<window::Settings> {
+            None
+        }
+
+        fn boot(&self) -> (Self::State, Task<Self::Message>) {
+            ((), Task::none())
+        }
+
+        fn update(&self, _state: &mut Self::State, _message: Self::Message) -> Task<Self::Message> {
+            Task::none()
+        }
+
+        fn view<'a>(
+            &self,
+            _state: &'a Self::State,
+            window: window::Id,
+        ) -> impl Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
+            self.viewed_window.set(Some(window));
+            core::widget::Void
+        }
+
+        fn menu(
+            &self,
+            _state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            menu::bar([menu::submenu("Window").push(menu::item("Target").on_press(window))])
+        }
+    }
+
+    fn menu_target(
+        program: &Attach<Definition>,
+        state: &Tester<Definition>,
+        window: Option<window::Id>,
+    ) -> Option<window::Id> {
+        let menu = program.menu(state, window);
+        let menu::Entry::Item(item) = &menu.menus()[0].entries()[0] else {
+            panic!("target menu item")
+        };
+        let Some(menu::Action::Message(produce)) = item.action() else {
+            panic!("target message")
+        };
+        let Message(Tick::Program(target)) = produce() else {
+            panic!("mapped program message")
+        };
+        target
+    }
+
+    #[test]
+    fn idle_and_asserting_menus_target_the_same_window_as_their_views() {
+        let program = attach(Definition {
+            viewed_window: Cell::new(None),
+        });
+        let (mut state, _) = program.boot();
+        let native_window = window::Id::unique();
+        let asserted_window = window::Id::unique();
+
+        let _ = program.view(&state, native_window);
+        assert_eq!(program.program.viewed_window.get(), Some(native_window));
+        assert_eq!(
+            menu_target(&program, &state, Some(native_window)),
+            program.program.viewed_window.get()
+        );
+        assert_eq!(menu_target(&program, &state, None), None);
+
+        state.state = State::Asserting {
+            state: (),
+            window: asserted_window,
+            last_interaction: None,
+        };
+        let _ = program.view(&state, native_window);
+        assert_eq!(program.program.viewed_window.get(), Some(asserted_window));
+        assert_eq!(
+            menu_target(&program, &state, Some(native_window)),
+            program.program.viewed_window.get()
+        );
+        assert_eq!(menu_target(&program, &state, None), None);
+    }
+
+    #[test]
+    fn recording_and_playing_menus_target_the_emulated_window_only_while_focused() {
+        let program = attach(Definition {
+            viewed_window: Cell::new(None),
+        });
+        let (mut state, _) = program.boot();
+        let native_window = window::Id::unique();
+        let (sender, _receiver) = mpsc::channel(16);
+        let emulator = Emulator::new(
+            sender,
+            &program.program,
+            emulator::Mode::Immediate,
+            Size::new(800.0, 600.0),
+        );
+        let emulated_window = emulator.window();
+        assert_ne!(native_window, emulated_window);
+        state.state = State::Recording { emulator };
+
+        let _ = program.view(&state, native_window);
+        assert_eq!(program.program.viewed_window.get(), Some(emulated_window));
+        assert_eq!(
+            menu_target(&program, &state, Some(native_window)),
+            program.program.viewed_window.get()
+        );
+        assert_eq!(menu_target(&program, &state, None), None);
+
+        let State::Recording { emulator } = state.state else {
+            panic!("recording emulator")
+        };
+        state.state = State::Playing {
+            emulator,
+            current: 0,
+            outcome: Outcome::Running,
+        };
+        let _ = program.view(&state, native_window);
+        assert_eq!(program.program.viewed_window.get(), Some(emulated_window));
+        assert_eq!(
+            menu_target(&program, &state, Some(native_window)),
+            program.program.viewed_window.get()
+        );
+        assert_eq!(menu_target(&program, &state, None), None);
+    }
 }
