@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::Action;
 use crate::edit;
 use crate::keyboard::Modifiers;
@@ -13,18 +11,6 @@ pub struct Item<Message> {
     enabled: bool,
     checked: bool,
     shortcut: Option<Shortcut>,
-}
-
-impl<Message> Clone for Item<Message> {
-    fn clone(&self) -> Self {
-        Self {
-            title: self.title.clone(),
-            action: self.action.clone(),
-            enabled: self.enabled,
-            checked: self.checked,
-            shortcut: self.shortcut,
-        }
-    }
 }
 
 impl<Message> Item<Message> {
@@ -68,7 +54,7 @@ impl<Message> Item<Message> {
     where
         Message: Clone + 'static,
     {
-        self.action = message.map(|message| Action::Message(Rc::new(move || message.clone())));
+        self.action = message.map(|message| Action::Message(Box::new(move || message.clone())));
         self
     }
 
@@ -76,7 +62,7 @@ impl<Message> Item<Message> {
     ///
     /// The factory is not called while constructing, mapping, or displaying menus.
     pub fn on_press_with(mut self, f: impl Fn() -> Message + 'static) -> Self {
-        self.action = Some(Action::Message(Rc::new(f)));
+        self.action = Some(Action::Message(Box::new(f)));
         self
     }
 
@@ -139,6 +125,11 @@ impl<Message> Item<Message> {
         self.action.as_ref()
     }
 
+    /// Consumes the item and transfers its action to a runtime.
+    pub fn into_action(self) -> Option<Action<Message>> {
+        self.action
+    }
+
     /// Transforms emitted messages lazily, preserving semantic edit actions.
     pub fn map<Other>(self, f: impl Fn(Message) -> Other + 'static) -> Item<Other>
     where
@@ -148,7 +139,7 @@ impl<Message> Item<Message> {
         Item {
             title: self.title,
             action: self.action.map(|action| match action {
-                Action::Message(produce) => Action::Message(Rc::new(move || f(produce()))),
+                Action::Message(produce) => Action::Message(Box::new(move || f(produce()))),
                 Action::Edit(command) => Action::Edit(command),
             }),
             enabled: self.enabled,

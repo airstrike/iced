@@ -75,7 +75,8 @@ File → New Counter opens another counter. Closing every window keeps the daemo
 running: File → New Counter remains available. Quit from the normal macOS
 application menu.
 
-Descriptions are owned values; native handles stay in the shell. `on_press`
+Descriptions own their actions and move into the runtime; native handles stay in
+the shell. `on_press`
 accepts a cloneable message; `on_press_with` creates a fresh message on activation
 without requiring `Message: Clone`.
 

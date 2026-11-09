@@ -10,13 +10,12 @@ pub struct Menu<Message> {
     enabled: bool,
 }
 
-impl<Message> Clone for Menu<Message> {
-    fn clone(&self) -> Self {
-        Self {
-            title: self.title.clone(),
-            entries: self.entries.clone(),
-            enabled: self.enabled,
-        }
+impl<Message> IntoIterator for Menu<Message> {
+    type Item = Entry<Message>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_iter()
     }
 }
 

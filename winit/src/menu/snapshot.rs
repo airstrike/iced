@@ -31,8 +31,7 @@ impl Snapshot {
         let send: Rc<dyn Fn(Action<Message>)> = Rc::new(move |action| proxy.send_action(action));
         Self {
             roots: bar
-                .menus()
-                .iter()
+                .into_iter()
                 .map(|menu| Branch::from_menu(menu, true, &scope, &send))
                 .collect(),
         }

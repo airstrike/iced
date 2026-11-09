@@ -83,7 +83,7 @@ fn identical_presentation_does_not_cache_an_old_factory() {
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
     let make = |value| {
         super::Branch::from_menu(
-            &menu::Menu::new("Same").push(menu::item("Same").on_press_with(move || value)),
+            menu::Menu::new("Same").push(menu::item("Same").on_press_with(move || value)),
             true,
             &scope,
             &send,
@@ -138,7 +138,7 @@ fn inherited_then_first_enabled_shortcuts_win_and_disabled_ancestors_are_inert()
                 .on_press(())
                 .shortcut(Modifiers::LOGO, 'q'),
         );
-    let mut branch = super::Branch::from_menu(&menu, true, &scope, &send);
+    let mut branch = super::Branch::from_menu(menu, true, &scope, &send);
     branch.claim_shortcuts(&mut HashSet::from([inherited]));
     let crate::menu::branch::Entry::Submenu(disabled) = &branch.entries[0] else {
         panic!("the first entry is a submenu");
@@ -173,12 +173,12 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
         }
     });
     let window = window::Id::unique();
-    let menu = menu::Menu::new("Edit").push(menu::Item::edit(edit::Command::Paste));
+    let menu = || menu::Menu::new("Edit").push(menu::Item::edit(edit::Command::Paste));
     let scope = Rc::new(Scope {
         window: Some(window),
         is_current: Box::new(|| true),
     });
-    let branch = super::Branch::from_menu(&menu, true, &scope, &send);
+    let branch = super::Branch::from_menu(menu(), true, &scope, &send);
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the Edit menu contains an item");
     };
@@ -188,10 +188,51 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
     );
 
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let branch = super::Branch::from_menu(&menu, true, &scope, &send);
+    let branch = super::Branch::from_menu(menu(), true, &scope, &send);
     let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
         panic!("the Edit menu contains an item");
     };
     assert!(!item.enabled);
     assert!(item.callback.is_none());
+}
+
+#[test]
+fn lowering_owns_factories_until_the_native_snapshot_is_released() {
+    use crate::core::menu;
+    use crate::runtime::Action;
+    use std::cell::RefCell;
+
+    struct Message(u32);
+
+    let captured = Rc::new(Cell::new(0));
+    let weak = Rc::downgrade(&captured);
+    let menu = crate::core::menu![
+        "File",
+        menu::item("Run").on_press_with(move || {
+            captured.set(captured.get() + 1);
+            Message(captured.get())
+        }),
+    ];
+    let output = Rc::new(RefCell::new(Vec::new()));
+    let send: Rc<dyn Fn(Action<Message>)> = Rc::new({
+        let output = Rc::clone(&output);
+        move |action| {
+            if let Action::Output(Message(value)) = action {
+                output.borrow_mut().push(value);
+            }
+        }
+    });
+    let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
+    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    assert!(output.borrow().is_empty());
+    let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
+        panic!("the menu contains the factory item");
+    };
+    let callback = item.callback.as_ref().unwrap();
+    callback.invoke();
+    callback.invoke();
+    assert_eq!(*output.borrow(), [1, 2]);
+    assert!(weak.upgrade().is_some());
+    drop(branch);
+    assert!(weak.upgrade().is_none());
 }

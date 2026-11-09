@@ -1,7 +1,8 @@
 //! Native application menus.
 //!
 //! Build a [`Bar`] from menus and return it from your program's menu function.
-//! Menu actions are evaluated only when the user activates an enabled item.
+//! Descriptions own their actions and are consumed by the runtime. Menu actions
+//! are evaluated only when the user activates an enabled item.
 //! Native menus are currently supported on macOS; requesting a nonempty bar on
 //! another platform is not yet implemented. An empty bar preserves the platform's
 //! default application menu.

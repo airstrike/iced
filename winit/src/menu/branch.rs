@@ -47,25 +47,28 @@ impl Branch {
     }
 
     pub(super) fn from_menu<Message: 'static>(
-        menu: &menu::Menu<Message>,
+        menu: menu::Menu<Message>,
         parent_enabled: bool,
         scope: &Rc<Scope>,
         send: &Rc<dyn Fn(Action<Message>)>,
     ) -> Self {
         let window = scope.window;
         let enabled = parent_enabled && menu.is_enabled();
+        let title = menu.title().to_owned();
         let entries = menu
-            .entries()
-            .iter()
+            .into_iter()
             .map(|entry| match entry {
                 menu::Entry::Submenu(menu) => {
                     Entry::Submenu(Self::from_menu(menu, enabled, scope, send))
                 }
                 menu::Entry::Separator => Entry::Separator,
                 menu::Entry::Item(item) => {
-                    let action = item.action().cloned();
+                    let enabled = enabled && item.is_enabled();
+                    let title = item.title().to_owned();
+                    let checked = item.is_checked();
+                    let shortcut = item.shortcut_key();
+                    let action = item.into_action();
                     let enabled = enabled
-                        && item.is_enabled()
                         && (!matches!(action, Some(menu::Action::Edit(_))) || window.is_some());
                     let callback = action.filter(|_| enabled).map(|action| {
                         let send = send.clone();
@@ -82,17 +85,17 @@ impl Branch {
                         }))
                     });
                     Entry::Item(Item {
-                        title: item.title().to_owned(),
+                        title,
                         enabled,
-                        checked: item.is_checked(),
-                        shortcut: item.shortcut_key(),
+                        checked,
+                        shortcut,
                         callback,
                     })
                 }
             })
             .collect();
         Self {
-            title: menu.title().to_owned(),
+            title,
             enabled,
             entries,
         }

@@ -13,16 +13,6 @@ pub enum Entry<Message> {
     Separator,
 }
 
-impl<Message> Clone for Entry<Message> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Item(item) => Self::Item(item.clone()),
-            Self::Submenu(menu) => Self::Submenu(menu.clone()),
-            Self::Separator => Self::Separator,
-        }
-    }
-}
-
 impl<Message> From<Item<Message>> for Entry<Message> {
     fn from(item: Item<Message>) -> Self {
         Self::Item(item)

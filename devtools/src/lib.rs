@@ -118,13 +118,7 @@ where
         if rewinding {
             // Semantic editing bypasses message mapping, so disabled ancestors
             // also protect the historical widget tree from native edit actions.
-            menu::Bar::new(
-                menus
-                    .menus()
-                    .iter()
-                    .cloned()
-                    .map(|menu| menu.enabled(false)),
-            )
+            menu::Bar::new(menus.into_iter().map(|menu| menu.enabled(false)))
         } else {
             menus
         }

@@ -14,14 +14,6 @@ impl<Message> Default for Bar<Message> {
     }
 }
 
-impl<Message> Clone for Bar<Message> {
-    fn clone(&self) -> Self {
-        Self {
-            menus: self.menus.clone(),
-        }
-    }
-}
-
 impl<Message> From<Menu<Message>> for Bar<Message> {
     fn from(menu: Menu<Message>) -> Self {
         Self::new([menu])
@@ -37,6 +29,15 @@ impl<Message, const N: usize> From<[Menu<Message>; N]> for Bar<Message> {
 impl<Message> From<Vec<Menu<Message>>> for Bar<Message> {
     fn from(menus: Vec<Menu<Message>>) -> Self {
         Self::from_vec(menus)
+    }
+}
+
+impl<Message> IntoIterator for Bar<Message> {
+    type Item = Menu<Message>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.menus.into_iter()
     }
 }
 
@@ -125,7 +126,7 @@ mod tests {
             ),
             menu::edit(),
         ]);
-        let bar = bar.clone().map({
+        let bar = bar.map({
             let mapped = Rc::clone(&mapped);
             move |message| {
                 mapped.set(mapped.get() + 1);
