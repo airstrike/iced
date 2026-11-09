@@ -1,14 +1,32 @@
-use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
-use objc2_foundation::MainThreadMarker;
+use objc2_app_kit::{
+    NSApplication, NSBackingStoreType, NSMenu, NSMenuItem, NSWindow, NSWindowStyleMask,
+};
+use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize, ns_string};
 
 use super::registration::{self, Registration};
 
 pub(super) fn run() {
+    use objc2::MainThreadOnly;
+
     let mtm = MainThreadMarker::new().expect("the harness-free test runs on the main thread");
     let application = NSApplication::sharedApplication(mtm);
     let previous_main = application.mainMenu();
     let main = NSMenu::new(mtm);
     application.setMainMenu(Some(&main));
+
+    // SAFETY: The window is created on the main thread and retained for the test;
+    // releasedWhenClosed is disabled before any close can release it externally.
+    let window = unsafe {
+        NSWindow::initWithContentRect_styleMask_backing_defer(
+            NSWindow::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(100.0, 100.0)),
+            NSWindowStyleMask::Titled,
+            NSBackingStoreType::Buffered,
+            false,
+        )
+    };
+    unsafe { window.setReleasedWhenClosed(false) };
+    window.setTitle(ns_string!("Predates registration"));
 
     let original = NSMenu::new(mtm);
     let first = NSMenu::new(mtm);
@@ -64,6 +82,24 @@ pub(super) fn run() {
         assert!(std::ptr::eq(&*current, menu));
     };
     assert_window(&first);
+    assert!(
+        first
+            .itemWithTitle(ns_string!("Predates registration"))
+            .is_some()
+    );
+    registration::window(&first);
+    let matches = first
+        .itemArray()
+        .iter()
+        .filter(|item| {
+            item.title()
+                .isEqualToString(ns_string!("Predates registration"))
+        })
+        .count();
+    assert_eq!(
+        matches, 1,
+        "seeding an existing window must not duplicate it"
+    );
 
     // A replacement root is selected even while the old marked object is retained.
     main.removeItem(&first_item);
@@ -72,9 +108,16 @@ pub(super) fn run() {
     main.addItem(&second_item);
     registration::window(&second);
     assert_window(&second);
+    assert!(
+        second
+            .itemWithTitle(ns_string!("Predates registration"))
+            .is_some()
+    );
     main.removeItem(&second_item);
     main.addItem(&first_item);
     assert_window(&first);
+
+    window.close();
 
     application.setMainMenu(previous_main.as_deref());
     println!("native menu roles: Window replacement and scoped Help restoration passed");

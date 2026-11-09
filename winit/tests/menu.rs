@@ -13,6 +13,7 @@ mod image;
 mod registration;
 #[cfg(target_os = "macos")]
 #[path = "menu/roles.rs"]
+#[allow(unsafe_code)]
 mod roles;
 
 fn main() {

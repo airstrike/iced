@@ -1,5 +1,5 @@
 use objc2::rc::Retained;
-use objc2_app_kit::{NSApplication, NSMenu};
+use objc2_app_kit::{NSApplication, NSMenu, NSWindowStyleMask};
 use objc2_foundation::MainThreadMarker;
 
 /// Restores the previous Help registration only while we still own it.
@@ -67,4 +67,13 @@ fn same(first: Option<&NSMenu>, second: Option<&NSMenu>) -> bool {
 pub(super) fn window(menu: &NSMenu) {
     let app = NSApplication::sharedApplication(MainThreadMarker::from(menu));
     app.setWindowsMenu(Some(menu));
+    // Setting a title normally creates its Window item, but these windows may
+    // have been titled before this menu existed. The API ignores duplicates.
+    for window in app.windows() {
+        if !window.isExcludedFromWindowsMenu()
+            && window.styleMask().contains(NSWindowStyleMask::Titled)
+        {
+            app.addWindowsItem_title_filename(&window, &window.title(), false);
+        }
+    }
 }
