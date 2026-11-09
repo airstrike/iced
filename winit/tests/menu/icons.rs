@@ -19,16 +19,13 @@ pub fn run() {
     assert!(!cache.update(Some(handle.into())).unwrap().isTemplate());
     assert!(cache.update(None).is_none());
 
-    let bytes = include_bytes!("../../../examples/tour/images/ferris.png");
+    let bytes = include_bytes!("icon.png");
     let encoded = image::Handle::from_bytes(bytes.as_slice());
     let image = cache.update(Some(encoded.into())).unwrap();
     assert!(image.isValid());
     assert_eq!(image.size().width.max(image.size().height), 16.0);
 
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../examples/tour/images/ferris.png"
-    );
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/menu/icon.png");
     assert!(cache.update(Some(menu::Icon::new(path))).unwrap().isValid());
 
     for handle in [
