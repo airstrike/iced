@@ -18,6 +18,7 @@ mod responsive;
 mod stack;
 mod themer;
 
+pub mod anchored;
 pub mod button;
 pub mod checkbox;
 pub mod combo_box;
@@ -52,6 +53,8 @@ mod helpers;
 
 pub use helpers::*;
 
+#[doc(no_inline)]
+pub use anchored::Anchored;
 #[doc(no_inline)]
 pub use button::Button;
 #[doc(no_inline)]

@@ -671,6 +671,17 @@ pub fn hover<W, V>(base: W, top: V) -> crate::Hover<W, V> {
     Hover::new(base, top)
 }
 
+/// Creates a new [`Anchored`] widget showing `content` in an overlay next to
+/// `anchor`.
+///
+/// [`Anchored`]: crate::Anchored
+pub fn anchored<'a, W, V, Message, Theme>(
+    anchor: W,
+    content: V,
+) -> crate::Anchored<'a, W, V, Message, Theme> {
+    crate::Anchored::new(anchor, content)
+}
+
 /// Creates a new [`Sensor`] widget.
 ///
 /// A [`Sensor`] widget can generate messages when its contents are shown,
