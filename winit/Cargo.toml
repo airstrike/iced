@@ -57,3 +57,8 @@ objc2-app-kit.workspace = true
 objc2-app-kit.features = ["std", "NSApplication", "NSCell", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder"]
 objc2-foundation.workspace = true
 objc2-foundation.features = ["std", "NSArray", "NSObjCRuntime", "NSObject", "NSRunLoop", "NSString", "NSThread"]
+
+# AppKit's registration APIs must be exercised on the actual main thread.
+[[test]]
+name = "menu"
+harness = false

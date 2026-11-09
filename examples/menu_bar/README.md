@@ -86,7 +86,20 @@ messages. An edit item with no eligible focused control has no effect. Applicati
 can also request these actions with `iced::edit` tasks, such as
 `iced::edit::copy(window_id)`.
 
-Help → About iced opens a separate information window with a different menu.
+Support → About iced opens a separate information window with a different menu.
+The example registers its menus explicitly, so their titles can be customized:
+
+```rust
+let windows: menu::Menu<Message> = menu!["Windows"].role(menu::Role::Window);
+let help = menu!["Support", menu::item("About iced…").on_press(Message::About)]
+    .role(menu::Role::Help);
+```
+
+AppKit maintains the Window menu's list of windows and the Help menu's search
+field. The first top-level menu for each role is registered; roles on nested
+menus have no effect. Help registration restores the previous Help menu when removed. Window roles
+follow the lifetime of the native menu; changing a role replaces that native
+menu without altering inherited application menus.
 File → New Counter opens another counter. Closing every window keeps the daemon
 running: File → New Counter remains available. Quit from the normal macOS
 application menu.

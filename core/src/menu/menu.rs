@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::Entry;
+use super::{Entry, Role};
 
 /// A named menu containing items, separators, and nested menus.
 #[derive(Debug)]
@@ -8,6 +8,7 @@ pub struct Menu<Message> {
     title: String,
     entries: Vec<Entry<Message>>,
     enabled: bool,
+    role: Option<Role>,
 }
 
 impl<Message> IntoIterator for Menu<Message> {
@@ -26,6 +27,7 @@ impl<Message> Menu<Message> {
             title: title.into(),
             entries: Vec::new(),
             enabled: true,
+            role: None,
         }
     }
 
@@ -53,6 +55,21 @@ impl<Message> Menu<Message> {
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
+    }
+
+    /// Assigns a native role to this menu, independently of its title.
+    ///
+    /// The first top-level menu with each role is registered with the platform.
+    /// Roles on nested menus and later declarations of the same role are ignored.
+    /// Native menus currently support macOS only.
+    pub fn role(mut self, role: Role) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    /// Returns the native role assigned to this menu, if any.
+    pub fn native_role(&self) -> Option<Role> {
+        self.role
     }
 
     /// Returns the menu title.
@@ -87,6 +104,7 @@ impl<Message> Menu<Message> {
         Menu {
             title: self.title,
             enabled: self.enabled,
+            role: self.role,
             entries: self
                 .entries
                 .into_iter()

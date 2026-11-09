@@ -6,10 +6,12 @@ use objc2_app_kit::{NSApplication, NSMenu};
 use objc2_foundation::MainThreadMarker;
 
 use crate::Proxy;
+use crate::core::menu::Role;
 use crate::menu::snapshot::Snapshot;
 
 use super::branch::Branch;
 use super::delegate::Delegate;
+use super::registration::{self, Registration};
 use super::{run_loop, shortcut};
 
 /// Owns only the roots appended to winit's existing application menu.
@@ -18,6 +20,7 @@ pub struct Menu {
     roots: Vec<Branch>,
     delegate: Retained<Delegate>,
     pending: Option<Snapshot>,
+    help: Registration,
 }
 
 impl Menu {
@@ -28,6 +31,7 @@ impl Menu {
             roots: Vec::new(),
             delegate: Delegate::new(mtm, proxy),
             pending: None,
+            help: Registration::new(mtm),
         }
     }
 
@@ -84,15 +88,46 @@ impl Menu {
             }
         }
 
-        for (index, branch) in snapshot.roots.into_iter().enumerate() {
+        let mut window_assigned = false;
+        let mut help_assigned = false;
+        for (index, mut branch) in snapshot.roots.into_iter().enumerate() {
+            let assigned = match branch.role {
+                Some(Role::Window) => Some(&mut window_assigned),
+                Some(Role::Help) => Some(&mut help_assigned),
+                None => None,
+            };
+            if let Some(assigned) = assigned {
+                if *assigned {
+                    branch.role = None;
+                }
+                *assigned = true;
+            }
+
             if let Some(root) = self.roots.get_mut(index) {
-                root.update(branch, &self.delegate);
+                if root.role == branch.role {
+                    root.update(branch, &self.delegate);
+                } else {
+                    // AppKit cannot unmark a Window menu through setWindowsMenu(None).
+                    let position = main.indexOfItem(&root.item);
+                    main.removeItem(&root.item);
+                    *root = Branch::new(branch, &self.delegate);
+                    main.insertItem_atIndex(&root.item, position);
+                    if root.role == Some(Role::Window) {
+                        registration::window(&root.menu);
+                    }
+                }
             } else {
                 let root = Branch::new(branch, &self.delegate);
                 main.addItem(&root.item);
+                if root.role == Some(Role::Window) {
+                    registration::window(&root.menu);
+                }
                 self.roots.push(root);
             }
         }
+
+        let help = self.roots.iter().find(|root| root.role == Some(Role::Help));
+        self.help.update(help.map(|root| &*root.menu));
     }
 }
 
@@ -100,6 +135,7 @@ impl Drop for Menu {
     fn drop(&mut self) {
         self.delegate.ivars().live.set(false);
         self.delegate.cancel_wake();
+        self.help.update(None);
         if let Some(main) = &self.main {
             for root in &self.roots {
                 main.removeItem(&root.item);

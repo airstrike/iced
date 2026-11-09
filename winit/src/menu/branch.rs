@@ -10,6 +10,7 @@ use super::scope::Scope;
 pub struct Branch {
     pub title: String,
     pub enabled: bool,
+    pub role: Option<menu::Role>,
     pub entries: Vec<Entry>,
 }
 
@@ -56,6 +57,7 @@ impl Branch {
         let window = scope.window;
         let enabled = parent_enabled && menu.is_enabled();
         let title = menu.title().to_owned();
+        let role = menu.native_role();
         let entries = menu
             .into_iter()
             .map(|entry| match entry {
@@ -98,6 +100,7 @@ impl Branch {
         Self {
             title,
             enabled,
+            role,
             entries,
         }
     }

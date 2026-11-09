@@ -17,6 +17,7 @@ mod item;
     reason = "The private leaf holds Menu; this module is its public facade."
 )]
 mod menu;
+mod role;
 pub mod shortcut;
 
 pub use action::Action;
@@ -25,4 +26,5 @@ pub use construction::{bar, edit, item, menu, separator};
 pub use entry::Entry;
 pub use item::Item;
 pub use menu::Menu;
+pub use role::Role;
 pub use shortcut::Shortcut;

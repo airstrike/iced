@@ -236,3 +236,18 @@ fn lowering_owns_factories_until_the_native_snapshot_is_released() {
     drop(branch);
     assert!(weak.upgrade().is_none());
 }
+
+#[test]
+fn mapped_menu_roles_reach_the_native_snapshot() {
+    use crate::core::menu;
+    use crate::runtime::Action;
+
+    let menu = crate::core::menu!["Support", menu::item("About").on_press(1_u8)]
+        .role(menu::Role::Help)
+        .map(u16::from);
+    let send: Rc<dyn Fn(Action<u16>)> = Rc::new(|_| {});
+    let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
+    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    assert_eq!(branch.role, Some(menu::Role::Help));
+    assert_eq!(branch.title, "Support");
+}

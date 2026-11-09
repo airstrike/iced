@@ -116,7 +116,12 @@ impl Example {
                 .on_press(Message::Close(id))
                 .shortcut(Modifiers::COMMAND, 'w')
         }));
-        let help = menu!["Help", menu::item("About iced…").on_press(Message::About)];
+        let windows = menu!["Windows"].role(menu::Role::Window);
+        let help = menu![
+            "Support",
+            menu::item("About iced…").on_press(Message::About)
+        ]
+        .role(menu::Role::Help);
 
         if let Some(id) = id
             && let Some(Window::Counter(counter)) = self.windows.get(&id)
@@ -125,11 +130,12 @@ impl Example {
                 file,
                 menu::edit(),
                 counter.menu().map(Message::Counter.with(id)),
+                windows,
                 help,
             ]
             .into()
         } else {
-            [file, help].into()
+            [file, windows, help].into()
         }
     }
 

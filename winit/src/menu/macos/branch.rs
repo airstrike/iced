@@ -3,6 +3,7 @@ use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSString};
 
+use crate::core::menu;
 use crate::menu::branch;
 
 use super::delegate::Delegate;
@@ -10,7 +11,8 @@ use super::entry::Entry;
 
 pub(super) struct Branch {
     pub(super) item: Retained<NSMenuItem>,
-    menu: Retained<NSMenu>,
+    pub(super) menu: Retained<NSMenu>,
+    pub(super) role: Option<menu::Role>,
     entries: Vec<Entry>,
 }
 
@@ -25,6 +27,7 @@ impl Branch {
         let mut branch = Self {
             item,
             menu,
+            role: None,
             entries: Vec::new(),
         };
         branch.update(snapshot, delegate);
@@ -32,6 +35,7 @@ impl Branch {
     }
 
     pub(super) fn update(&mut self, snapshot: branch::Branch, delegate: &Delegate) {
+        self.role = snapshot.role;
         let title = NSString::from_str(&snapshot.title);
         self.item.setTitle(&title);
         self.item.setEnabled(snapshot.enabled);
@@ -67,9 +71,10 @@ impl Branch {
             for entry in self.entries.drain(..) {
                 self.menu.removeItem(entry.item());
             }
-            for entry in snapshot.entries {
+            for (index, entry) in snapshot.entries.into_iter().enumerate() {
                 let entry = Entry::new(entry, delegate);
-                self.menu.addItem(entry.item());
+                // Window/Help registration may append system-owned entries.
+                self.menu.insertItem_atIndex(entry.item(), index as isize);
                 self.entries.push(entry);
             }
         }
