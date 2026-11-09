@@ -21,7 +21,7 @@ pub(super) fn modifiers(modifiers: keyboard::Modifiers) -> NSEventModifierFlags 
     flags
 }
 
-pub(super) fn collect_shortcuts(item: &NSMenuItem, shortcuts: &mut HashSet<menu::Shortcut>) {
+pub(super) fn collect(item: &NSMenuItem, shortcuts: &mut HashSet<menu::Shortcut>) {
     let key = item.keyEquivalent().to_string();
     let mut chars = key.chars();
     if let Some(key) = chars.next()
@@ -47,7 +47,7 @@ pub(super) fn collect_shortcuts(item: &NSMenuItem, shortcuts: &mut HashSet<menu:
     }
     if let Some(menu) = item.submenu() {
         for item in menu.itemArray() {
-            collect_shortcuts(&item, shortcuts);
+            collect(&item, shortcuts);
         }
     }
 }

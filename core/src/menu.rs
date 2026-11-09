@@ -20,7 +20,7 @@ pub mod shortcut;
 
 pub use action::Action;
 pub use bar::Bar;
-pub use construction::{bar, edit, item, separator, submenu};
+pub use construction::{bar, edit, item, menu, separator};
 pub use entry::Entry;
 pub use item::Item;
 pub use menu::Menu;

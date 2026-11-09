@@ -24,9 +24,9 @@ fn update(state: &mut u32, message: Message) {
     clippy::trivially_copy_pass_by_ref,
     reason = "The application menu callback borrows its state."
 )]
-fn menu(state: &u32) -> menu::Bar<Message> {
+fn menus(state: &u32) -> menu::Bar<Message> {
     let next = *state + 1;
-    menu::bar([menu::submenu(state.to_string())
+    menu::bar([menu::Menu::new(state.to_string())
         .push(menu::item("Next").on_press_with(move || Message(Cell::new(next))))])
 }
 
@@ -46,7 +46,7 @@ fn application_menu_survives_every_builder_wrapper_in_either_order() {
     let program = iced::application(|| 1, update, view)
         .presets([iced::Preset::new("Sample", || (7, Task::none()))])
         .antialiasing(true)
-        .menu(menu)
+        .menu(menus)
         .title("Menu test")
         .subscription(|_| Subscription::none())
         .theme(Theme::Dark)
@@ -70,7 +70,7 @@ fn application_menu_survives_every_builder_wrapper_in_either_order() {
         .style(|_, theme| iced::theme::Base::base(theme))
         .scale_factor(|_| 1.5)
         .executor::<iced::executor::Default>()
-        .menu(menu);
+        .menu(menus);
     activate(&program, &mut state);
     assert_eq!(state, 3);
 }
@@ -83,7 +83,7 @@ fn daemon_menu_receives_key_window_and_none_after_all_wrappers() {
             let seen = Rc::clone(&seen);
             move |state, window| {
                 seen.set(window);
-                menu(state)
+                menus(state)
             }
         })
         .presets([iced::Preset::new("Sample", || (7, Task::none()))])
@@ -118,7 +118,7 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
     )
     .menu(|_| {
         menu::bar([
-            menu::submenu("File").push(menu::item("Change").on_press(7)),
+            menu::Menu::new("File").push(menu::item("Change").on_press(7)),
             menu::edit(),
         ])
     });
@@ -176,7 +176,7 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
 #[cfg(feature = "tester")]
 #[test]
 fn tester_forwards_the_program_menu_without_requiring_clone_or_sync_messages() {
-    let program = iced_tester::attach(iced::application(|| 42, update, view).menu(menu));
+    let program = iced_tester::attach(iced::application(|| 42, update, view).menu(menus));
     let (state, _) = program.boot();
     let bar = program.menu(&state, None);
     assert_eq!(bar.menus()[0].title(), "42");

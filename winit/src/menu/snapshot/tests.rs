@@ -83,7 +83,7 @@ fn identical_presentation_does_not_cache_an_old_factory() {
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
     let make = |value| {
         super::Branch::from_menu(
-            &menu::submenu("Same").push(menu::item("Same").on_press_with(move || value)),
+            &menu::Menu::new("Same").push(menu::item("Same").on_press_with(move || value)),
             true,
             &scope,
             &send,
@@ -115,9 +115,9 @@ fn inherited_then_first_enabled_shortcuts_win_and_disabled_ancestors_are_inert()
     let inherited = menu::Shortcut::new(Modifiers::LOGO, 'q').unwrap();
     let send: Rc<dyn Fn(Action<()>)> = Rc::new(|_| panic!("disabled factories must not run"));
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
-    let menu = menu::submenu("Root")
+    let menu = menu::Menu::new("Root")
         .push(
-            menu::submenu("Disabled").enabled(false).push(
+            menu::Menu::new("Disabled").enabled(false).push(
                 menu::item("Hidden accelerator")
                     .on_press(())
                     .shortcut(Modifiers::LOGO, 'k'),
@@ -173,7 +173,7 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
         }
     });
     let window = window::Id::unique();
-    let menu = menu::submenu("Edit").push(menu::Item::edit(edit::Command::Paste));
+    let menu = menu::Menu::new("Edit").push(menu::Item::edit(edit::Command::Paste));
     let scope = Rc::new(Scope {
         window: Some(window),
         is_current: Box::new(|| true),

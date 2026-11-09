@@ -1,9 +1,9 @@
+use std::rc::Rc;
+
 use super::Action;
 use crate::edit;
 use crate::keyboard::Modifiers;
 use crate::menu::shortcut::{self, Shortcut};
-
-use std::rc::Rc;
 
 /// A native menu item with an optional action and shortcut.
 #[derive(Debug)]

@@ -1,8 +1,8 @@
+use std::collections::BTreeMap;
+
 use iced::keyboard::Modifiers;
 use iced::widget::{button, center, column, text};
 use iced::{Function, Point, Size, Subscription, Task, Widget, menu, window};
-
-use std::collections::BTreeMap;
 
 use crate::counter;
 
@@ -105,31 +105,32 @@ impl Example {
     }
 
     pub(super) fn menu(&self, id: Option<window::Id>) -> menu::Bar<Message> {
-        let mut file = menu::submenu("File").push(
+        let file = menu![
+            "File",
             menu::item("New Counter")
                 .on_press(Message::NewCounter)
                 .shortcut(Modifiers::COMMAND, 'n'),
-        );
-
-        if let Some(id) = id {
-            file = file.push(
-                menu::item("Close Window")
-                    .on_press(Message::Close(id))
-                    .shortcut(Modifiers::COMMAND, 'w'),
-            );
-        }
-
-        let mut bar = menu::bar([file]);
+        ]
+        .extend(id.map(|id| {
+            menu::item("Close Window")
+                .on_press(Message::Close(id))
+                .shortcut(Modifiers::COMMAND, 'w')
+        }));
+        let help = menu!["Help", menu::item("About iced…").on_press(Message::About)];
 
         if let Some(id) = id
             && let Some(Window::Counter(counter)) = self.windows.get(&id)
         {
-            bar = bar
-                .push(menu::edit())
-                .push(counter.menu().map(Message::Counter.with(id)));
+            [
+                file,
+                menu::edit(),
+                counter.menu().map(Message::Counter.with(id)),
+                help,
+            ]
+            .into()
+        } else {
+            [file, help].into()
         }
-
-        bar.push(menu::submenu("Help").push(menu::item("About iced…").on_press(Message::About)))
     }
 
     pub(super) fn view(&self, id: window::Id) -> impl Widget<Message> {

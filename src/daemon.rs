@@ -209,11 +209,14 @@ impl<P: Program> Daemon<P> {
     /// windows are not implicitly merged. The platform's application menu is
     /// preserved.
     ///
+    /// The callback may return a menu bar, a single menu, or an array or vector
+    /// of menus.
+    ///
     /// Menus refresh after messages and focus changes settle. Native menus are
     /// currently supported on macOS; other platforms support only an empty bar.
-    pub fn menu(
+    pub fn menu<B>(
         self,
-        f: impl Fn(&P::State, Option<window::Id>) -> menu::Bar<P::Message>,
+        f: impl Fn(&P::State, Option<window::Id>) -> B,
     ) -> Daemon<
         impl Program<
             State = P::State,
@@ -222,9 +225,12 @@ impl<P: Program> Daemon<P> {
             Renderer = P::Renderer,
             Executor = P::Executor,
         >,
-    > {
+    >
+    where
+        B: Into<menu::Bar<P::Message>>,
+    {
         Daemon {
-            raw: program::with_menu(self.raw, f),
+            raw: program::with_menu(self.raw, move |state, window| f(state, window).into()),
             settings: self.settings,
             presets: self.presets,
         }

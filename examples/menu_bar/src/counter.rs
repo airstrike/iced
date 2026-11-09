@@ -109,41 +109,30 @@ impl State {
     }
 
     pub fn menu(&self) -> menu::Menu<Message> {
-        let step = [Step::One, Step::Five, Step::Ten].into_iter().fold(
-            menu::submenu("Step"),
-            |menu, step| {
-                menu.push(
-                    menu::item(step.value().to_string())
-                        .checked(self.step == step)
-                        .on_press(Message::Step(step)),
-                )
-            },
-        );
+        let steps = [Step::One, Step::Five, Step::Ten].into_iter().map(|step| {
+            menu::item(step.value().to_string())
+                .checked(self.step == step)
+                .on_press(Message::Step(step))
+        });
 
-        menu::submenu(&self.name)
-            .push(
-                menu::item(format!("Increase by {}", self.step.value()))
-                    .on_press_maybe(self.can_increment().then_some(Message::Increment))
-                    .shortcut(Modifiers::COMMAND, 'i'),
-            )
-            .push(
-                menu::item(format!("Decrease by {}", self.step.value()))
-                    .on_press_maybe(self.can_decrement().then_some(Message::Decrement))
-                    .shortcut(Modifiers::COMMAND, 'd'),
-            )
-            .push(
-                menu::item("Reset")
-                    .on_press_maybe((self.value != 0).then_some(Message::Reset))
-                    .shortcut(Modifiers::COMMAND, 'r'),
-            )
-            .push(menu::separator())
-            .push(
-                menu::item("Allow negative values")
-                    .checked(self.allow_negative)
-                    .on_press(Message::AllowNegative(!self.allow_negative)),
-            )
-            .push(step)
-            .push(menu::separator())
-            .push(menu::item(format!("Current value: {}", self.value)))
+        menu![
+            &self.name,
+            menu::item(format!("Increase by {}", self.step.value()))
+                .on_press_maybe(self.can_increment().then_some(Message::Increment))
+                .shortcut(Modifiers::COMMAND, 'i'),
+            menu::item(format!("Decrease by {}", self.step.value()))
+                .on_press_maybe(self.can_decrement().then_some(Message::Decrement))
+                .shortcut(Modifiers::COMMAND, 'd'),
+            menu::item("Reset")
+                .on_press_maybe((self.value != 0).then_some(Message::Reset))
+                .shortcut(Modifiers::COMMAND, 'r'),
+            menu::separator(),
+            menu::item("Allow negative values")
+                .checked(self.allow_negative)
+                .on_press(Message::AllowNegative(!self.allow_negative)),
+            menu("Step", steps),
+            menu::separator(),
+            menu::item(format!("Current value: {}", self.value)),
+        ]
     }
 }

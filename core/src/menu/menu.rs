@@ -1,6 +1,6 @@
-use super::Entry;
-
 use std::rc::Rc;
+
+use super::Entry;
 
 /// A named menu containing items, separators, and nested menus.
 #[derive(Debug)]
@@ -28,6 +28,20 @@ impl<Message> Menu<Message> {
             entries: Vec::new(),
             enabled: true,
         }
+    }
+
+    /// Creates an enabled menu from items, submenus, or entries.
+    pub fn with_entries(
+        title: impl Into<String>,
+        entries: impl IntoIterator<Item = impl Into<Entry<Message>>>,
+    ) -> Self {
+        Self::new(title).extend(entries)
+    }
+
+    /// Appends entries from an iterator, preserving their order.
+    pub fn extend(mut self, entries: impl IntoIterator<Item = impl Into<Entry<Message>>>) -> Self {
+        self.entries.extend(entries.into_iter().map(Into::into));
+        self
     }
 
     /// Appends an entry to the menu.

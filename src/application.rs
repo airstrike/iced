@@ -396,11 +396,14 @@ impl<P: Program> Application<P> {
 
     /// Sets the native menu logic of the [`Application`].
     ///
+    /// The callback may return a menu bar, a single menu, or an array or vector
+    /// of menus.
+    ///
     /// Menus refresh after messages and focus changes settle. Native menus are
     /// currently supported on macOS; other platforms support only an empty bar.
-    pub fn menu(
+    pub fn menu<B>(
         self,
-        f: impl Fn(&P::State) -> menu::Bar<P::Message>,
+        f: impl Fn(&P::State) -> B,
     ) -> Application<
         impl Program<
             State = P::State,
@@ -409,9 +412,12 @@ impl<P: Program> Application<P> {
             Renderer = P::Renderer,
             Executor = P::Executor,
         >,
-    > {
+    >
+    where
+        B: Into<menu::Bar<P::Message>>,
+    {
         Application {
-            raw: program::with_menu(self.raw, move |state, _window| f(state)),
+            raw: program::with_menu(self.raw, move |state, _window| f(state).into()),
             settings: self.settings,
             window: self.window,
             presets: self.presets,

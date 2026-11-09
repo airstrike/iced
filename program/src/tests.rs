@@ -67,7 +67,7 @@ fn decorators_preserve_menus_presets_settings_and_lazy_nonclone_messages() {
             let seen_window = Rc::clone(&seen_window);
             move |state, window| {
                 seen_window.set(window);
-                menu::bar([menu::submenu(state.to_string()).push(
+                menu::bar([menu::Menu::new(state.to_string()).push(
                     menu::item("Next").on_press_with({
                         let calls = Rc::clone(&calls);
                         let next = *state + 1;

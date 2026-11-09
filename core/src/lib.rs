@@ -69,6 +69,7 @@ pub use image::Image;
 pub use input_method::InputMethod;
 pub use layout::Layout;
 pub use length::Length;
+pub use menu::menu;
 pub use overlay::Overlay;
 pub use padding::Padding;
 pub use pixels::Pixels;

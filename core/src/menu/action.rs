@@ -1,7 +1,7 @@
-use crate::edit;
-
 use std::fmt;
 use std::rc::Rc;
+
+use crate::edit;
 
 /// An action invoked when an enabled menu item is activated.
 pub enum Action<Message> {

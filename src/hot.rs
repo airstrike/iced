@@ -116,7 +116,7 @@ mod tests {
         let program = crate::daemon(|| 7_u32, |_: &mut u32, _: u32| {}, view)
             .theme(crate::Theme::Dark)
             .menu(|state, window| {
-                menu::bar([menu::submenu(format!("{state}: {window:?}"))
+                menu::bar([menu::Menu::new(format!("{state}: {window:?}"))
                     .push(menu::item("Change").on_press(9))])
             });
         let program = Hot::new(program);

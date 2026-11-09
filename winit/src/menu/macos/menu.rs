@@ -32,12 +32,7 @@ impl Menu {
     }
 
     pub fn update(&mut self, snapshot: Snapshot) {
-        if self
-            .delegate
-            .ivars()
-            .tracking
-            .is_frozen(run_loop::run_loop_mode())
-        {
+        if self.delegate.ivars().tracking.is_frozen(run_loop::mode()) {
             self.pending = Some(snapshot);
             self.delegate.schedule_wake();
         } else {
@@ -47,7 +42,7 @@ impl Menu {
     }
 
     pub fn flush(&mut self) {
-        let mode = run_loop::run_loop_mode();
+        let mode = run_loop::mode();
         self.delegate.ivars().tracking.resume(mode);
         if !self.delegate.ivars().tracking.is_frozen(mode)
             && let Some(snapshot) = self.pending.take()
@@ -78,7 +73,7 @@ impl Menu {
                 .iter()
                 .any(|root| std::ptr::eq(&*root.item, &*item))
             {
-                shortcut::collect_shortcuts(&item, &mut shortcuts);
+                shortcut::collect(&item, &mut shortcuts);
             }
         }
         snapshot.claim_shortcuts(&mut shortcuts);

@@ -956,7 +956,7 @@ mod tests {
             _state: &Self::State,
             window: Option<window::Id>,
         ) -> menu::Bar<Self::Message> {
-            menu::bar([menu::submenu("Window").push(menu::item("Target").on_press(window))])
+            menu::bar([menu::Menu::new("Window").push(menu::item("Target").on_press(window))])
         }
     }
 

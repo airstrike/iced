@@ -2,7 +2,7 @@ use objc2_foundation::{NSDefaultRunLoopMode, NSRunLoop};
 
 use crate::menu::tracking::Mode;
 
-pub(super) fn run_loop_mode() -> Mode {
+pub(super) fn mode() -> Mode {
     let Some(mode) = NSRunLoop::currentRunLoop().currentMode() else {
         return Mode::Other;
     };

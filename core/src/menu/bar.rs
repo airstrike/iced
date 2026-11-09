@@ -1,6 +1,6 @@
-use super::Menu;
-
 use std::rc::Rc;
+
+use super::Menu;
 
 /// The application menus contributed by a program.
 #[derive(Debug)]
@@ -22,12 +22,35 @@ impl<Message> Clone for Bar<Message> {
     }
 }
 
+impl<Message> From<Menu<Message>> for Bar<Message> {
+    fn from(menu: Menu<Message>) -> Self {
+        Self::new([menu])
+    }
+}
+
+impl<Message, const N: usize> From<[Menu<Message>; N]> for Bar<Message> {
+    fn from(menus: [Menu<Message>; N]) -> Self {
+        Self::new(menus)
+    }
+}
+
+impl<Message> From<Vec<Menu<Message>>> for Bar<Message> {
+    fn from(menus: Vec<Menu<Message>>) -> Self {
+        Self::from_vec(menus)
+    }
+}
+
 impl<Message> Bar<Message> {
     /// Creates a menu bar from the given menus, in display order.
     pub fn new(menus: impl IntoIterator<Item = Menu<Message>>) -> Self {
         Self {
             menus: menus.into_iter().collect(),
         }
+    }
+
+    /// Uses an already allocated vector as the menu bar's contents.
+    pub fn from_vec(menus: Vec<Menu<Message>>) -> Self {
+        Self { menus }
     }
 
     /// Appends a menu to the bar.

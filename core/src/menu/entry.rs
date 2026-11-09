@@ -1,6 +1,6 @@
-use super::{Item, Menu};
-
 use std::rc::Rc;
+
+use super::{Item, Menu};
 
 /// An entry in a native menu.
 #[derive(Debug)]
