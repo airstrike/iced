@@ -146,7 +146,10 @@ mod tests {
         assert_eq!(item.title(), "Fresh");
         assert!(item.is_enabled());
         assert!(item.is_checked());
-        assert_eq!(item.shortcut_key().map(menu::Shortcut::key), Some('n'));
+        assert_eq!(
+            item.shortcut_key().map(menu::Shortcut::key),
+            Some(&crate::keyboard::Key::from('n'))
+        );
         let Some(Action::Message(produce)) = item.action() else {
             panic!("message factory")
         };

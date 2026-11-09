@@ -35,7 +35,8 @@ impl Branch {
                     if !item.enabled
                         || item
                             .shortcut
-                            .is_some_and(|shortcut| !claimed.insert(shortcut))
+                            .as_ref()
+                            .is_some_and(|shortcut| !claimed.insert(shortcut.clone()))
                     {
                         item.shortcut = None;
                     }
@@ -66,7 +67,7 @@ impl Branch {
                     let enabled = enabled && item.is_enabled();
                     let title = item.title().to_owned();
                     let checked = item.is_checked();
-                    let shortcut = item.shortcut_key();
+                    let shortcut = item.shortcut_key().cloned();
                     let action = item.into_action();
                     let enabled = enabled
                         && (!matches!(action, Some(menu::Action::Edit(_))) || window.is_some());

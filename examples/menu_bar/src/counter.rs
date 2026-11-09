@@ -1,4 +1,5 @@
 use iced::keyboard::Modifiers;
+use iced::keyboard::key::Named;
 use iced::widget::{button, checkbox, column, row, text, text_editor, text_input};
 use iced::{Fill, Widget, menu};
 
@@ -131,6 +132,18 @@ impl State {
                 .checked(self.allow_negative)
                 .on_press(Message::AllowNegative(!self.allow_negative)),
             menu("Step", steps),
+            menu![
+                "More shortcuts",
+                menu::item("Increase (F5)")
+                    .on_press_maybe(self.can_increment().then_some(Message::Increment))
+                    .shortcut(Modifiers::NONE, Named::F5),
+                menu::item("Decrease (Down arrow)")
+                    .on_press_maybe(self.can_decrement().then_some(Message::Decrement))
+                    .shortcut(Modifiers::COMMAND, Named::ArrowDown),
+                menu::item("Reset (é)")
+                    .on_press_maybe((self.value != 0).then_some(Message::Reset))
+                    .shortcut(Modifiers::COMMAND, 'é'),
+            ],
             menu::separator(),
             menu::item(format!("Current value: {}", self.value)),
         ]

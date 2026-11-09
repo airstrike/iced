@@ -117,6 +117,30 @@ impl Key {
     }
 }
 
+impl From<char> for Key {
+    fn from(character: char) -> Self {
+        Self::Character(character.to_string().into())
+    }
+}
+
+impl From<&str> for Key {
+    fn from(character: &str) -> Self {
+        Self::Character(character.into())
+    }
+}
+
+impl From<String> for Key {
+    fn from(character: String) -> Self {
+        Self::Character(character.into())
+    }
+}
+
+impl From<SmolStr> for Key {
+    fn from(character: SmolStr) -> Self {
+        Self::Character(character)
+    }
+}
+
 impl From<Named> for Key {
     fn from(named: Named) -> Self {
         Self::Named(named)

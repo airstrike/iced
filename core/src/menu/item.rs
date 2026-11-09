@@ -1,6 +1,6 @@
 use super::Action;
 use crate::edit;
-use crate::keyboard::Modifiers;
+use crate::keyboard::{Key, Modifiers};
 use crate::menu::shortcut::{self, Shortcut};
 
 /// A native menu item with an optional action and shortcut.
@@ -78,21 +78,24 @@ impl<Message> Item<Message> {
         self
     }
 
-    /// Sets this item's shortcut.
+    /// Sets this item's shortcut from a character, string, or named logical key.
     ///
     /// # Panics
     /// Panics if the key or modifiers are rejected by [`Shortcut::new`]. Use
     /// [`Self::try_shortcut`] to handle invalid shortcuts without panicking.
-    pub fn shortcut(self, modifiers: Modifiers, key: char) -> Self {
+    pub fn shortcut(self, modifiers: Modifiers, key: impl Into<Key>) -> Self {
         self.try_shortcut(modifiers, key)
             .expect("native menu shortcut must be valid")
     }
 
     /// Sets this item's shortcut after validating the key and modifiers.
+    ///
+    /// # Errors
+    /// Returns the validation errors documented by [`Shortcut::new`].
     pub fn try_shortcut(
         mut self,
         modifiers: Modifiers,
-        key: char,
+        key: impl Into<Key>,
     ) -> Result<Self, shortcut::Error> {
         self.shortcut = Some(Shortcut::new(modifiers, key)?);
         Ok(self)
@@ -116,8 +119,8 @@ impl<Message> Item<Message> {
     }
 
     /// Returns the validated shortcut, if any.
-    pub fn shortcut_key(&self) -> Option<Shortcut> {
-        self.shortcut
+    pub fn shortcut_key(&self) -> Option<&Shortcut> {
+        self.shortcut.as_ref()
     }
 
     /// Returns the activation action, if any.

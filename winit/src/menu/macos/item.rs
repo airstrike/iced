@@ -22,7 +22,7 @@ impl Item {
 
         if let Some(shortcut) = snapshot.shortcut {
             self.item
-                .setKeyEquivalent(&NSString::from_str(&shortcut.key().to_string()));
+                .setKeyEquivalent(&NSString::from_str(&shortcut::key(&shortcut)));
             self.item
                 .setKeyEquivalentModifierMask(shortcut::modifiers(shortcut.modifiers()));
         } else {

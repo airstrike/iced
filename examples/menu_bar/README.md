@@ -62,7 +62,23 @@ same child state as `view` and maps its menu with
 Use the Counter menu to increase, decrease, reset, choose a step, or allow
 negative values. The buttons and checkbox update the same state, including the
 menu's checks, labels, and disabled items. Command-I, Command-D, and Command-R
-activate the corresponding native menu items.
+activate the corresponding native menu items. The More shortcuts submenu also
+accepts F5, Command–Down Arrow, and Command–é:
+
+```rust
+use iced::keyboard::Modifiers;
+use iced::keyboard::key::Named;
+
+menu::item("Increase").on_press(Message::Increment)
+    .shortcut(Modifiers::NONE, Named::F5);
+menu::item("Reset").on_press(Message::Reset)
+    .shortcut(Modifiers::COMMAND, 'é');
+```
+
+Shortcuts use iced's logical key types. Character keys accept a single Unicode
+scalar and require a command modifier; named navigation/editing keys and F1–F35
+may be unmodified. `try_shortcut` reports unsupported keys. AppKit handles matching
+against the active keyboard layout; there is no synthetic keyboard event.
 
 The Edit menu operates on the focused window's name field or notes editor.
 Cut, Copy, Paste, and Select All preserve the widgets' normal input and editing
