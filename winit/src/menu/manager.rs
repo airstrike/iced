@@ -3,20 +3,23 @@ use std::sync::Arc;
 use crate::Proxy;
 use crate::core::{menu, window};
 
-use super::platform;
+#[cfg(target_os = "macos")]
+use super::macos;
+#[cfg(not(target_os = "macos"))]
+use super::other;
 
 pub struct Manager<Message: 'static> {
     proxy: Proxy<Message>,
     focus: crate::window::Focus,
     #[cfg(target_os = "macos")]
-    native: platform::Menu,
+    native: macos::Menu,
 }
 
 impl<Message: 'static> Manager<Message> {
     pub fn new(proxy: Proxy<Message>, focus: crate::window::Focus) -> Self {
         Self {
             #[cfg(target_os = "macos")]
-            native: platform::Menu::new(proxy.clone()),
+            native: macos::Menu::new(proxy.clone()),
             proxy,
             focus,
         }
@@ -38,7 +41,7 @@ impl<Message: 'static> Manager<Message> {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = (&self.proxy, &self.focus, window);
-            platform::update(&bar);
+            other::update(&bar);
         }
     }
 

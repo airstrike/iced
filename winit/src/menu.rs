@@ -4,13 +4,17 @@ mod manager;
 
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
-#[path = "menu/macos.rs"]
-mod platform;
+mod macos;
 
 #[cfg(not(target_os = "macos"))]
-#[path = "menu/other.rs"]
-mod platform;
+mod other;
 
+#[cfg(target_os = "macos")]
+mod branch;
+#[cfg(target_os = "macos")]
+mod callback;
+#[cfg(target_os = "macos")]
+mod scope;
 #[cfg(target_os = "macos")]
 mod snapshot;
 #[cfg(target_os = "macos")]
