@@ -1,6 +1,7 @@
 mod branch;
 mod delegate;
 mod entry;
+mod image;
 mod item;
 mod menu;
 mod registration;

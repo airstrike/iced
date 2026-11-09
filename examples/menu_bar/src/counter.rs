@@ -3,12 +3,15 @@ use iced::keyboard::key::Named;
 use iced::widget::{button, checkbox, column, row, text, text_editor, text_input};
 use iced::{Fill, Widget, menu};
 
+use crate::icons::Icons;
+
 pub struct State {
     pub name: String,
     value: i64,
     step: Step,
     allow_negative: bool,
     notes: text_editor::Content,
+    icons: Icons,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +49,7 @@ impl State {
             value: if number == 1 { 0 } else { 10 },
             step: if number == 1 { Step::One } else { Step::Five },
             allow_negative: false,
+            icons: Icons::default(),
             notes: text_editor::Content::with_text(
                 "Select some text here, then use the native Edit menu.\nEach window has its own counter and notes.",
             ),
@@ -119,12 +123,15 @@ impl State {
         menu![
             &self.name,
             menu::item(format!("Increase by {}", self.step.value()))
+                .icon(&self.icons.increase)
                 .on_press_maybe(self.can_increment().then_some(Message::Increment))
                 .shortcut(Modifiers::COMMAND, 'i'),
             menu::item(format!("Decrease by {}", self.step.value()))
+                .icon(&self.icons.decrease)
                 .on_press_maybe(self.can_decrement().then_some(Message::Decrement))
                 .shortcut(Modifiers::COMMAND, 'd'),
             menu::item("Reset")
+                .icon(&self.icons.reset)
                 .on_press_maybe((self.value != 0).then_some(Message::Reset))
                 .shortcut(Modifiers::COMMAND, 'r'),
             menu::separator(),

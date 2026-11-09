@@ -80,6 +80,22 @@ scalar and require a command modifier; named navigation/editing keys and F1–F3
 may be unmodified. `try_shortcut` reports unsupported keys. AppKit handles matching
 against the active keyboard layout; there is no synthetic keyboard event.
 
+Items accept iced image handles for icons. The example creates its handles once,
+then reuses them across menu updates: plus and minus are RGBA templates, while
+Reset uses an embedded PNG in full color.
+
+```rust
+menu::item("Increase").on_press(Message::Increment)
+    .icon(menu::Icon::new(&self.plus_image).template(true));
+menu::item("Reset").on_press(Message::Reset).icon(&self.reset_image);
+```
+
+Templates use their alpha channel as a mask and adapt to macOS appearance.
+Icons fit within 16 × 16 points while preserving aspect ratio. AppKit decodes
+paths and encoded bytes; invalid images are omitted. Handles can be constructed
+through `iced::widget::image` with `image-without-codecs` enabled; no Rust image
+codec feature is required for native menus.
+
 The Edit menu operates on the focused window's name field or notes editor.
 Cut, Copy, Paste, and Select All preserve the widgets' normal input and editing
 messages. An edit item with no eligible focused control has no effect. Applications
@@ -97,7 +113,8 @@ let help = menu!["Support", menu::item("About iced…").on_press(Message::About)
 
 AppKit maintains the Window menu's list of windows and the Help menu's search
 field. The first top-level menu for each role is registered; roles on nested
-menus have no effect. Help registration restores the previous Help menu when removed. Window roles
+menus have no effect. Help registration restores the previous Help menu when
+removed. Window roles
 follow the lifetime of the native menu; changing a role replaces that native
 menu without altering inherited application menus.
 File → New Counter opens another counter. Closing every window keeps the daemon

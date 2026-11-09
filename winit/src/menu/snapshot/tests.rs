@@ -251,3 +251,20 @@ fn mapped_menu_roles_reach_the_native_snapshot() {
     assert_eq!(branch.role, Some(menu::Role::Help));
     assert_eq!(branch.title, "Support");
 }
+
+#[test]
+fn mapped_item_icons_reach_the_native_snapshot() {
+    use crate::core::{image, menu};
+    use crate::runtime::Action;
+
+    let icon = menu::Icon::new(image::Handle::from_rgba(1, 1, vec![0, 0, 0, 255])).template(true);
+    let menu = crate::core::menu!["Counter", menu::item("Increase").icon(&icon).on_press(1_u8)]
+        .map(u16::from);
+    let send: Rc<dyn Fn(Action<u16>)> = Rc::new(|_| {});
+    let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
+    let branch = super::Branch::from_menu(menu, true, &scope, &send);
+    let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
+        panic!("the menu contains one item");
+    };
+    assert_eq!(item.icon.as_ref(), Some(&icon));
+}

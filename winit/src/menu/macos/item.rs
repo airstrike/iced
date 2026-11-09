@@ -6,12 +6,14 @@ use objc2_foundation::{MainThreadMarker, NSString, ns_string};
 use crate::menu::branch;
 
 use super::delegate::Delegate;
+use super::image::Image;
 use super::shortcut;
 use super::target::Target;
 
 pub(super) struct Item {
     pub(super) item: Retained<NSMenuItem>,
     pub(super) target: Option<Retained<Target>>,
+    pub(super) image: Image,
 }
 
 impl Item {
@@ -19,6 +21,7 @@ impl Item {
         self.item.setTitle(&NSString::from_str(&snapshot.title));
         self.item.setEnabled(snapshot.enabled);
         self.item.setState(if snapshot.checked { 1 } else { 0 });
+        self.item.setImage(self.image.update(snapshot.icon));
 
         if let Some(shortcut) = snapshot.shortcut {
             self.item

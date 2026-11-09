@@ -54,9 +54,9 @@ mundy.optional = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
 objc2-app-kit.workspace = true
-objc2-app-kit.features = ["std", "NSApplication", "NSCell", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder"]
+objc2-app-kit.features = ["std", "NSApplication", "NSBitmapImageRep", "NSCell", "NSEvent", "NSGraphics", "NSImage", "NSImageRep", "NSMenu", "NSMenuItem", "NSResponder"]
 objc2-foundation.workspace = true
-objc2-foundation.features = ["std", "NSArray", "NSObjCRuntime", "NSObject", "NSRunLoop", "NSString", "NSThread"]
+objc2-foundation.features = ["std", "NSArray", "NSData", "NSGeometry", "NSObjCRuntime", "NSObject", "NSRunLoop", "NSString", "NSThread"]
 
 # AppKit's registration APIs must be exercised on the actual main thread.
 [[test]]

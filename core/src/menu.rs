@@ -11,6 +11,7 @@ mod action;
 mod bar;
 mod construction;
 mod entry;
+mod icon;
 mod item;
 #[expect(
     clippy::module_inception,
@@ -24,6 +25,7 @@ pub use action::Action;
 pub use bar::Bar;
 pub use construction::{bar, edit, item, menu, separator};
 pub use entry::Entry;
+pub use icon::Icon;
 pub use item::Item;
 pub use menu::Menu;
 pub use role::Role;

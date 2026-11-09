@@ -1,5 +1,6 @@
 mod counter;
 mod example;
+mod icons;
 
 use example::Example;
 

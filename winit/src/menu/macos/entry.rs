@@ -7,6 +7,7 @@ use crate::menu::branch;
 
 use super::branch::Branch;
 use super::delegate::Delegate;
+use super::image::Image;
 use super::item::Item;
 
 pub(super) enum Entry {
@@ -23,6 +24,7 @@ impl Entry {
                 let mut item = Item {
                     item: NSMenuItem::new(mtm),
                     target: None,
+                    image: Image::default(),
                 };
                 // SAFETY: Every target installed by Item::update implements this
                 // exact selector, and Item retains it until the target is cleared.

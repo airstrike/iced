@@ -1,4 +1,5 @@
 use super::Action;
+use super::Icon;
 use crate::edit;
 use crate::keyboard::{Key, Modifiers};
 use crate::menu::shortcut::{self, Shortcut};
@@ -11,6 +12,7 @@ pub struct Item<Message> {
     enabled: bool,
     checked: bool,
     shortcut: Option<Shortcut>,
+    icon: Option<Icon>,
 }
 
 impl<Message> Item<Message> {
@@ -22,6 +24,7 @@ impl<Message> Item<Message> {
             enabled: true,
             checked: false,
             shortcut: None,
+            icon: None,
         }
     }
 
@@ -76,6 +79,17 @@ impl<Message> Item<Message> {
     pub fn checked(mut self, checked: bool) -> Self {
         self.checked = checked;
         self
+    }
+
+    /// Displays an image beside this item.
+    pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
+        self.icon = Some(icon.into());
+        self
+    }
+
+    /// Returns the image displayed beside this item, if any.
+    pub fn image(&self) -> Option<&Icon> {
+        self.icon.as_ref()
     }
 
     /// Sets this item's shortcut from a character, string, or named logical key.
@@ -148,6 +162,7 @@ impl<Message> Item<Message> {
             enabled: self.enabled,
             checked: self.checked,
             shortcut: self.shortcut,
+            icon: self.icon,
         }
     }
 }

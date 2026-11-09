@@ -1,5 +1,14 @@
 //! Main-thread tests for native menu ownership.
 #[cfg(target_os = "macos")]
+pub use iced_winit::core;
+#[cfg(target_os = "macos")]
+#[path = "menu/icons.rs"]
+mod icons;
+#[cfg(target_os = "macos")]
+#[path = "../src/menu/macos/image.rs"]
+#[allow(unsafe_code)]
+mod image;
+#[cfg(target_os = "macos")]
 #[path = "../src/menu/macos/registration.rs"]
 mod registration;
 #[cfg(target_os = "macos")]
@@ -13,4 +22,6 @@ fn main() {
     }
     #[cfg(target_os = "macos")]
     roles::run();
+    #[cfg(target_os = "macos")]
+    icons::run();
 }

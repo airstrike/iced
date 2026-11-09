@@ -25,6 +25,7 @@ pub struct Item {
     pub enabled: bool,
     pub checked: bool,
     pub shortcut: Option<menu::Shortcut>,
+    pub icon: Option<menu::Icon>,
     pub callback: Option<Rc<Callback>>,
 }
 
@@ -70,6 +71,7 @@ impl Branch {
                     let title = item.title().to_owned();
                     let checked = item.is_checked();
                     let shortcut = item.shortcut_key().cloned();
+                    let icon = item.image().cloned();
                     let action = item.into_action();
                     let enabled = enabled
                         && (!matches!(action, Some(menu::Action::Edit(_))) || window.is_some());
@@ -92,6 +94,7 @@ impl Branch {
                         enabled,
                         checked,
                         shortcut,
+                        icon,
                         callback,
                     })
                 }
