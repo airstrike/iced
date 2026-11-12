@@ -66,7 +66,12 @@ where
         let surface_size = state.physical_size();
         let surface_version = state.surface_version();
 
-        compositor.configure_surface(&mut surface, surface_size.width, surface_size.height);
+        // A window can open with no area yet, as a canvas does before the
+        // page lays it out: its surface is configured once a resize gives
+        // it one, as `Window::configure_surface` does.
+        if surface_size.width > 0 && surface_size.height > 0 {
+            compositor.configure_surface(&mut surface, surface_size.width, surface_size.height);
+        }
 
         let renderer = compositor.create_renderer(renderer_settings);
 
