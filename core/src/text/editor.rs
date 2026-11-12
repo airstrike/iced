@@ -326,12 +326,41 @@ pub struct State {
     last_click: Option<mouse::Click>,
     is_dragging: bool,
     partial_scroll: f32,
+    scrolls_on_touch: bool,
+    touch_drag: Option<TouchDrag>,
+}
+
+/// A finger on a [`State`] that scrolls on touch: a tap until it travels
+/// past [`TouchDrag::THRESHOLD`], a scroll from then on.
+#[derive(Debug, Clone, Copy)]
+struct TouchDrag {
+    start: Point,
+    position: Point,
+    scrolling: bool,
+}
+
+impl TouchDrag {
+    /// How far a finger may travel, in logical pixels, and still tap.
+    const THRESHOLD: f32 = 8.0;
 }
 
 impl State {
-    /// Creates a new [`State`].
+    /// Creates a new [`State`]. A finger works it like the mouse: a press
+    /// places the cursor and a drag selects.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a new [`State`] that a finger works as a touch screen's
+    /// editors do: a drag scrolls the content with the finger, pixel for
+    /// pixel, and a tap places the cursor when the finger lifts, so a
+    /// scroll never moves it. Taps chain like clicks: a double tap
+    /// selects a word, a triple tap a line.
+    pub fn scrolling_on_touch() -> Self {
+        Self {
+            scrolls_on_touch: true,
+            ..Self::default()
+        }
     }
 
     /// Updates the [`State`] for the given [`Editor`] and returns any relevant [`Update`].
@@ -458,6 +487,7 @@ impl State {
                 }
                 _ => None,
             },
+            Event::Touch(event) if self.scrolls_on_touch => self.touch(event, bounds, padding),
             Event::Touch(event) => match event {
                 touch::Event::FingerPressed { .. } => {
                     if let Some(cursor_position) = cursor.position_in(bounds) {
@@ -770,6 +800,76 @@ impl State {
     }
 }
 
+impl State {
+    /// A finger on a [`State`] that scrolls on touch.
+    fn touch<Message>(
+        &mut self,
+        event: &touch::Event,
+        bounds: Rectangle,
+        padding: Padding,
+    ) -> Option<Update<Message>> {
+        match event {
+            touch::Event::FingerPressed { position, .. } => {
+                if bounds.contains(*position) {
+                    self.touch_drag = Some(TouchDrag {
+                        start: *position,
+                        position: *position,
+                        scrolling: false,
+                    });
+
+                    Some(Update::Capture)
+                } else if self.focus.is_some() {
+                    self.focus = None;
+
+                    Some(Update::Unfocus)
+                } else {
+                    None
+                }
+            }
+            touch::Event::FingerMoved { position, .. } => {
+                let drag = self.touch_drag.as_mut()?;
+
+                if !drag.scrolling && drag.start.distance(*position) > TouchDrag::THRESHOLD {
+                    drag.scrolling = true;
+                }
+
+                let pixels = drag.position.y - position.y;
+                drag.position = *position;
+
+                Some(if drag.scrolling {
+                    Update::Action(Action::ScrollBy { pixels })
+                } else {
+                    Update::Capture
+                })
+            }
+            touch::Event::FingerLifted { position, .. } => {
+                let drag = self.touch_drag.take()?;
+
+                if drag.scrolling {
+                    return Some(Update::Capture);
+                }
+
+                let position =
+                    *position - Vector::new(bounds.x + padding.left, bounds.y + padding.top);
+                let click = mouse::Click::new(position, mouse::Button::Left, self.last_click);
+
+                self.focus = Some(Focus::now());
+                self.last_click = Some(click);
+
+                Some(Update::Action(Action::Click(
+                    click.position(),
+                    click.kind(),
+                )))
+            }
+            touch::Event::FingerLost { .. } => {
+                self.touch_drag = None;
+
+                None
+            }
+        }
+    }
+}
+
 impl Focusable for State {
     fn is_focused(&self) -> bool {
         self.focus.is_some()
@@ -971,6 +1071,9 @@ pub enum Update<Message> {
     Custom(Message),
     /// The [`Editor`] produced a sequence of updates.
     Sequence(Vec<Update<Message>>),
+    /// The event belongs to the [`Editor`] but changes nothing yet, like a
+    /// finger that may still become a scroll.
+    Capture,
 }
 
 fn motion(key: key::Named) -> Option<Motion> {

@@ -195,6 +195,9 @@ impl<R: text::Renderer> Input<R> {
                     shell.request_redraw();
                 }
                 editor::Update::Release => {}
+                editor::Update::Capture => {
+                    shell.capture_event();
+                }
                 editor::Update::Copy(text) => {
                     shell.write_clipboard(text);
                     shell.capture_event();

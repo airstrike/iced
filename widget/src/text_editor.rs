@@ -362,7 +362,7 @@ where
 
     fn state(&self) -> widget::tree::State {
         widget::tree::State::new(State {
-            editor: editor::State::new(),
+            editor: editor::State::scrolling_on_touch(),
             parser: RefCell::new(Parser::new(&self.parser_settings)),
             parser_settings: self.parser_settings.clone(),
             last_theme: RefCell::new(None),
@@ -439,6 +439,9 @@ where
                     shell.capture_event();
                 }
                 editor::Update::Release => {}
+                editor::Update::Capture => {
+                    shell.capture_event();
+                }
                 editor::Update::Custom(message) => {
                     shell.publish(message);
                     shell.capture_event();
