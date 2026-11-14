@@ -817,6 +817,56 @@ mod tests {
         Paragraph::with_spans(text)
     }
 
+    #[test]
+    fn balanced_wrap_preserves_shaped_rich_spans_after_resizing() {
+        let mut recipe = Text {
+            content: "word word word word",
+            bounds: Size::new(1000.0, f32::INFINITY),
+            size: Pixels(20.0),
+            line_height: LineHeight::Relative(1.5),
+            font: Font::default(),
+            align_x: Alignment::Center,
+            align_y: alignment::Vertical::Top,
+            shaping: Shaping::Advanced,
+            wrapping: Wrapping::Word,
+            ellipsis: Ellipsis::None,
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
+            weight: None,
+            hint_factor: None,
+        };
+        let unwrapped_width = Paragraph::with_text(recipe.clone()).min_bounds().width;
+        // Enough space for three words, leaving one word alone on line two.
+        recipe.bounds.width = unwrapped_width * 0.8;
+        let ordinary = Paragraph::with_text(recipe.clone());
+        let widths = |paragraph: &Paragraph| {
+            paragraph
+                .buffer()
+                .layout_runs()
+                .map(|run| run.line_w)
+                .collect::<Vec<_>>()
+        };
+        let greedy = widths(&ordinary);
+        assert_eq!(greedy.len(), 2);
+        assert!(greedy[0] > greedy[1] * 2.0);
+
+        recipe.wrapping = Wrapping::Balanced;
+        let expected = widths(&Paragraph::with_text(recipe.clone()));
+        assert_eq!(expected.len(), 2);
+        assert!((expected[0] - expected[1]).abs() < 1.0);
+
+        let spans = [Span::<()>::new("word word "), Span::new("word word")];
+        let bounds = recipe.bounds;
+        let mut rich = Paragraph::with_spans(recipe.with_content(&spans[..]));
+        assert_eq!(widths(&rich), expected);
+        assert_eq!(rich.span_bounds(1).len(), 1);
+        rich.resize(Size::new(unwrapped_width + 2.0, f32::INFINITY));
+        assert_eq!(widths(&rich).len(), 1);
+        rich.resize(bounds);
+        assert_eq!(widths(&rich), expected);
+    }
+
     /// Bounds should cover the ink of the span, without stretching to the
     /// line height.
     #[test]
