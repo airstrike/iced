@@ -229,6 +229,11 @@ pub enum Wrapping {
     /// This is the default.
     #[default]
     Word,
+    /// Balances short word-wrapped paragraphs without adding lines.
+    ///
+    /// Balancing applies independently to each hard paragraph of two to
+    /// six lines. Ellipsized and longer paragraphs use word wrapping.
+    Balanced,
     /// Wraps at the glyph level.
     Glyph,
     /// Wraps at the word level, or fallback to glyph level if a word can't fit on a line by itself.

@@ -466,6 +466,7 @@ pub fn to_wrap(wrapping: Wrapping) -> cosmic_text::Wrap {
     match wrapping {
         Wrapping::None => cosmic_text::Wrap::None,
         Wrapping::Word => cosmic_text::Wrap::Word,
+        Wrapping::Balanced => cosmic_text::Wrap::Balanced,
         Wrapping::Glyph => cosmic_text::Wrap::Glyph,
         Wrapping::WordOrGlyph => cosmic_text::Wrap::WordOrGlyph,
     }
