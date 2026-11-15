@@ -123,6 +123,7 @@ where
         component,
         view: crate::space()._boxed(),
         limits: layout::Limits::new(Size::ZERO, Size::INFINITE),
+        settings: None,
         is_outdated: Cell::new(true),
         has_overlay: false,
     }
@@ -135,6 +136,7 @@ where
     component: C,
     view: Element<'a, C::Event, Theme, Renderer>,
     limits: layout::Limits,
+    settings: Option<renderer::Settings>,
     is_outdated: Cell<bool>,
     has_overlay: bool,
 }
@@ -189,8 +191,12 @@ where
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) {
-        if &self.limits != limits {
+        let settings = renderer.settings();
+
+        // Default typography can change without changing the available bounds.
+        if &self.limits != limits || self.settings != Some(settings) {
             self.limits = *limits;
+            self.settings = Some(settings);
             self.view.layout(&mut tree.children[0], renderer, limits);
         }
 
@@ -277,6 +283,7 @@ where
 
         self.view
             .layout(&mut tree.children[0], renderer, &self.limits);
+        self.settings = Some(renderer.settings());
 
         tree.size = tree.children[0].size;
 
