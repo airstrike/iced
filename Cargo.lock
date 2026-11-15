@@ -1343,7 +1343,7 @@ dependencies = [
 [[package]]
 name = "dpi"
 version = "0.1.1"
-source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#91b6db9f4c620d44c787d0173637d1bf04ef4f58"
+source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#aec30edb096f7df5c16c3fbda550b49e7713652d"
 
 [[package]]
 name = "dtor"
@@ -7068,7 +7068,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#91b6db9f4c620d44c787d0173637d1bf04ef4f58"
+source = "git+https://github.com/airstrike/winit.git?branch=unified-titlebar#aec30edb096f7df5c16c3fbda550b49e7713652d"
 dependencies = [
  "ahash",
  "android-activity",
