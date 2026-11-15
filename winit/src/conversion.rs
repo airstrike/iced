@@ -524,6 +524,7 @@ pub fn cursor_position(position: winit::dpi::PhysicalPosition<f64>, scale_factor
 /// [`iced`]: https://github.com/iced-rs/iced/tree/0.12
 pub fn touch_event(touch: winit::event::Touch, scale_factor: f32) -> touch::Event {
     let id = touch::Finger(touch.id);
+    let timestamp = touch.timestamp;
     let position = {
         let location = touch.location.to_logical::<f64>(f64::from(scale_factor));
 
@@ -531,10 +532,26 @@ pub fn touch_event(touch: winit::event::Touch, scale_factor: f32) -> touch::Even
     };
 
     match touch.phase {
-        winit::event::TouchPhase::Started => touch::Event::FingerPressed { id, position },
-        winit::event::TouchPhase::Moved => touch::Event::FingerMoved { id, position },
-        winit::event::TouchPhase::Ended => touch::Event::FingerLifted { id, position },
-        winit::event::TouchPhase::Cancelled => touch::Event::FingerLost { id, position },
+        winit::event::TouchPhase::Started => touch::Event::FingerPressed {
+            id,
+            position,
+            timestamp,
+        },
+        winit::event::TouchPhase::Moved => touch::Event::FingerMoved {
+            id,
+            position,
+            timestamp,
+        },
+        winit::event::TouchPhase::Ended => touch::Event::FingerLifted {
+            id,
+            position,
+            timestamp,
+        },
+        winit::event::TouchPhase::Cancelled => touch::Event::FingerLost {
+            id,
+            position,
+            timestamp,
+        },
     }
 }
 
@@ -1147,4 +1164,62 @@ pub fn ime_purpose(purpose: input_method::Purpose) -> winit::window::ImePurpose 
 // See: https://en.wikipedia.org/wiki/Private_Use_Areas
 fn is_private_use(c: char) -> bool {
     ('\u{E000}'..='\u{F8FF}').contains(&c)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::touch_event;
+    use crate::core::time::Duration;
+    use crate::core::{Point, touch};
+    use winit::dpi::PhysicalPosition;
+    use winit::event::{DeviceId, Touch, TouchPhase};
+
+    #[test]
+    fn touch_conversion_preserves_source_time_while_scaling_position() {
+        for timestamp in [None, Some(Duration::from_micros(123_456))] {
+            for phase in [
+                TouchPhase::Started,
+                TouchPhase::Moved,
+                TouchPhase::Ended,
+                TouchPhase::Cancelled,
+            ] {
+                let event = touch_event(
+                    Touch {
+                        device_id: DeviceId::dummy(),
+                        phase,
+                        location: PhysicalPosition::new(30., 60.),
+                        force: None,
+                        id: 7,
+                        timestamp,
+                    },
+                    3.,
+                );
+                let (id, position, converted_timestamp) = match event {
+                    touch::Event::FingerPressed {
+                        id,
+                        position,
+                        timestamp,
+                    }
+                    | touch::Event::FingerMoved {
+                        id,
+                        position,
+                        timestamp,
+                    }
+                    | touch::Event::FingerLifted {
+                        id,
+                        position,
+                        timestamp,
+                    }
+                    | touch::Event::FingerLost {
+                        id,
+                        position,
+                        timestamp,
+                    } => (id, position, timestamp),
+                };
+                assert_eq!(id, touch::Finger(7));
+                assert_eq!(position, Point::new(10., 20.));
+                assert_eq!(converted_timestamp, timestamp);
+            }
+        }
+    }
 }

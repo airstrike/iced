@@ -60,8 +60,8 @@ impl canvas::Program<Message> for Multitouch {
     ) -> Option<canvas::Action<Message>> {
         let message = match event.clone() {
             Event::Touch(
-                touch::Event::FingerPressed { id, position }
-                | touch::Event::FingerMoved { id, position },
+                touch::Event::FingerPressed { id, position, .. }
+                | touch::Event::FingerMoved { id, position, .. },
             ) => Some(Message::FingerPressed { id, position }),
             Event::Touch(
                 touch::Event::FingerLifted { id, .. } | touch::Event::FingerLost { id, .. },
