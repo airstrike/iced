@@ -951,6 +951,8 @@ impl<Message> Binding<Message> {
                         match motion {
                             Motion::Left => Motion::Home,
                             Motion::Right => Motion::End,
+                            Motion::Up => Motion::DocumentStart,
+                            Motion::Down => Motion::DocumentEnd,
                             _ => motion,
                         }
                     } else {
