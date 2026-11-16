@@ -685,16 +685,25 @@ impl State {
             return;
         };
 
+        // Whole physical pixels: a caret or a selection edge between two is
+        // drawn as a blur across both.
+        let scale = renderer.scale().map_or(1.0, renderer::Scale::total);
+        let snap = |x: f32| (x * scale).round() / scale;
+
         match selection {
             Selection::Caret(position) if self.is_cursor_visible() => {
+                let width = if renderer::CRISP {
+                    (1.0 / renderer.hint_factor().unwrap_or(1.0)).max(1.0)
+                } else {
+                    1.0
+                };
+                let position = position + translation;
+                let x = snap(position.x);
+
                 let cursor = Rectangle::new(
-                    position + translation,
+                    Point::new(x, position.y),
                     Size::new(
-                        if renderer::CRISP {
-                            (1.0 / renderer.hint_factor().unwrap_or(1.0)).max(1.0)
-                        } else {
-                            1.0
-                        },
+                        (snap(x + width) - x).max(1.0 / scale),
                         line_height.to_absolute(text_size).into(),
                     ),
                 );
@@ -714,9 +723,17 @@ impl State {
                     .iter()
                     .filter_map(|range| clip_bounds.intersection(&(*range + translation)))
                 {
+                    let left = snap(range.x);
+                    let top = snap(range.y);
+
                     renderer.fill_quad(
                         renderer::Quad {
-                            bounds: range.round(),
+                            bounds: Rectangle {
+                                x: left,
+                                y: top,
+                                width: snap(range.x + range.width) - left,
+                                height: snap(range.y + range.height) - top,
+                            },
                             ..renderer::Quad::default()
                         },
                         style.selection,
