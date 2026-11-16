@@ -610,6 +610,8 @@ impl editor::Editor for Editor {
 
     fn move_to(&mut self, cursor: Cursor) {
         self.with_internal_mut(|internal| {
+            internal.preferred_x = None;
+
             // TODO: Expose `Affinity`
             internal.editor.set_cursor(cosmic_text::Cursor {
                 line: cursor.position.line,
