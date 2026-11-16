@@ -290,7 +290,17 @@ impl editor::Editor for Editor {
             match action {
                 Action::Move(
                     motion @ (Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown),
-                ) if editor.selection_bounds().is_none() => {
+                ) => {
+                    // A selection collapses to the edge the motion leaves from.
+                    if let Some((start, end)) = editor.selection_bounds() {
+                        editor.set_selection(cosmic_text::Selection::None);
+                        editor.set_cursor(match motion.direction() {
+                            Direction::Left => start,
+                            Direction::Right => end,
+                        });
+                        internal.preferred_x = None;
+                    }
+
                     move_vertically(editor, &mut internal.preferred_x, motion, font_system.raw());
 
                     if buffer_from_editor(editor).wrap() == cosmic_text::Wrap::None {
@@ -314,6 +324,29 @@ impl editor::Editor for Editor {
                     }
 
                     move_vertically(editor, &mut internal.preferred_x, motion, font_system.raw());
+
+                    if let Some((start, end)) = editor.selection_bounds()
+                        && start.line == end.line
+                        && start.index == end.index
+                    {
+                        editor.set_selection(cosmic_text::Selection::None);
+                    }
+
+                    shape_until_cursor(editor, &mut font_system.raw);
+                }
+                Action::Move(motion @ (Motion::Home | Motion::End)) => {
+                    editor.set_selection(cosmic_text::Selection::None);
+                    move_to_line_edge(editor, motion == Motion::End, font_system.raw());
+                    shape_until_cursor(editor, &mut font_system.raw);
+                }
+                Action::Select(motion @ (Motion::Home | Motion::End)) => {
+                    let cursor = editor.cursor();
+
+                    if editor.selection_bounds().is_none() {
+                        editor.set_selection(cosmic_text::Selection::Normal(cursor));
+                    }
+
+                    move_to_line_edge(editor, motion == Motion::End, font_system.raw());
 
                     if let Some((start, end)) = editor.selection_bounds()
                         && start.line == end.line
@@ -1079,6 +1112,49 @@ fn move_vertically(
     }
 }
 
+/// Move the caret to the start or the `end` of the visual line it is on: a
+/// wrapped line has an edge at every wrap, where the caret stays on the line
+/// it left.
+fn move_to_line_edge(
+    editor: &mut cosmic_text::Editor<'static>,
+    end: bool,
+    font_system: &mut cosmic_text::FontSystem,
+) {
+    let cursor = editor.cursor();
+
+    let edge = editor.with_buffer_mut(|buffer| {
+        let at = buffer.layout_cursor(font_system, cursor)?;
+        let line = buffer.line_layout(font_system, at.line)?.get(at.layout)?;
+
+        Some(if end {
+            let index = line.glyphs.iter().map(|glyph| glyph.end).max()?;
+            (index, cosmic_text::Affinity::Before)
+        } else {
+            let index = line.glyphs.iter().map(|glyph| glyph.start).min()?;
+            (index, cosmic_text::Affinity::After)
+        })
+    });
+
+    let (index, affinity) = edge.unwrap_or_else(|| {
+        let length = buffer_from_editor(editor)
+            .lines
+            .get(cursor.line)
+            .map_or(0, |line| line.text().len());
+
+        if end {
+            (length, cosmic_text::Affinity::Before)
+        } else {
+            (0, cosmic_text::Affinity::After)
+        }
+    });
+
+    editor.set_cursor(cosmic_text::Cursor {
+        index,
+        affinity,
+        ..cursor
+    });
+}
+
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
     match motion {
         Motion::Left => cosmic_text::Motion::Left,
@@ -1266,6 +1342,70 @@ mod tests {
 
     fn undo(editor: &mut Editor) {
         editor.perform(Action::Edit(Edit::Undo));
+    }
+
+    /// An editor laid out `width` pixels wide, wrapping at word bounds.
+    fn wrapped(text: &str, width: f32) -> Editor {
+        let mut editor = Editor::with_text(text);
+        editor.update(
+            Size::new(width, f32::INFINITY),
+            Font::default(),
+            Pixels(16.0),
+            LineHeight::default(),
+            Em::default(),
+            Vec::new(),
+            Wrapping::Word,
+            Alignment::Default,
+            None,
+            &mut crate::core::text::parser::PlainText,
+        );
+        editor
+    }
+
+    fn caret(editor: &Editor) -> (usize, usize) {
+        let position = editor.cursor().position;
+        (position.line, position.index)
+    }
+
+    #[test]
+    fn home_and_end_stop_at_the_wraps_of_a_line() {
+        let text = "alpha beta gamma delta epsilon zeta eta theta";
+        let mut editor = wrapped(text, 80.0);
+        editor.perform(Action::Move(Motion::DocumentStart));
+
+        editor.perform(Action::Move(Motion::End));
+        let (line, end) = caret(&editor);
+        assert_eq!(line, 0);
+        assert!(0 < end && end < text.len(), "the first row ends at {end}");
+
+        // Home on the second row lands at its start, past the space the
+        // first row wrapped at.
+        editor.perform(Action::Move(Motion::Down));
+        editor.perform(Action::Move(Motion::Home));
+        let (line, start) = caret(&editor);
+        assert_eq!(line, 0);
+        assert!(end < start && start <= end + 1, "{end} {start}");
+
+        editor.perform(Action::Select(Motion::End));
+        let selected = editor.cursor();
+        assert_eq!(selected.selection.map(|anchor| anchor.index), Some(start));
+        assert!(selected.position.index > start);
+    }
+
+    #[test]
+    fn up_and_down_leave_a_selection_from_its_edge() {
+        let mut editor = wrapped("one\ntwo\nthree", 400.0);
+        editor.perform(Action::Move(Motion::Down));
+        editor.perform(Action::Select(Motion::Right));
+
+        editor.perform(Action::Move(Motion::Down));
+        assert_eq!(caret(&editor), (2, 1));
+        assert_eq!(editor.cursor().selection, None);
+
+        editor.perform(Action::Move(Motion::Up));
+        editor.perform(Action::Select(Motion::Right));
+        editor.perform(Action::Move(Motion::Up));
+        assert_eq!(caret(&editor), (0, 1));
     }
 
     #[test]

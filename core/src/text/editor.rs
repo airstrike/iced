@@ -201,9 +201,10 @@ pub enum Motion {
     WordLeft,
     /// Move to the right boundary of a word.
     WordRight,
-    /// Move to the start of the line.
+    /// Move to the start of the visual line: a wrapped line has an edge at
+    /// every wrap.
     Home,
-    /// Move to the end of the line.
+    /// Move to the end of the visual line.
     End,
     /// Move to the start of the previous window.
     PageUp,
