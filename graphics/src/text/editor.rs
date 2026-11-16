@@ -282,6 +282,11 @@ impl editor::Editor for Editor {
                 internal.preferred_x = None;
             }
 
+            // Moving the caret or the selection ends the step being typed.
+            if !matches!(action, Action::Edit(_) | Action::Scroll { .. }) {
+                internal.history.close();
+            }
+
             match action {
                 Action::Move(
                     motion @ (Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown),
@@ -428,6 +433,16 @@ impl editor::Editor for Editor {
                         .unwrap_or_else(|| editor.cursor())
                         .line;
 
+                    let kind = match edit {
+                        Edit::Insert(_) => Kind::Typing,
+                        Edit::Backspace | Edit::Delete if editor.selection_bounds().is_none() => {
+                            Kind::Deleting
+                        }
+                        _ => Kind::Other,
+                    };
+
+                    let before = Caret::of(editor);
+
                     if !matches!(edit, Edit::Undo | Edit::Redo) {
                         editor.start_change();
                     }
@@ -507,18 +522,26 @@ impl editor::Editor for Editor {
                             editor.action(font_system.raw(), cosmic_text::Action::Delete);
                         }
                         Edit::Undo => {
-                            if let Some(change) = internal.history.undo() {
-                                let mut change = change.clone();
+                            if let Some(step) = internal.history.undo() {
+                                let mut change = step.change.clone();
                                 change.reverse();
 
                                 let _ = editor.apply_change(&change);
+                                step.before.restore(editor);
                             }
                         }
                         Edit::Redo => {
-                            if let Some(change) = internal.history.redo() {
-                                let _ = editor.apply_change(change);
+                            if let Some(step) = internal.history.redo() {
+                                let _ = editor.apply_change(&step.change);
+                                step.after.restore(editor);
                             }
                         }
+                    }
+
+                    if let Some(change) = editor.finish_change() {
+                        internal
+                            .history
+                            .push(kind, change, before, Caret::of(editor));
                     }
 
                     let lines_after_edit = buffer_from_editor(editor).lines.len();
@@ -599,18 +622,13 @@ impl editor::Editor for Editor {
                     buffer_mut_from_editor(editor).shape_until_scroll(&mut font_system.raw, false);
                 }
             }
-
-            if let Some(change) = editor.finish_change()
-                && !change.items.is_empty()
-            {
-                internal.history.push(change);
-            }
         });
     }
 
     fn move_to(&mut self, cursor: Cursor) {
         self.with_internal_mut(|internal| {
             internal.preferred_x = None;
+            internal.history.close();
 
             // TODO: Expose `Affinity`
             internal.editor.set_cursor(cosmic_text::Cursor {
@@ -1127,10 +1145,52 @@ fn shape_until_cursor(
     }
 }
 
+/// The undo history of an [`Editor`].
+///
+/// A run of typing or deleting at one caret is a single step; any other edit
+/// is a step of its own.
 #[derive(Default)]
 struct History {
-    changes: Vec<cosmic_text::Change>,
+    steps: Vec<Step>,
     current: usize,
+    /// The kind of the last edit, while the next edit of the same kind at the
+    /// caret it left may join its step.
+    open: Option<Kind>,
+}
+
+struct Step {
+    change: cosmic_text::Change,
+    before: Caret,
+    after: Caret,
+}
+
+/// What an edit did, to decide whether it joins the step before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Typing,
+    Deleting,
+    Other,
+}
+
+/// The caret and selection of the editor around a step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Caret {
+    cursor: cosmic_text::Cursor,
+    selection: cosmic_text::Selection,
+}
+
+impl Caret {
+    fn of(editor: &cosmic_text::Editor<'_>) -> Self {
+        Self {
+            cursor: editor.cursor(),
+            selection: editor.selection(),
+        }
+    }
+
+    fn restore(self, editor: &mut cosmic_text::Editor<'_>) {
+        editor.set_cursor(self.cursor);
+        editor.set_selection(self.selection);
+    }
 }
 
 impl History {
@@ -1138,28 +1198,183 @@ impl History {
         Self::default()
     }
 
-    fn undo(&mut self) -> Option<&cosmic_text::Change> {
+    fn undo(&mut self) -> Option<&Step> {
+        self.open = None;
+
         if self.current == 0 {
             return None;
         }
 
-        self.current = self.current.saturating_sub(1);
-        self.changes.get(self.current)
+        self.current -= 1;
+        self.steps.get(self.current)
     }
 
-    fn redo(&mut self) -> Option<&cosmic_text::Change> {
-        if self.current >= self.changes.len() {
+    fn redo(&mut self) -> Option<&Step> {
+        self.open = None;
+
+        if self.current >= self.steps.len() {
             return None;
         }
 
-        let change = self.changes.get(self.current);
+        let step = self.steps.get(self.current);
         self.current += 1;
-        change
+        step
     }
 
-    fn push(&mut self, change: cosmic_text::Change) {
-        self.changes.truncate(self.current);
-        self.changes.push(change);
-        self.current += 1;
+    fn push(&mut self, kind: Kind, change: cosmic_text::Change, before: Caret, after: Caret) {
+        if change.items.is_empty() {
+            self.open = None;
+            return;
+        }
+
+        let joins = self.open == Some(kind) && self.current == self.steps.len();
+
+        match self.steps.last_mut() {
+            Some(step) if joins && step.after == before => {
+                step.change.items.extend(change.items);
+                step.after = after;
+            }
+            _ => {
+                self.steps.truncate(self.current);
+                self.steps.push(Step {
+                    change,
+                    before,
+                    after,
+                });
+                self.current += 1;
+            }
+        }
+
+        self.open = (kind != Kind::Other).then_some(kind);
+    }
+
+    fn close(&mut self) {
+        self.open = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::text::Editor as _;
+
+    fn type_text(editor: &mut Editor, text: &str) {
+        for c in text.chars() {
+            editor.perform(Action::Edit(Edit::Insert(c)));
+        }
+    }
+
+    fn undo(editor: &mut Editor) {
+        editor.perform(Action::Edit(Edit::Undo));
+    }
+
+    #[test]
+    fn a_run_of_typing_undoes_as_one_step() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "hello");
+        undo(&mut editor);
+
+        assert_eq!(editor.text(), "");
+    }
+
+    #[test]
+    fn a_paste_is_a_step_of_its_own() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "one");
+        editor.perform(Action::Edit(Edit::Paste(Arc::new(" two".to_owned()))));
+        type_text(&mut editor, " three");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "one two");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "one");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "");
+    }
+
+    #[test]
+    fn a_run_of_deleting_undoes_as_one_step() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "hello");
+        editor.perform(Action::Move(Motion::Left));
+
+        for _ in 0..3 {
+            editor.perform(Action::Edit(Edit::Backspace));
+        }
+        assert_eq!(editor.text(), "ho");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "hello");
+        assert_eq!(editor.cursor().position, Position { line: 0, index: 4 });
+    }
+
+    #[test]
+    fn moving_the_caret_ends_the_step() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "ab");
+        editor.perform(Action::Move(Motion::Left));
+        type_text(&mut editor, "c");
+        assert_eq!(editor.text(), "acb");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "ab");
+        assert_eq!(editor.cursor().position, Position { line: 0, index: 1 });
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "");
+    }
+
+    #[test]
+    fn enter_and_word_deletion_are_steps_of_their_own() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "one two");
+        editor.perform(Action::Edit(Edit::BackspaceWord));
+        assert_eq!(editor.text(), "one ");
+
+        editor.perform(Action::Edit(Edit::Enter));
+        type_text(&mut editor, "x");
+        assert_eq!(editor.text(), "one \nx");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "one \n");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "one ");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "one two");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "");
+    }
+
+    #[test]
+    fn undo_restores_the_selection_and_redo_the_caret() {
+        let mut editor = Editor::with_text("");
+
+        type_text(&mut editor, "hello");
+        editor.perform(Action::SelectAll);
+        type_text(&mut editor, "x");
+        assert_eq!(editor.text(), "x");
+
+        undo(&mut editor);
+        assert_eq!(editor.text(), "hello");
+        assert_eq!(editor.cursor().position, Position { line: 0, index: 5 });
+        assert_eq!(
+            editor.cursor().selection,
+            Some(Position { line: 0, index: 0 })
+        );
+
+        editor.perform(Action::Edit(Edit::Redo));
+        assert_eq!(editor.text(), "x");
+        assert_eq!(editor.cursor().position, Position { line: 0, index: 1 });
+        assert_eq!(editor.cursor().selection, None);
     }
 }
