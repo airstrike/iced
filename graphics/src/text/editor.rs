@@ -18,6 +18,9 @@ pub struct Editor(Option<Arc<Internal>>);
 
 struct Internal {
     editor: cosmic_text::Editor<'static>,
+    /// Where Up and Down aim for on the lines they reach, in physical pixels:
+    /// the column the caret had before the first of them.
+    preferred_x: Option<f32>,
     selection: RwLock<Option<Selection>>,
     history: History,
     font: Font,
@@ -267,7 +270,55 @@ impl editor::Editor for Editor {
         self.with_internal_mut(|internal| {
             let editor = &mut internal.editor;
 
+            // Up and Down remember the caret's column across shorter lines;
+            // anything else that moves the caret sets a new one.
+            let is_vertical = matches!(
+                action,
+                Action::Move(Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown)
+                    | Action::Select(Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown)
+                    | Action::Scroll { .. }
+            );
+            if !is_vertical {
+                internal.preferred_x = None;
+            }
+
             match action {
+                Action::Move(
+                    motion @ (Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown),
+                ) if editor.selection_bounds().is_none() => {
+                    move_vertically(editor, &mut internal.preferred_x, motion, font_system.raw());
+
+                    if buffer_from_editor(editor).wrap() == cosmic_text::Wrap::None {
+                        let cursor = cosmic_text::Cursor {
+                            affinity: cosmic_text::Affinity::Before,
+                            ..editor.cursor()
+                        };
+
+                        editor.set_cursor(cursor);
+                    }
+
+                    shape_until_cursor(editor, &mut font_system.raw);
+                }
+                Action::Select(
+                    motion @ (Motion::Up | Motion::Down | Motion::PageUp | Motion::PageDown),
+                ) => {
+                    let cursor = editor.cursor();
+
+                    if editor.selection_bounds().is_none() {
+                        editor.set_selection(cosmic_text::Selection::Normal(cursor));
+                    }
+
+                    move_vertically(editor, &mut internal.preferred_x, motion, font_system.raw());
+
+                    if let Some((start, end)) = editor.selection_bounds()
+                        && start.line == end.line
+                        && start.index == end.index
+                    {
+                        editor.set_selection(cosmic_text::Selection::None);
+                    }
+
+                    shape_until_cursor(editor, &mut font_system.raw);
+                }
                 // Motion events
                 Action::Move(motion) => {
                     if let Some((start, end)) = editor.selection_bounds() {
@@ -884,6 +935,7 @@ impl Default for Internal {
                     line_height: 1.0,
                 },
             )),
+            preferred_x: None,
             selection: RwLock::new(None),
             history: History::new(),
             font: Font::default(),
@@ -945,6 +997,66 @@ fn visual_lines_offset(line: usize, buffer: &cosmic_text::Buffer) -> i32 {
         .sum();
 
     visual_lines_offset as i32 * if scroll.line < line { 1 } else { -1 }
+}
+
+/// Move the caret of `editor` up or down by `motion` to the character
+/// nearest the column in `preferred_x`, or to the caret's own column, which
+/// it then remembers.
+fn move_vertically(
+    editor: &mut cosmic_text::Editor<'static>,
+    preferred_x: &mut Option<f32>,
+    motion: Motion,
+    font_system: &mut cosmic_text::FontSystem,
+) {
+    let cursor = editor.cursor();
+
+    let moved = editor.with_buffer_mut(|buffer| {
+        let x = match *preferred_x {
+            Some(x) => x,
+            None => {
+                let at = buffer.layout_cursor(font_system, cursor)?;
+                let line = buffer.line_layout(font_system, at.line)?.get(at.layout)?;
+
+                line.glyphs
+                    .iter()
+                    .find(|glyph| cursor.index < glyph.end)
+                    .map(|glyph| glyph.x)
+                    .or_else(|| line.glyphs.last().map(|glyph| glyph.x + glyph.w))
+                    .unwrap_or_default()
+            }
+        };
+
+        let (moved, _) = buffer.cursor_motion(font_system, cursor, None, to_motion(motion))?;
+        let at = buffer.layout_cursor(font_system, moved)?;
+        let line = buffer.line_layout(font_system, at.line)?.get(at.layout)?;
+
+        let nearest = line
+            .glyphs
+            .iter()
+            .find(|glyph| x < glyph.x + glyph.w / 2.0)
+            .map(|glyph| (glyph.start, cosmic_text::Affinity::After))
+            .or_else(|| {
+                line.glyphs
+                    .last()
+                    .map(|glyph| (glyph.end, cosmic_text::Affinity::Before))
+            });
+
+        let moved = match nearest {
+            Some((index, affinity)) => cosmic_text::Cursor {
+                index,
+                affinity,
+                ..moved
+            },
+            None => moved,
+        };
+
+        Some((moved, x))
+    });
+
+    if let Some((cursor, x)) = moved {
+        editor.set_cursor(cursor);
+        *preferred_x = Some(x);
+    }
 }
 
 fn to_motion(motion: Motion) -> cosmic_text::Motion {
