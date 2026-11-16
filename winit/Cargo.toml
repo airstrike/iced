@@ -44,7 +44,17 @@ arboard.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys.workspace = true
-web-sys.features = ["Clipboard", "Document", "Navigator", "Window", "HtmlCanvasElement"]
+web-sys.features = [
+    "Clipboard",
+    "ClipboardEvent",
+    "DataTransfer",
+    "Document",
+    "HtmlCanvasElement",
+    "KeyboardEvent",
+    "KeyboardEventInit",
+    "Navigator",
+    "Window",
+]
 wasm-bindgen-futures.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
