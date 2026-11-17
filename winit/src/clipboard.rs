@@ -1,6 +1,9 @@
 //! Access the clipboard.
 use crate::core::clipboard::{Content, Error, Kind};
 
+#[cfg(any(target_arch = "wasm32", test))]
+mod paste;
+
 pub use platform::*;
 
 impl Default for Clipboard {
@@ -199,8 +202,9 @@ mod platform {
 mod platform {
     use super::*;
 
+    use super::paste::{self, Paste, Read};
+
     use std::cell::RefCell;
-    use std::mem;
     use std::rc::Rc;
     use std::sync::Arc;
 
@@ -224,17 +228,6 @@ mod platform {
     enum State {
         Connected { clipboard: web_sys::Clipboard },
         Unavailable,
-    }
-
-    /// A paste shortcut in flight.
-    #[derive(Default)]
-    struct Paste {
-        /// A paste shortcut was pressed and its `paste` event has not fired yet.
-        is_expected: bool,
-        /// The text of a `paste` event that no read has taken yet.
-        text: Option<String>,
-        /// The reads waiting for the expected `paste` event.
-        reads: Vec<Box<dyn FnOnce(Result<Content, Error>)>>,
     }
 
     struct Listener {
@@ -272,8 +265,12 @@ mod platform {
 
                 listeners.push(Listener::new(&window, "pointerdown", {
                     let paste = paste.clone();
+                    let clipboard = state.clipboard();
 
-                    move |_| paste.borrow_mut().text = None
+                    move |_| {
+                        let reads = paste.borrow_mut().interrupt();
+                        fall_back(reads, clipboard.as_ref());
+                    }
                 }));
 
                 listeners.push(Listener::new(&window, "paste", {
@@ -294,16 +291,17 @@ mod platform {
         pub fn read(&self, kind: Kind, callback: impl FnOnce(Result<Content, Error>) + 'static) {
             match kind {
                 Kind::Text => {
-                    let mut paste = self.paste.borrow_mut();
+                    let text = self.paste.borrow_mut().take_text();
 
-                    if let Some(text) = paste.text.take() {
-                        drop(paste);
+                    if let Some(text) = text {
                         callback(Ok(Content::Text(text)));
-                    } else if paste.is_expected {
-                        paste.reads.push(Box::new(callback));
-                    } else {
-                        drop(paste);
-                        read_text(self.state.clipboard().as_ref(), callback);
+                        return;
+                    }
+
+                    let read = self.paste.borrow_mut().wait(Box::new(callback));
+
+                    if let Some(read) = read {
+                        read_text(self.state.clipboard().as_ref(), read);
                     }
                 }
                 kind => {
@@ -402,7 +400,8 @@ mod platform {
             return;
         }
 
-        paste.borrow_mut().text = None;
+        let reads = paste.borrow_mut().interrupt();
+        fall_back(reads, clipboard);
 
         let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
             return;
@@ -412,8 +411,8 @@ mod platform {
             return;
         }
 
-        paste.borrow_mut().is_expected = true;
-        schedule_fallback(paste, clipboard);
+        let shortcut = paste.borrow_mut().press();
+        schedule_timeout(shortcut, paste, clipboard);
 
         // An element over the canvas (an input method's text field) forwards
         // its key presses to winit and lets the browser paste on its own.
@@ -448,33 +447,34 @@ mod platform {
         }
     }
 
-    fn schedule_fallback(paste: &Rc<RefCell<Paste>>, clipboard: Option<&web_sys::Clipboard>) {
-        // The browser fires `paste` right after the key press, before any
-        // timer. Without one, fall back to reading the clipboard.
-        let fallback = Closure::once_into_js({
+    fn schedule_timeout(
+        shortcut: u64,
+        paste: &Rc<RefCell<Paste>>,
+        clipboard: Option<&web_sys::Clipboard>,
+    ) {
+        let timeout = Closure::once_into_js({
             let paste = paste.clone();
             let clipboard = clipboard.cloned();
 
             move || {
-                let reads = {
-                    let mut paste = paste.borrow_mut();
-
-                    if !paste.is_expected {
-                        return;
-                    }
-
-                    paste.is_expected = false;
-                    mem::take(&mut paste.reads)
-                };
-
-                for callback in reads {
-                    read_text(clipboard.as_ref(), callback);
-                }
+                let reads = paste.borrow_mut().time_out(shortcut);
+                fall_back(reads, clipboard.as_ref());
             }
         });
 
         if let Some(window) = web_sys::window() {
-            let _ = window.set_timeout_with_callback(fallback.unchecked_ref());
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                timeout.unchecked_ref(),
+                paste::TIMEOUT,
+            );
+        }
+    }
+
+    /// Reads the clipboard for the reads of a paste shortcut whose `paste`
+    /// event did not come.
+    fn fall_back(reads: Vec<Read>, clipboard: Option<&web_sys::Clipboard>) {
+        for read in reads {
+            read_text(clipboard, read);
         }
     }
 
@@ -487,33 +487,20 @@ mod platform {
             .target()
             .is_some_and(|target| target.has_type::<web_sys::HtmlCanvasElement>());
 
-        // A paste into an element of the page belongs to it, unless iced read
-        // the clipboard for the key press that pasted.
-        if !is_canvas && paste.borrow().reads.is_empty() {
-            return;
-        }
-
-        event.prevent_default();
-
         let text = clipboard_event
             .clipboard_data()
             .and_then(|data| data.get_data("text/plain").ok());
 
-        let reads = {
-            let mut paste = paste.borrow_mut();
-            paste.is_expected = false;
-
-            let reads = mem::take(&mut paste.reads);
-
-            if reads.is_empty() {
-                paste.text = text.clone();
-            }
-
-            reads
+        // A paste into an element of the page belongs to it, unless iced read
+        // the clipboard for the key press that pasted.
+        let Some(reads) = paste.borrow_mut().paste(text.as_deref(), is_canvas) else {
+            return;
         };
 
-        for callback in reads {
-            callback(
+        event.prevent_default();
+
+        for read in reads {
+            read(
                 text.clone()
                     .map(Content::Text)
                     .ok_or(Error::ContentNotAvailable),
@@ -530,10 +517,7 @@ mod platform {
             || (key.key() == "Insert" && key.shift_key() && !key.ctrl_key() && !key.meta_key())
     }
 
-    fn read_text(
-        clipboard: Option<&web_sys::Clipboard>,
-        callback: impl FnOnce(Result<Content, Error>) + 'static,
-    ) {
+    fn read_text(clipboard: Option<&web_sys::Clipboard>, callback: Read) {
         let Some(clipboard) = clipboard else {
             callback(Err(Error::ClipboardUnavailable));
             return;
