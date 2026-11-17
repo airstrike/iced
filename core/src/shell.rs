@@ -2,7 +2,7 @@
 use crate::clipboard;
 use crate::event;
 use crate::window;
-use crate::{Clipboard, InputMethod, Window};
+use crate::{Clipboard, InputMethod, Rectangle, Window};
 
 use std::rc::{self, Rc};
 use std::sync::Arc;
@@ -24,6 +24,7 @@ pub struct Shell<'a, Message> {
     input_method: InputMethod,
     invalidation: Invalidation,
     clipboard: Clipboard,
+    reveal: Option<Rectangle>,
 }
 
 /// The most severe invalidation requested by a [`Shell`] while
@@ -57,6 +58,7 @@ impl<'a, Message> Shell<'a, Message> {
             invalidation: Invalidation::None,
             input_method: InputMethod::Disabled,
             clipboard: Clipboard::new(),
+            reveal: None,
         }
     }
 
@@ -168,6 +170,19 @@ impl<'a, Message> Shell<'a, Message> {
         self.clipboard.primary = Some(text.into());
     }
 
+    /// Asks the scrollables around the widget to scroll `area`, in window
+    /// coordinates, into view: a caret a key press moved, say.
+    pub fn request_reveal(&mut self, area: Rectangle) {
+        self.reveal = Some(area);
+    }
+
+    /// Takes the area a widget asked to scroll into view, if any. A
+    /// scrollable takes it after updating its content, scrolls, and asks
+    /// again for what still does not show.
+    pub fn take_reveal(&mut self) -> Option<Rectangle> {
+        self.reveal.take()
+    }
+
     /// Returns the [`Clipboard`] requests of the [`Shell`], mutably.
     pub fn clipboard_mut(&mut self) -> &mut Clipboard {
         &mut self.clipboard
@@ -248,6 +263,7 @@ impl<'a, Message> Shell<'a, Message> {
 
         self.input_method.merge(&other.input_method);
         self.clipboard.merge(&mut other.clipboard);
+        self.reveal = other.reveal.or(self.reveal);
     }
 }
 
