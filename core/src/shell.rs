@@ -56,10 +56,7 @@ impl<'a, Message> Shell<'a, Message> {
             redraw_request: window::RedrawRequest::Wait,
             invalidation: Invalidation::None,
             input_method: InputMethod::Disabled,
-            clipboard: Clipboard {
-                reads: Vec::new(),
-                write: None,
-            },
+            clipboard: Clipboard::new(),
         }
     }
 
@@ -163,6 +160,12 @@ impl<'a, Message> Shell<'a, Message> {
     /// The runtime will produce a [`clipboard::Event::Written`] when the contents have been written.
     pub fn write_clipboard(&mut self, content: impl Into<clipboard::Content>) {
         self.clipboard.write = Some(content.into());
+    }
+
+    /// Requests the runtime to make `text` the primary selection, where the
+    /// system has one (X11 and Wayland): the text a middle click pastes.
+    pub fn write_primary(&mut self, text: impl Into<String>) {
+        self.clipboard.primary = Some(text.into());
     }
 
     /// Returns the [`Clipboard`] requests of the [`Shell`], mutably.

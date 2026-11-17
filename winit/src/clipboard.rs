@@ -79,6 +79,17 @@ mod platform {
                         Content::Image(crate::core::clipboard::Image { rgba, size })
                     }),
                     Kind::Files => get.file_list().map(Content::Files),
+                    #[cfg(all(
+                        unix,
+                        not(any(target_os = "macos", target_os = "android", target_os = "ios"))
+                    ))]
+                    Kind::Primary => {
+                        use arboard::{GetExtLinux, LinuxClipboardKind};
+
+                        get.clipboard(LinuxClipboardKind::Primary)
+                            .text()
+                            .map(Content::Text)
+                    }
                     kind => {
                         log::warn!("unsupported clipboard kind: {kind:?}");
 
@@ -132,6 +143,39 @@ mod platform {
 
                 callback(result);
             });
+        }
+    }
+
+    impl Clipboard {
+        /// Makes `text` the primary selection, where the system has one.
+        pub fn write_primary(&mut self, text: String) {
+            #[cfg(all(
+                unix,
+                not(any(target_os = "macos", target_os = "android", target_os = "ios"))
+            ))]
+            {
+                use arboard::{LinuxClipboardKind, SetExtLinux};
+
+                let State::Connected { clipboard } = &self.state else {
+                    return;
+                };
+                let clipboard = clipboard.clone();
+
+                let _ = thread::spawn(move || {
+                    if let Ok(mut clipboard) = clipboard.lock() {
+                        let _ = clipboard
+                            .set()
+                            .clipboard(LinuxClipboardKind::Primary)
+                            .text(text);
+                    }
+                });
+            }
+
+            #[cfg(not(all(
+                unix,
+                not(any(target_os = "macos", target_os = "android", target_os = "ios"))
+            )))]
+            let _ = text;
         }
     }
 
@@ -269,6 +313,9 @@ mod platform {
                 }
             }
         }
+
+        /// The web has no primary selection: does nothing.
+        pub fn write_primary(&mut self, _text: String) {}
 
         /// Writes the given text contents to the [`Clipboard`].
         pub fn write(
