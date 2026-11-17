@@ -323,6 +323,10 @@ fn render<'a>(
                 &mut render_pass,
             );
         }
+
+        if let Some((_state, pipeline)) = &msaa {
+            pipeline.unscissor(&mut render_pass);
+        }
     }
 
     if let Some((state, pipeline)) = msaa {
