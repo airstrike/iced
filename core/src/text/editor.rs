@@ -373,11 +373,13 @@ impl State {
                 ))
             }
             Event::Clipboard(clipboard::Event::Read(Ok(content))) => {
-                let focus = self.focus.as_ref()?;
+                let focus = self.focus.as_mut()?;
 
                 if !focus.is_window_focused {
                     return None;
                 }
+
+                focus.updated_at = Instant::now();
 
                 let clipboard::Content::Text(text) = content.as_ref() else {
                     return None;
@@ -502,6 +504,10 @@ impl State {
                     Some(Update::InputMethod)
                 }
                 input_method::Event::Preedit(content, selection) if self.focus.is_some() => {
+                    if let Some(focus) = &mut self.focus {
+                        focus.updated_at = Instant::now();
+                    }
+
                     self.preedit = Some(input_method::Preedit {
                         content: content.clone(),
                         selection: selection.clone(),
@@ -510,9 +516,15 @@ impl State {
 
                     Some(Update::InputMethod)
                 }
-                input_method::Event::Commit(content) if self.focus.is_some() => Some(
-                    Update::Action(Action::Edit(Edit::Paste(Arc::new(content.clone())))),
-                ),
+                input_method::Event::Commit(content) if self.focus.is_some() => {
+                    if let Some(focus) = &mut self.focus {
+                        focus.updated_at = Instant::now();
+                    }
+
+                    Some(Update::Action(Action::Edit(Edit::Paste(Arc::new(
+                        content.clone(),
+                    )))))
+                }
                 _ => None,
             },
             Event::Keyboard(keyboard::Event::KeyPressed {
