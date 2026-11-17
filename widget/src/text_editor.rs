@@ -111,6 +111,7 @@ where
     on_edit: Option<Box<dyn Fn(Action) -> Message + 'a>>,
     parser_settings: Parser::Settings,
     highlighter: Option<Box<dyn text::Highlighter<Parser::Output, Theme> + 'a>>,
+    caret_width: Option<f32>,
     last_status: Option<Status>,
 }
 
@@ -139,6 +140,7 @@ where
             on_edit: None,
             parser_settings: (),
             highlighter: None,
+            caret_width: None,
             last_status: None,
         }
     }
@@ -224,6 +226,13 @@ where
         self
     }
 
+    /// Draws the caret as a block `width` pixels wide over the character
+    /// after it, as an editor typing over its text does; `None` draws a line.
+    pub fn caret_width(mut self, width: impl Into<Option<f32>>) -> Self {
+        self.caret_width = width.into();
+        self
+    }
+
     /// Sets the [`Font`] of the [`TextEditor`].
     ///
     /// [`Font`]: crate::core::Font
@@ -299,6 +308,7 @@ where
             on_edit: self.on_edit,
             parser_settings: settings,
             highlighter: Some(Box::new(highlighter)),
+            caret_width: self.caret_width,
             last_status: self.last_status,
         }
     }
@@ -596,6 +606,7 @@ where
             editor::Style {
                 value: style.value,
                 selection: style.selection,
+                caret_width: self.caret_width,
             },
         );
     }

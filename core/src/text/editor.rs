@@ -705,11 +705,11 @@ impl State {
 
         match selection {
             Selection::Caret(position) if self.is_cursor_visible() => {
-                let width = if renderer::CRISP {
+                let width = style.caret_width.unwrap_or(if renderer::CRISP {
                     (1.0 / renderer.hint_factor().unwrap_or(1.0)).max(1.0)
                 } else {
                     1.0
-                };
+                });
                 let position = position + translation;
                 let x = snap(position.x);
 
@@ -727,7 +727,12 @@ impl State {
                             bounds: clipped_cursor,
                             ..renderer::Quad::default()
                         },
-                        style.value,
+                        if style.caret_width.is_some() {
+                            // The character under a block stays readable.
+                            style.value.scale_alpha(0.4)
+                        } else {
+                            style.value
+                        },
                     );
                 }
             }
@@ -773,6 +778,10 @@ pub struct Style {
 
     /// The background [`Color`] of any selection.
     pub selection: Color,
+
+    /// The width of a block caret over the character after it, as typing
+    /// over the text draws it; `None` draws a line.
+    pub caret_width: Option<f32>,
 }
 
 #[derive(Debug, Clone)]

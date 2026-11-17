@@ -339,6 +339,7 @@ impl<R: text::Renderer> Input<R> {
             editor::Style {
                 value: style.value,
                 selection: style.selection,
+                caret_width: None,
             },
         );
     }
