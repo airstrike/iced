@@ -138,6 +138,20 @@ impl Pipeline {
         targets.as_ref().unwrap().clone()
     }
 
+    /// Widens the scissor back to the whole target before the pass ends.
+    ///
+    /// The GL backend resolves the multisampled attachment with
+    /// `glBlitFramebuffer`, which honors the scissor test. Left scissored to
+    /// its last mesh, the pass would resolve only that rectangle, and the
+    /// rest of the resolve target would keep the meshes of earlier frames,
+    /// which the blit then composites over the frame.
+    pub fn unscissor(&self, render_pass: &mut wgpu::RenderPass<'_>) {
+        let targets = self.targets.read().expect("Read MSAA targets");
+        let size = targets.as_ref().unwrap().size;
+
+        render_pass.set_scissor_rect(0, 0, size.width, size.height);
+    }
+
     pub fn render_pass<'a>(&self, encoder: &'a mut wgpu::CommandEncoder) -> wgpu::RenderPass<'a> {
         let targets = self.targets.read().expect("Read MSAA targets");
         let targets = targets.as_ref().unwrap();
