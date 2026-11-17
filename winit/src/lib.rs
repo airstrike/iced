@@ -1935,4 +1935,8 @@ fn run_clipboard<Message: Send>(
             });
         });
     }
+
+    if let Some(text) = requests.primary {
+        clipboard.write_primary(text);
+    }
 }

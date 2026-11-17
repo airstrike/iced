@@ -10,6 +10,9 @@ pub struct Clipboard {
     /// The content that must be written to the clipboard by the runtime,
     /// if any.
     pub write: Option<Content>,
+    /// The text that must become the primary selection, where the system
+    /// has one (X11 and Wayland): the text pasted by a middle click.
+    pub primary: Option<String>,
 }
 
 impl Clipboard {
@@ -18,6 +21,7 @@ impl Clipboard {
         Self {
             reads: Vec::new(),
             write: None,
+            primary: None,
         }
     }
 
@@ -25,6 +29,7 @@ impl Clipboard {
     pub fn merge(&mut self, other: &mut Self) {
         self.reads.append(&mut other.reads);
         self.write = other.write.take().or(self.write.take());
+        self.primary = other.primary.take().or(self.primary.take());
     }
 }
 
@@ -85,6 +90,9 @@ pub enum Kind {
     #[cfg(feature = "image")]
     Image,
     Files,
+    /// The text of the primary selection, where the system has one (X11
+    /// and Wayland); elsewhere, reading it fails.
+    Primary,
 }
 
 /// A clipboard image.
