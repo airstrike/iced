@@ -74,14 +74,23 @@ pub fn select(start: Point, end: Point, target: Target) -> impl Operation {
         fn text(
             &mut self,
             _id: Option<&crate::widget::Id>,
-            _bounds: crate::Rectangle,
+            bounds: crate::Rectangle,
             state: &mut dyn Text,
         ) {
-            state.select(
-                self.start + self.translation,
-                self.end + self.translation,
-                self.target,
-            );
+            let start = self.start + self.translation;
+            let end = self.end + self.translation;
+
+            // Only the text a selection starts in grows it to whole words or
+            // lines. Elsewhere, a paragraph snaps the start to its nearest
+            // edge, and growing from there would select the word or line at
+            // that edge although the selection never reaches the paragraph.
+            let target = if bounds.contains(start) {
+                self.target
+            } else {
+                Target::Character
+            };
+
+            state.select(start, end, target);
         }
     }
 
