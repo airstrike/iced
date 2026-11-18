@@ -54,16 +54,17 @@ pub trait Editor: Sized + Default {
     /// Returns the minimum bounds to fit contents.
     fn min_bounds(&self) -> Size;
 
-    /// Returns the number of logical pixels the renderer should shift
-    /// the buffer's `(0, 0)` *down* from the editor's content-area
-    /// origin so the first visible line's ascenders don't clip.
+    /// Returns the number of logical pixels the first visible line's
+    /// glyphs extend above its line box.
     ///
-    /// Non-zero only when the user-chosen line height for the first
-    /// line is smaller than the font's natural ascent + descent — at
-    /// which point cosmic-text centers glyphs around the baseline and
-    /// the topmost ascenders end up above `line_top = 0`. The widget
-    /// uses this value to offset the buffer position it passes to
-    /// the renderer's `fill_rich_editor`.
+    /// Non-zero only when the line height of the first line is smaller
+    /// than the font's ascent + descent: cosmic-text centers the glyphs
+    /// in the line box with a negative half-leading, as CSS does, so they
+    /// overflow it evenly above and below. [`min_bounds`] leaves this
+    /// overflow out, as CSS leaves it out of the line box. Widgets that
+    /// clip the buffer to their bounds can read it to extend the clip.
+    ///
+    /// [`min_bounds`]: Self::min_bounds
     ///
     /// Default impl returns `0.0` (no overflow) for backends without
     /// glyph-extent awareness.
@@ -71,15 +72,11 @@ pub trait Editor: Sized + Default {
         0.0
     }
 
-    /// Returns the number of logical pixels the LAST visible line's
-    /// glyph bottom extends below its slot bottom — the bottom-side
-    /// counterpart of [`visual_top_pad`].
+    /// Returns the number of logical pixels the last visible line's
+    /// glyphs extend below its line box: the bottom counterpart of
+    /// [`visual_top_pad`].
     ///
-    /// Widgets whose allocation matches `min_bounds().height` already
-    /// reserve room for this overflow (it's baked into the measure).
-    /// Widgets that constrain the buffer to a fixed viewport (and
-    /// hence may render glyphs whose descenders extend past their
-    /// clip rect) can read this to extend the clip on the bottom.
+    /// [`visual_top_pad`]: Self::visual_top_pad
     ///
     /// Default impl returns `0.0` for backends without glyph-extent
     /// awareness.

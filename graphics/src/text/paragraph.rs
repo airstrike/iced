@@ -5,7 +5,7 @@ use crate::core::font;
 use crate::core::text::{
     Alignment, Decoration, Ellipsis, Hit, LineHeight, Shaping, Span, Target, Text, Wrapping,
 };
-use crate::core::{Em, Font, Pixels, Point, Rectangle, Size};
+use crate::core::{Em, Font, Padding, Pixels, Point, Rectangle, Size};
 use crate::text;
 
 use std::fmt;
@@ -26,6 +26,7 @@ struct Internal {
     align_y: alignment::Vertical,
     bounds: Size,
     min_bounds: Size,
+    overflow: Padding,
     version: text::Version,
     letter_spacing: Em,
     font_features: Vec<font::Feature>,
@@ -65,6 +66,7 @@ impl Paragraph {
         Weak {
             raw: Arc::downgrade(paragraph),
             min_bounds: paragraph.min_bounds,
+            overflow: paragraph.overflow,
             align_x: paragraph.align_x,
             align_y: paragraph.align_y,
         }
@@ -132,6 +134,7 @@ impl core::text::Paragraph for Paragraph {
         buffer.shape_until_scroll(font_system.raw(), false);
 
         let min_bounds = text::align(&mut buffer, font_system.raw(), text.align_x) / hint_factor;
+        let overflow = text::overflow(&buffer) / hint_factor;
 
         Self(Arc::new(Internal {
             buffer,
@@ -145,6 +148,7 @@ impl core::text::Paragraph for Paragraph {
             ellipsis: text.ellipsis,
             bounds: text.bounds,
             min_bounds,
+            overflow,
             version: font_system.version(),
             selection: None,
             last_click: None,
@@ -252,6 +256,7 @@ impl core::text::Paragraph for Paragraph {
         buffer.shape_until_scroll(font_system.raw(), false);
 
         let min_bounds = text::align(&mut buffer, font_system.raw(), text.align_x) / hint_factor;
+        let overflow = text::overflow(&buffer) / hint_factor;
 
         Self(Arc::new(Internal {
             buffer,
@@ -265,6 +270,7 @@ impl core::text::Paragraph for Paragraph {
             ellipsis: text.ellipsis,
             bounds: text.bounds,
             min_bounds,
+            overflow,
             version: font_system.version(),
             selection: None,
             last_click: None,
@@ -292,6 +298,7 @@ impl core::text::Paragraph for Paragraph {
 
         paragraph.bounds = new_bounds;
         paragraph.min_bounds = min_bounds;
+        paragraph.overflow = text::overflow(&paragraph.buffer) / paragraph.hint_factor;
 
         if let Some(Selection { start, end, .. }) = paragraph.selection {
             paragraph.selection = Some(Selection {
@@ -760,6 +767,7 @@ impl Default for Internal {
             align_y: alignment::Vertical::Top,
             bounds: Size::ZERO,
             min_bounds: Size::ZERO,
+            overflow: Padding::ZERO,
             version: text::Version::default(),
             letter_spacing: Em::ZERO,
             font_features: Vec::new(),
@@ -778,6 +786,8 @@ pub struct Weak {
     raw: sync::Weak<Internal>,
     /// The minimum bounds of the [`Paragraph`].
     pub min_bounds: Size,
+    /// How far its glyphs overflow its minimum bounds, above and below.
+    pub overflow: Padding,
     /// The horizontal alignment of the [`Paragraph`].
     pub align_x: Alignment,
     /// The vertical alignment of the [`Paragraph`].
@@ -875,6 +885,49 @@ mod tests {
         assert_eq!(widths(&rich).len(), 1);
         rich.resize(bounds);
         assert_eq!(widths(&rich), expected);
+    }
+
+    /// A line height smaller than the font's ascent plus descent keeps the
+    /// box at the line height and centers the glyphs in it, overflowing it
+    /// evenly above and below, as CSS's negative half-leading does.
+    #[test]
+    fn tight_line_height_centers_glyphs_in_the_line_box() {
+        let recipe = |content, line_height| Text {
+            content,
+            bounds: Size::new(1000.0, f32::INFINITY),
+            size: Pixels(20.0),
+            line_height,
+            font: Font::default(),
+            align_x: Alignment::Default,
+            align_y: alignment::Vertical::Top,
+            shaping: Shaping::default(),
+            wrapping: Wrapping::default(),
+            ellipsis: Ellipsis::default(),
+            letter_spacing: Em::ZERO,
+            font_features: Vec::new(),
+            font_variations: Vec::new(),
+            weight: None,
+            hint_factor: None,
+        };
+
+        let tight = Paragraph::with_text(recipe("Hg", LineHeight::Relative(1.0)));
+        let run = tight.buffer().layout_runs().next().unwrap();
+        let content_area = run.max_ascent + run.max_descent;
+        assert!(content_area > 20.0);
+
+        assert_eq!(tight.min_bounds().height, 20.0);
+
+        let half_leading = (20.0 - content_area) / 2.0;
+        assert!((run.line_y - (half_leading + run.max_ascent)).abs() < 1e-3);
+        assert!((tight.0.overflow.top + half_leading).abs() < 1e-3);
+        assert!((tight.0.overflow.bottom + half_leading).abs() < 1e-3);
+
+        let two_lines = Paragraph::with_text(recipe("H\ng", LineHeight::Relative(1.0)));
+        assert_eq!(two_lines.min_bounds().height, 40.0);
+
+        let loose = Paragraph::with_text(recipe("Hg", LineHeight::Relative(1.5)));
+        assert_eq!(loose.min_bounds().height, 30.0);
+        assert_eq!(loose.0.overflow, Padding::ZERO);
     }
 
     /// Bounds should cover the ink of the span, without stretching to the

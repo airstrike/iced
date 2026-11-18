@@ -12,7 +12,7 @@ pub use cosmic_text;
 use crate::core::alignment;
 use crate::core::font::{self, Font};
 use crate::core::text::{Alignment, Ellipsis, Shaping, Wrapping};
-use crate::core::{Color, Em, Pixels, Point, Rectangle, Size, Transformation};
+use crate::core::{Color, Em, Padding, Pixels, Point, Rectangle, Size, Transformation};
 use crate::rich;
 
 use std::borrow::Cow;
@@ -101,6 +101,7 @@ impl Text {
                 transformation,
                 ..
             } => Rectangle::new(*position, paragraph.min_bounds)
+                .expand(paragraph.overflow)
                 .intersection(clip_bounds)
                 .map(|bounds| bounds * *transformation),
             Text::Editor {
@@ -262,22 +263,18 @@ impl PartialEq for Raw {
 }
 
 /// Measures the dimensions of the given [`cosmic_text::Buffer`].
+///
+/// The height is the sum of its line boxes, like CSS: a line height smaller
+/// than the font's ascent plus descent does not grow it. Glyphs are centered
+/// in each line box with half of the leading above and below them, so they
+/// overflow it evenly on both sides; see [`overflow`].
 pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
     let mut width = 0.0_f32;
     let mut height = 0.0_f32;
     let mut has_rtl = false;
     let mut last_line_i: Option<usize> = None;
 
-    let mut first_top_overflow = 0.0_f32;
-    let mut last_bottom_overflow = 0.0_f32;
-    let mut is_first_run = true;
-
     for run in buffer.layout_runs() {
-        if is_first_run {
-            let glyph_above_line = run.line_top - (run.line_y - run.max_ascent);
-            first_top_overflow = glyph_above_line.max(0.0);
-            is_first_run = false;
-        }
         if last_line_i != Some(run.line_i) {
             if let Some(prev_i) = last_line_i
                 && let Some(line) = buffer.lines.get(prev_i)
@@ -292,9 +289,6 @@ pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
         width = width.max(run.line_w);
         height += run.line_height;
         has_rtl = has_rtl || run.rtl;
-
-        let glyph_below_line = (run.line_y + run.max_descent) - (run.line_top + run.line_height);
-        last_bottom_overflow = glyph_below_line.max(0.0);
     }
 
     if let Some(last_i) = last_line_i
@@ -303,9 +297,21 @@ pub fn measure(buffer: &cosmic_text::Buffer) -> (Size, bool) {
         height += line.margin_bottom();
     }
 
-    height += first_top_overflow + last_bottom_overflow;
-
     (Size::new(width, height), has_rtl)
+}
+
+/// Returns how far the glyphs of the given [`cosmic_text::Buffer`] overflow
+/// the box [`measure`] returns: above its first line and below its last.
+///
+/// Non-zero only when a line height is smaller than the font's ascent plus
+/// descent. The overflow is ink, not layout: it is drawn and damaged, never
+/// measured.
+pub fn overflow(buffer: &cosmic_text::Buffer) -> Padding {
+    Padding {
+        top: visual_top_pad(buffer),
+        bottom: visual_bottom_pad(buffer),
+        ..Padding::ZERO
+    }
 }
 
 /// Aligns the given [`cosmic_text::Buffer`] with the given [`Alignment`]
@@ -564,9 +570,8 @@ pub fn regions(
 
 /// Returns how far the first line's glyph ascenders extend above its
 /// line slot, or `0.0` when the slot fully contains the ascent (the
-/// common case). Pair with [`measure`] — the total height already
-/// includes this overflow; this tells you how much of it sits above
-/// the buffer's `(0, 0)`.
+/// common case). [`measure`] leaves this overflow out of the height,
+/// as CSS leaves it out of the line box.
 pub fn visual_top_pad(buffer: &cosmic_text::Buffer) -> f32 {
     let Some(first) = buffer.layout_runs().next() else {
         return 0.0;

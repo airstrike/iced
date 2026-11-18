@@ -246,3 +246,16 @@ impl From<Pixels> for Padding {
         Self::from(pixels.0)
     }
 }
+
+impl std::ops::Div<f32> for Padding {
+    type Output = Self;
+
+    fn div(self, scale: f32) -> Self {
+        Self {
+            top: self.top / scale,
+            right: self.right / scale,
+            bottom: self.bottom / scale,
+            left: self.left / scale,
+        }
+    }
+}
