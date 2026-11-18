@@ -396,8 +396,9 @@ impl Engine {
                     return;
                 };
 
-                let physical_bounds =
-                    Rectangle::new(*position, paragraph.min_bounds) * transformation;
+                let physical_bounds = Rectangle::new(*position, paragraph.min_bounds)
+                    .expand(paragraph.overflow)
+                    * transformation;
 
                 if !clip_bounds.intersects(&physical_bounds) {
                     return;
