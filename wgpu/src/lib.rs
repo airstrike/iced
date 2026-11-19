@@ -33,6 +33,7 @@ mod buffer;
 mod color;
 mod engine;
 mod nudge;
+mod opacity;
 mod quad;
 mod text;
 mod triangle;
@@ -74,6 +75,7 @@ pub struct Renderer {
     settings: renderer::Settings,
 
     layers: layer::Stack,
+    opacity: opacity::State,
     scale: Option<renderer::Scale>,
 
     quad: quad::State,
@@ -96,6 +98,7 @@ impl Renderer {
         Self {
             settings,
             layers: layer::Stack::new(),
+            opacity: opacity::State::default(),
             scale: None,
 
             quad: quad::State::new(),
@@ -661,6 +664,54 @@ impl Renderer {
 }
 
 impl core::Renderer for Renderer {
+    fn start_opacity(&mut self, bounds: Rectangle, opacity: f32) {
+        let scale = self.scale().unwrap_or_default().total();
+        self.opacity.parents.push((
+            std::mem::take(&mut self.layers),
+            self.scale,
+            bounds,
+            opacity,
+        ));
+        self.layers
+            .push_transformation(Transformation::translate(-bounds.x, -bounds.y));
+        self.scale = Some(renderer::Scale {
+            window: 1.,
+            application: scale,
+        });
+    }
+
+    fn end_opacity(&mut self) {
+        let Some((parent, scale, bounds, alpha)) = self.opacity.parents.pop() else {
+            return;
+        };
+        let factor = self.scale.unwrap_or_default().total();
+        let limit = self.engine.device.limits().max_texture_dimension_2d as f32;
+        let factor = factor.min(limit / bounds.width.max(bounds.height).max(1.));
+        let size = Size::new(
+            (bounds.width * factor).ceil().max(1.) as u32,
+            (bounds.height * factor).ceil().max(1.) as u32,
+        );
+        let surface = self.opacity.surface(&self.engine, size, alpha);
+        let viewport = Viewport::with_physical_size(
+            size,
+            renderer::Scale {
+                window: 1.,
+                application: factor,
+            },
+        );
+        let _submission = self.present(
+            Some(Color::TRANSPARENT),
+            self.engine.format,
+            &surface.view,
+            &viewport,
+        );
+        self.layers = parent;
+        self.scale = scale;
+        self.layers.push_clip(bounds);
+        primitive::Renderer::draw_primitive(self, bounds, surface);
+        self.layers.pop_clip();
+    }
+
     fn start_layer(&mut self, bounds: Rectangle) {
         self.layers.push_clip(bounds);
     }
@@ -712,6 +763,8 @@ impl core::Renderer for Renderer {
     }
 
     fn reset(&mut self, new_bounds: Rectangle) {
+        self.opacity.surfaces.truncate(self.opacity.next);
+        self.opacity.next = 0;
         self.layers.reset(new_bounds);
     }
 

@@ -42,6 +42,13 @@ where
         delegate!(self, renderer, renderer.fill_quad(quad, background.into()));
     }
 
+    fn start_opacity(&mut self, bounds: Rectangle, opacity: f32) {
+        delegate!(self, renderer, renderer.start_opacity(bounds, opacity));
+    }
+    fn end_opacity(&mut self) {
+        delegate!(self, renderer, renderer.end_opacity());
+    }
+
     fn start_layer(&mut self, bounds: Rectangle) {
         delegate!(self, renderer, renderer.start_layer(bounds));
     }

@@ -14,6 +14,12 @@ pub const CRISP: bool = cfg!(feature = "crisp");
 
 /// A component that can be used by widgets to draw themselves on a screen.
 pub trait Renderer: 'static {
+    /// Opens an isolated, partially transparent group in local logical coordinates.
+    fn start_opacity(&mut self, _bounds: Rectangle, _opacity: f32) {}
+
+    /// Composites the isolated group and resumes drawing into its parent.
+    fn end_opacity(&mut self) {}
+
     /// Starts recording a new layer.
     fn start_layer(&mut self, bounds: Rectangle);
 
