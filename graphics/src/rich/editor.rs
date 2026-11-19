@@ -674,7 +674,10 @@ impl rich_editor::Editor for Editor {
             let buffer = buffer_mut_from_editor(&mut internal.document);
             if let Some(buffer_line) = buffer.lines.get_mut(line) {
                 let base = buffer_line.attrs_list().defaults();
-                let attrs = style_to_attrs(style, &base, internal.line_height_ratio);
+                let mut attrs = style_to_attrs(style, &base, internal.line_height_ratio);
+                if !buffer_line.text().is_empty() {
+                    attrs.metadata = Explicit::from_style(style).bits();
+                }
 
                 if buffer_line.text().is_empty() {
                     // Empty lines have no characters to span. Update the
@@ -975,37 +978,78 @@ impl PartialEq for Weak {
     }
 }
 
+// A span can deliberately set the current paragraph value. Keep that distinction in
+// the rich editor's private cosmic-text buffer when serializing or changing defaults.
+bitflags::bitflags! {
+    struct Explicit: usize {
+        const BOLD = 1;
+        const ITALIC = 1 << 1;
+        const UNDERLINE = 1 << 2;
+        const STRIKE = 1 << 3;
+        const FONT = 1 << 4;
+        const SIZE = 1 << 5;
+        const COLOR = 1 << 6;
+        const TRACKING = 1 << 7;
+        const OPTICAL_SIZE = 1 << 8;
+    }
+}
+
+impl Explicit {
+    fn from_style(style: &Style) -> Self {
+        let mut fields = Self::empty();
+        fields.set(Self::BOLD, style.bold.is_some());
+        fields.set(Self::ITALIC, style.italic.is_some());
+        fields.set(Self::UNDERLINE, style.underline.is_some());
+        fields.set(Self::STRIKE, style.strikethrough.is_some());
+        fields.set(Self::FONT, style.font.is_some());
+        fields.set(Self::SIZE, style.size.is_some());
+        fields.set(Self::COLOR, style.color.is_some());
+        fields.set(Self::TRACKING, style.letter_spacing.is_some());
+        fields.set(Self::OPTICAL_SIZE, style.optical_size.is_some());
+        fields
+    }
+}
+
 fn rebase_attrs<'a>(
     attrs: &mut cosmic_text::Attrs<'a>,
     old_defaults: &cosmic_text::Attrs<'_>,
     new_defaults: &cosmic_text::Attrs<'a>,
 ) {
-    if attrs.color_opt == old_defaults.color_opt {
+    let explicit = Explicit::from_bits_truncate(attrs.metadata);
+    if !explicit.contains(Explicit::COLOR) && attrs.color_opt == old_defaults.color_opt {
         attrs.color_opt = new_defaults.color_opt;
     }
-    if attrs.family == old_defaults.family {
+    if !explicit.contains(Explicit::FONT) && attrs.family == old_defaults.family {
         attrs.family = new_defaults.family;
     }
-    if attrs.weight == old_defaults.weight {
+    if !explicit.contains(Explicit::BOLD) && attrs.weight == old_defaults.weight {
         attrs.weight = new_defaults.weight;
     }
-    if attrs.style == old_defaults.style {
+    if !explicit.contains(Explicit::ITALIC) && attrs.style == old_defaults.style {
         attrs.style = new_defaults.style;
     }
     if attrs.stretch == old_defaults.stretch {
         attrs.stretch = new_defaults.stretch;
     }
-    if attrs.metrics_opt == old_defaults.metrics_opt {
+    if !explicit.contains(Explicit::SIZE) && attrs.metrics_opt == old_defaults.metrics_opt {
         attrs.metrics_opt = new_defaults.metrics_opt;
     }
-    if attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
+    if !explicit.contains(Explicit::TRACKING) && attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
         attrs.letter_spacing_opt = new_defaults.letter_spacing_opt;
     }
-    if attrs.optical_size == old_defaults.optical_size {
+    if !explicit.contains(Explicit::OPTICAL_SIZE) && attrs.optical_size == old_defaults.optical_size {
         attrs.optical_size = new_defaults.optical_size;
     }
+    let underline = attrs.text_decoration.underline;
+    let strike = attrs.text_decoration.strikethrough;
     if attrs.text_decoration == old_defaults.text_decoration {
         attrs.text_decoration = new_defaults.text_decoration;
+    }
+    if explicit.contains(Explicit::UNDERLINE) {
+        attrs.text_decoration.underline = underline;
+    }
+    if explicit.contains(Explicit::STRIKE) {
+        attrs.text_decoration.strikethrough = strike;
     }
 }
 
@@ -1118,8 +1162,8 @@ fn attrs_to_style(
     defaults: &cosmic_text::Attrs<'_>,
     font_names: &HashSet<&'static str>,
 ) -> Style {
-    // Only report an explicit font when the span differs from the line defaults.
-    let font = if attrs.family != defaults.family {
+    let explicit = Explicit::from_bits_truncate(attrs.metadata);
+    let font = if explicit.contains(Explicit::FONT) || attrs.family != defaults.family {
         Some(Font {
             family: from_family(attrs.family, font_names),
             ..Font::default()
@@ -1138,19 +1182,18 @@ fn attrs_to_style(
     let strikethrough_default = defaults.text_decoration.strikethrough;
 
     Style {
-        bold: (bold != bold_default).then_some(bold),
-        italic: (italic != italic_default).then_some(italic),
-        underline: (underline != underline_default).then_some(underline),
-        strikethrough: (strikethrough != strikethrough_default).then_some(strikethrough),
-        color: attrs
-            .color_opt
+        bold: (explicit.contains(Explicit::BOLD) || bold != bold_default).then_some(bold),
+        italic: (explicit.contains(Explicit::ITALIC) || italic != italic_default).then_some(italic),
+        underline: (explicit.contains(Explicit::UNDERLINE) || underline != underline_default).then_some(underline),
+        strikethrough: (explicit.contains(Explicit::STRIKE) || strikethrough != strikethrough_default).then_some(strikethrough),
+        color: attrs.color_opt.filter(|_| explicit.contains(Explicit::COLOR) || attrs.color_opt != defaults.color_opt)
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
-        letter_spacing: if attrs.letter_spacing_opt != defaults.letter_spacing_opt {
+        letter_spacing: if explicit.contains(Explicit::TRACKING) || attrs.letter_spacing_opt != defaults.letter_spacing_opt {
             attrs.letter_spacing_opt.map(|ls| ls.0)
         } else {
             None
         },
-        size: if attrs.metrics_opt != defaults.metrics_opt {
+        size: if explicit.contains(Explicit::SIZE) || attrs.metrics_opt != defaults.metrics_opt {
             attrs.metrics_opt.map(|m| {
                 let m: cosmic_text::Metrics = m.into();
                 m.font_size
@@ -1159,7 +1202,7 @@ fn attrs_to_style(
             None
         },
         font,
-        optical_size: if attrs.optical_size != defaults.optical_size {
+        optical_size: if explicit.contains(Explicit::OPTICAL_SIZE) || attrs.optical_size != defaults.optical_size {
             Some(match attrs.optical_size {
                 cosmic_text::OpticalSize::Auto => font::OpticalSize::Auto,
                 cosmic_text::OpticalSize::Fixed(v) => font::OpticalSize::Fixed(v.to_bits()),
