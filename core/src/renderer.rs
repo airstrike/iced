@@ -1,6 +1,8 @@
 //! Write your own renderer.
 #[cfg(debug_assertions)]
 mod null;
+mod rotation;
+pub use rotation::Rotation;
 
 use crate::image;
 use crate::text;
@@ -33,6 +35,16 @@ pub trait Renderer: 'static {
 
     /// Opens an isolated group using the selected backdrop blend operation.
     fn start_composite(&mut self, _bounds: Rectangle, _opacity: f32, _blend: BlendMode) {}
+
+    /// Record a widget locally and composite it at its rotated placement.
+    fn start_rotation(&mut self, source: Rectangle, _placement: Rotation) {
+        self.start_composite(source, 1., BlendMode::Normal);
+    }
+
+    /// Clip descendants to the exact rotated, rounded frame in the parent plane.
+    fn start_rotated_clip(&mut self, visible: Rectangle, frame: Rotation, radii: [f32; 4]) {
+        self.start_content_clip(visible, frame.frame, radii);
+    }
 
     /// Composites the isolated group and resumes drawing into its parent.
     fn end_opacity(&mut self) {}

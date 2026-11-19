@@ -8,26 +8,34 @@ struct Mask {
     metadata: vec4<f32>,
     frame: vec4<f32>,
     radii: vec4<f32>,
+    source_matrix: vec4<f32>,
+    clip_rotation: vec4<f32>,
 }
 @group(0) @binding(2) var<uniform> mask: Mask;
 
 fn coverage(uv: vec2<f32>) -> f32 {
-    let p = uv * vec2<f32>(textureDimensions(surface)) - mask.frame.xy;
+    if any(uv < vec2<f32>(0.)) || any(uv > vec2<f32>(1.)) { return 0.; }
+    if mask.clip_rotation.z == 0. { return mask.metadata.x; }
     let half_size = mask.frame.zw * 0.5;
-    let left = p.x < half_size.x;
-    let top = p.y < half_size.y;
+    let offset = uv * vec2<f32>(textureDimensions(surface)) - mask.frame.xy - half_size;
+    let c = mask.clip_rotation.x;
+    let s = mask.clip_rotation.y;
+    let p = vec2<f32>(c*offset.x - s*offset.y, s*offset.x + c*offset.y);
+    let left = p.x < 0.;
+    let top = p.y < 0.;
     let r = select(select(mask.radii.z, mask.radii.w, left), select(mask.radii.y, mask.radii.x, left), top);
-    if r <= 0. { return mask.metadata.x; }
-    let d = abs(p - half_size) - half_size + vec2<f32>(r);
-    if d.x <= 0. || d.y <= 0. { return mask.metadata.x; }
-    return mask.metadata.x * clamp(r + 0.5 - length(max(d, vec2<f32>(0.))), 0., 1.);
+    let d = abs(p) - half_size + vec2<f32>(r);
+    let distance = length(max(d, vec2<f32>(0.))) + min(max(d.x,d.y),0.) - r;
+    return mask.metadata.x * clamp(0.5-distance,0.,1.);
 }
 
 @group(0) @binding(3) var black: texture_2d<f32>;
 
 @vertex fn vs_main(@builtin(vertex_index) index: u32) -> Vertex {
     let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    return Vertex(vec4<f32>(uv * vec2<f32>(2., -2.) + vec2<f32>(-1., 1.), 0., 1.), uv);
+    let local = uv - vec2<f32>(0.5);
+    let source_uv = vec2<f32>(dot(mask.source_matrix.xy,local),dot(mask.source_matrix.zw,local))+vec2<f32>(0.5);
+    return Vertex(vec4<f32>(uv * vec2<f32>(2., -2.) + vec2<f32>(-1., 1.), 0., 1.), source_uv);
 }
 @fragment fn fs_main(vertex: Vertex) -> @location(0) vec4<f32> {
     return textureSample(surface, surface_sampler, vertex.uv) * coverage(vertex.uv);

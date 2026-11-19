@@ -13,7 +13,8 @@ pub(super) struct State {
         f32,
         renderer::BlendMode,
         bool,
-        Option<(Rectangle, [f32; 4])>,
+        Option<(renderer::Rotation, [f32; 4])>,
+        Option<renderer::Rotation>,
     )>,
     pub backdrop_sensitive: bool,
     pub rounded_clips: Vec<bool>,
@@ -43,7 +44,7 @@ impl Compositor {
         let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
             binding,
             ty,
-            visibility: wgpu::ShaderStages::FRAGMENT,
+            visibility: if binding == 2 {wgpu::ShaderStages::VERTEX_FRAGMENT} else {wgpu::ShaderStages::FRAGMENT},
             count: None,
         };
         let texture = wgpu::BindingType::Texture {
@@ -147,7 +148,7 @@ impl State {
         &mut self,
         engine: &Engine,
         size: Size<u32>,
-        parameters: [f32; 12],
+        parameters: [f32; 20],
         blend: renderer::BlendMode,
     ) -> Surface {
         let compositor = self
@@ -181,7 +182,7 @@ impl State {
             let black = pass_through.then(make_view);
             let alpha = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("iced group opacity"),
-                size: 48,
+                size: 80,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });

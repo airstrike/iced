@@ -692,6 +692,7 @@ impl core::Renderer for Renderer {
             blend,
             std::mem::take(&mut self.opacity.backdrop_sensitive),
             None,
+            None,
         ));
         self.layers
             .push_transformation(Transformation::translate(-bounds.x, -bounds.y));
@@ -702,7 +703,7 @@ impl core::Renderer for Renderer {
     }
 
     fn end_opacity(&mut self) {
-        let Some((parent, scale, bounds, alpha, blend, parent_sensitive, mask)) =
+        let Some((parent, scale, bounds, alpha, blend, parent_sensitive, mask, placement)) =
             self.opacity.parents.pop()
         else {
             return;
@@ -721,9 +722,16 @@ impl core::Renderer for Renderer {
             (bounds.width * factor).ceil().max(1.) as u32,
             (bounds.height * factor).ceil().max(1.) as u32,
         );
-        let mut parameters = [0.; 12];
+        let mut parameters = [0.; 20];
+        let target = placement.map_or(bounds, |rotation| rotation.bounds());
+        let rotation = placement.map_or(0., |p| p.radians);
+        let (s,c) = rotation.sin_cos();
+        parameters[12..16].copy_from_slice(&[c*target.width/bounds.width, -s*target.height/bounds.width, s*target.width/bounds.height, c*target.height/bounds.height]);
         parameters[0] = alpha;
-        if let Some((frame, radii)) = mask {
+        if let Some((rotation, radii)) = mask {
+            let frame = rotation.frame;
+            let (s,c) = rotation.radians.sin_cos();
+            parameters[16..20].copy_from_slice(&[c,s,1.,0.]);
             parameters[4..8].copy_from_slice(&[
                 (frame.x - bounds.x) * factor,
                 (frame.y - bounds.y) * factor,
@@ -751,10 +759,21 @@ impl core::Renderer for Renderer {
         self.recall();
         self.layers = parent;
         self.scale = scale;
-        self.layers.push_clip(bounds);
-        primitive::Renderer::draw_primitive(self, bounds, surface);
+        self.layers.push_clip(target);
+        primitive::Renderer::draw_primitive(self, target, surface);
         self.layers.pop_clip();
         self.layers.split();
+    }
+
+    fn start_rotation(&mut self, source: Rectangle, placement: renderer::Rotation) {
+        self.start_composite(source,1.,renderer::BlendMode::Normal);
+        if let Some(parent) = self.opacity.parents.last_mut() { parent.7 = Some(placement); }
+    }
+
+    fn start_rotated_clip(&mut self, visible: Rectangle, frame: renderer::Rotation, radii: [f32;4]) {
+        self.opacity.rounded_clips.push(true);
+        self.start_composite(visible, 1., renderer::BlendMode::PassThrough);
+        if let Some(parent) = self.opacity.parents.last_mut() { parent.6 = Some((frame, radii)); }
     }
 
     fn start_content_clip(&mut self, visible: Rectangle, frame: Rectangle, radii: [f32; 4]) {
@@ -763,7 +782,7 @@ impl core::Renderer for Renderer {
         if rounded {
             self.start_composite(visible, 1., core::renderer::BlendMode::PassThrough);
             if let Some(parent) = self.opacity.parents.last_mut() {
-                parent.6 = Some((frame, radii));
+                parent.6 = Some((renderer::Rotation { frame, radians: 0. }, radii));
             }
         } else {
             self.layers.push_content_clip(visible);
