@@ -13,8 +13,10 @@ pub(super) struct State {
         f32,
         renderer::BlendMode,
         bool,
+        Option<(Rectangle, [f32; 4])>,
     )>,
     pub backdrop_sensitive: bool,
+    pub rounded_clips: Vec<bool>,
     pub surfaces: Vec<Surface>,
     pub next: usize,
     compositor: Option<Arc<Compositor>>,
@@ -145,7 +147,7 @@ impl State {
         &mut self,
         engine: &Engine,
         size: Size<u32>,
-        opacity: f32,
+        parameters: [f32; 12],
         blend: renderer::BlendMode,
     ) -> Surface {
         let compositor = self
@@ -179,7 +181,7 @@ impl State {
             let black = pass_through.then(make_view);
             let alpha = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("iced group opacity"),
-                size: 16,
+                size: 48,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
@@ -225,7 +227,7 @@ impl State {
         self.next += 1;
         engine
             .queue
-            .write_buffer(&surface.alpha, 0, bytemuck::bytes_of(&opacity));
+            .write_buffer(&surface.alpha, 0, bytemuck::bytes_of(&parameters));
         surface
     }
 }

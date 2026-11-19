@@ -37,6 +37,16 @@ pub trait Renderer: 'static {
     /// Composites the isolated group and resumes drawing into its parent.
     fn end_opacity(&mut self) {}
 
+    /// Clip all descendant layers. The visible surface can be smaller than the rounded frame.
+    fn start_content_clip(&mut self, visible: Rectangle, _frame: Rectangle, _radii: [f32; 4]) {
+        self.start_layer(visible);
+    }
+
+    /// Resume drawing outside the descendant clip.
+    fn end_content_clip(&mut self) {
+        self.end_layer();
+    }
+
     /// Starts recording a new layer.
     fn start_layer(&mut self, bounds: Rectangle);
 

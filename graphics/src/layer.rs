@@ -49,6 +49,7 @@ pub struct Stack<T: Layer> {
     layers: Vec<T>,
     transformations: Vec<Transformation>,
     previous: Vec<usize>,
+    descendant_clips: Vec<Rectangle>,
     current: usize,
     active_count: usize,
 }
@@ -60,6 +61,7 @@ impl<T: Layer> Stack<T> {
             layers: vec![T::default()],
             transformations: vec![Transformation::IDENTITY],
             previous: vec![],
+            descendant_clips: vec![],
             current: 0,
             active_count: 1,
         }
@@ -89,12 +91,29 @@ impl<T: Layer> Stack<T> {
         self.active_count += 1;
 
         let bounds = bounds * self.transformation();
+        let bounds = self.descendant_clips.last().map_or(bounds, |parent| {
+            parent.intersection(&bounds).unwrap_or_default()
+        });
 
         if self.current == self.layers.len() {
             self.layers.push(T::with_bounds(bounds));
         } else {
             self.layers[self.current].resize(bounds);
         }
+    }
+
+    /// Constrain even widget-internal layers opened while drawing the descendants.
+    pub fn push_content_clip(&mut self, bounds: Rectangle) {
+        self.push_clip(bounds);
+        self.descendant_clips
+            .push(self.layers[self.current].bounds());
+    }
+
+    /// Resume at the parent's clip above everything recorded by its children.
+    pub fn pop_content_clip(&mut self) {
+        let _ = self.descendant_clips.pop();
+        self.pop_clip();
+        self.split();
     }
 
     /// Pops the current clipping region from the [`Stack`] and restores the previous one.
@@ -226,6 +245,7 @@ impl<T: Layer> Stack<T> {
         self.current = 0;
         self.active_count = 1;
         self.previous.clear();
+        self.descendant_clips.clear();
     }
 }
 

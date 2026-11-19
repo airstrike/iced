@@ -53,6 +53,18 @@ where
         delegate!(self, renderer, renderer.end_opacity());
     }
 
+    fn start_content_clip(&mut self, visible: Rectangle, frame: Rectangle, radii: [f32; 4]) {
+        delegate!(
+            self,
+            renderer,
+            renderer.start_content_clip(visible, frame, radii)
+        );
+    }
+
+    fn end_content_clip(&mut self) {
+        delegate!(self, renderer, renderer.end_content_clip());
+    }
+
     fn start_layer(&mut self, bounds: Rectangle) {
         delegate!(self, renderer, renderer.start_layer(bounds));
     }

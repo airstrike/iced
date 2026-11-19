@@ -691,6 +691,7 @@ impl core::Renderer for Renderer {
             opacity,
             blend,
             std::mem::take(&mut self.opacity.backdrop_sensitive),
+            None,
         ));
         self.layers
             .push_transformation(Transformation::translate(-bounds.x, -bounds.y));
@@ -701,7 +702,7 @@ impl core::Renderer for Renderer {
     }
 
     fn end_opacity(&mut self) {
-        let Some((parent, scale, bounds, alpha, blend, parent_sensitive)) =
+        let Some((parent, scale, bounds, alpha, blend, parent_sensitive, mask)) =
             self.opacity.parents.pop()
         else {
             return;
@@ -720,7 +721,18 @@ impl core::Renderer for Renderer {
             (bounds.width * factor).ceil().max(1.) as u32,
             (bounds.height * factor).ceil().max(1.) as u32,
         );
-        let surface = self.opacity.surface(&self.engine, size, alpha, blend);
+        let mut parameters = [0.; 12];
+        parameters[0] = alpha;
+        if let Some((frame, radii)) = mask {
+            parameters[4..8].copy_from_slice(&[
+                (frame.x - bounds.x) * factor,
+                (frame.y - bounds.y) * factor,
+                frame.width * factor,
+                frame.height * factor,
+            ]);
+            parameters[8..12].copy_from_slice(&radii.map(|r| r * factor));
+        }
+        let surface = self.opacity.surface(&self.engine, size, parameters, blend);
         let viewport = Viewport::with_physical_size(
             size,
             renderer::Scale {
@@ -743,6 +755,27 @@ impl core::Renderer for Renderer {
         primitive::Renderer::draw_primitive(self, bounds, surface);
         self.layers.pop_clip();
         self.layers.split();
+    }
+
+    fn start_content_clip(&mut self, visible: Rectangle, frame: Rectangle, radii: [f32; 4]) {
+        let rounded = radii.iter().any(|r| *r > 0.);
+        self.opacity.rounded_clips.push(rounded);
+        if rounded {
+            self.start_composite(visible, 1., core::renderer::BlendMode::PassThrough);
+            if let Some(parent) = self.opacity.parents.last_mut() {
+                parent.6 = Some((frame, radii));
+            }
+        } else {
+            self.layers.push_content_clip(visible);
+        }
+    }
+
+    fn end_content_clip(&mut self) {
+        if self.opacity.rounded_clips.pop() == Some(true) {
+            self.end_opacity();
+        } else {
+            self.layers.pop_content_clip();
+        }
     }
 
     fn start_layer(&mut self, bounds: Rectangle) {
