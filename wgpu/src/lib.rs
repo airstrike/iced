@@ -664,13 +664,19 @@ impl Renderer {
 }
 
 impl core::Renderer for Renderer {
-    fn start_opacity(&mut self, bounds: Rectangle, opacity: f32) {
+    fn start_composite(
+        &mut self,
+        bounds: Rectangle,
+        opacity: f32,
+        blend: core::renderer::BlendMode,
+    ) {
         let scale = self.scale().unwrap_or_default().total();
         self.opacity.parents.push((
             std::mem::take(&mut self.layers),
             self.scale,
             bounds,
             opacity,
+            blend,
         ));
         self.layers
             .push_transformation(Transformation::translate(-bounds.x, -bounds.y));
@@ -681,7 +687,7 @@ impl core::Renderer for Renderer {
     }
 
     fn end_opacity(&mut self) {
-        let Some((parent, scale, bounds, alpha)) = self.opacity.parents.pop() else {
+        let Some((parent, scale, bounds, alpha, blend)) = self.opacity.parents.pop() else {
             return;
         };
         let factor = self.scale.unwrap_or_default().total();
@@ -691,7 +697,7 @@ impl core::Renderer for Renderer {
             (bounds.width * factor).ceil().max(1.) as u32,
             (bounds.height * factor).ceil().max(1.) as u32,
         );
-        let surface = self.opacity.surface(&self.engine, size, alpha);
+        let surface = self.opacity.surface(&self.engine, size, alpha, blend);
         let viewport = Viewport::with_physical_size(
             size,
             renderer::Scale {

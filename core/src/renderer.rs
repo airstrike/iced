@@ -12,10 +12,25 @@ use crate::{
 /// pixel grid.
 pub const CRISP: bool = cfg!(feature = "crisp");
 
+/// How an isolated group combines with the content already behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BlendMode {
+    /// Composite the source over its backdrop.
+    #[default]
+    Normal,
+    /// Multiply source and backdrop colors where their alpha channels overlap.
+    Multiply,
+}
+
 /// A component that can be used by widgets to draw themselves on a screen.
 pub trait Renderer: 'static {
     /// Opens an isolated, partially transparent group in local logical coordinates.
-    fn start_opacity(&mut self, _bounds: Rectangle, _opacity: f32) {}
+    fn start_opacity(&mut self, bounds: Rectangle, opacity: f32) {
+        self.start_composite(bounds, opacity, BlendMode::Normal);
+    }
+
+    /// Opens an isolated group using the selected backdrop blend operation.
+    fn start_composite(&mut self, _bounds: Rectangle, _opacity: f32, _blend: BlendMode) {}
 
     /// Composites the isolated group and resumes drawing into its parent.
     fn end_opacity(&mut self) {}

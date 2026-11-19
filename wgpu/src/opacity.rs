@@ -6,7 +6,13 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub(super) struct State {
-    pub parents: Vec<(layer::Stack, Option<renderer::Scale>, Rectangle, f32)>,
+    pub parents: Vec<(
+        layer::Stack,
+        Option<renderer::Scale>,
+        Rectangle,
+        f32,
+        renderer::BlendMode,
+    )>,
     pub surfaces: Vec<Surface>,
     pub next: usize,
     compositor: Option<Arc<Compositor>>,
@@ -15,6 +21,8 @@ pub(super) struct State {
 #[derive(Debug)]
 struct Compositor {
     pipeline: wgpu::RenderPipeline,
+    multiply_backdrop: wgpu::RenderPipeline,
+    multiply_source: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
 }
 
@@ -25,33 +33,85 @@ impl Compositor {
             label: Some("iced opacity"),
             source: wgpu::ShaderSource::Wgsl(include_str!("opacity.wgsl").into()),
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("iced isolated opacity"),
-            layout: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: engine.format,
-                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: Default::default(),
-            depth_stencil: None,
-            multisample: Default::default(),
-            multiview_mask: None,
-            cache: None,
+        let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
+            binding,
+            ty,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            count: None,
+        };
+        let bindings = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("iced isolated layer inputs"),
+            entries: &[
+                entry(
+                    0,
+                    wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                ),
+                entry(
+                    1,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ),
+                entry(
+                    2,
+                    wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                ),
+            ],
         });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("iced isolated layer composition"),
+            bind_group_layouts: &[Some(&bindings)],
+            immediate_size: 0,
+        });
+        let pipeline = |blend, write_mask| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("iced isolated opacity"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: engine.format,
+                        blend: Some(blend),
+                        write_mask,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: Default::default(),
+                depth_stencil: None,
+                multisample: Default::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let multiply = |src_factor, dst_factor| wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor,
+                dst_factor,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent::OVER,
+        };
+        use wgpu::BlendFactor::{Dst, One, OneMinusDstAlpha, OneMinusSrcAlpha};
         Self {
-            pipeline,
+            pipeline: pipeline(
+                wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
+                wgpu::ColorWrites::ALL,
+            ),
+            multiply_backdrop: pipeline(multiply(Dst, OneMinusSrcAlpha), wgpu::ColorWrites::COLOR),
+            multiply_source: pipeline(multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Linear,
                 min_filter: wgpu::FilterMode::Linear,
@@ -64,6 +124,7 @@ impl Compositor {
 #[derive(Debug, Clone)]
 pub(super) struct Surface {
     size: Size<u32>,
+    blend: renderer::BlendMode,
     pub view: wgpu::TextureView,
     alpha: wgpu::Buffer,
     bindings: wgpu::BindGroup,
@@ -71,7 +132,13 @@ pub(super) struct Surface {
 }
 
 impl State {
-    pub(super) fn surface(&mut self, engine: &Engine, size: Size<u32>, opacity: f32) -> Surface {
+    pub(super) fn surface(
+        &mut self,
+        engine: &Engine,
+        size: Size<u32>,
+        opacity: f32,
+        blend: renderer::BlendMode,
+    ) -> Surface {
         let compositor = self
             .compositor
             .get_or_insert_with(|| Arc::new(Compositor::new(engine)));
@@ -119,6 +186,7 @@ impl State {
             });
             let surface = Surface {
                 size,
+                blend,
                 view,
                 alpha,
                 bindings,
@@ -130,7 +198,8 @@ impl State {
                 self.surfaces.push(surface);
             }
         }
-        let surface = self.surfaces[self.next].clone();
+        let mut surface = self.surfaces[self.next].clone();
+        surface.blend = blend;
         self.next += 1;
         engine
             .queue
@@ -158,9 +227,22 @@ impl primitive::Primitive for Surface {
     ) {
     }
     fn draw(&self, _: &Pipeline, pass: &mut wgpu::RenderPass<'_>) -> bool {
-        pass.set_pipeline(&self.compositor.pipeline);
-        pass.set_bind_group(0, &self.bindings, &[]);
-        pass.draw(0..3, 0..1);
+        match self.blend {
+            renderer::BlendMode::Normal => {
+                pass.set_pipeline(&self.compositor.pipeline);
+                pass.set_bind_group(0, &self.bindings, &[]);
+                pass.draw(0..3, 0..1);
+            }
+            renderer::BlendMode::Multiply => {
+                // Premultiplied multiply is Cs*Cb + Cb*(1-As) + Cs*(1-Ab).
+                // Preserve destination alpha through the first two RGB terms.
+                pass.set_pipeline(&self.compositor.multiply_backdrop);
+                pass.set_bind_group(0, &self.bindings, &[]);
+                pass.draw(0..3, 0..1);
+                pass.set_pipeline(&self.compositor.multiply_source);
+                pass.draw(0..3, 0..1);
+            }
+        }
         true
     }
 }

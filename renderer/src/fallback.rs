@@ -42,8 +42,12 @@ where
         delegate!(self, renderer, renderer.fill_quad(quad, background.into()));
     }
 
-    fn start_opacity(&mut self, bounds: Rectangle, opacity: f32) {
-        delegate!(self, renderer, renderer.start_opacity(bounds, opacity));
+    fn start_composite(&mut self, bounds: Rectangle, opacity: f32, blend: renderer::BlendMode) {
+        delegate!(
+            self,
+            renderer,
+            renderer.start_composite(bounds, opacity, blend)
+        );
     }
     fn end_opacity(&mut self) {
         delegate!(self, renderer, renderer.end_opacity());
