@@ -106,6 +106,21 @@ impl<T: Layer> Stack<T> {
         self.current = self.previous.pop().unwrap();
     }
 
+    /// Continue drawing at the same clip above all recorded layers. A composited
+    /// child has already been recorded as a layer; subsequently drawn siblings
+    /// must follow it even if they are ordinary quads.
+    pub fn split(&mut self) {
+        self.flush();
+        let bounds = self.layers[self.current].bounds();
+        self.current = self.active_count;
+        self.active_count += 1;
+        if self.current == self.layers.len() {
+            self.layers.push(T::with_bounds(bounds));
+        } else {
+            self.layers[self.current].resize(bounds);
+        }
+    }
+
     /// Pushes a new [`Transformation`] in the [`Stack`].
     ///
     /// Future drawing operations will be affected by this new [`Transformation`] until

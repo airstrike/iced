@@ -134,6 +134,16 @@ impl Renderer {
         target: &wgpu::TextureView,
         viewport: &Viewport,
     ) -> wgpu::CommandEncoder {
+        self.draw_with_backdrop(clear_color, target, viewport, None)
+    }
+
+    fn draw_with_backdrop(
+        &mut self,
+        clear_color: Option<Color>,
+        target: &wgpu::TextureView,
+        viewport: &Viewport,
+        black: Option<&wgpu::TextureView>,
+    ) -> wgpu::CommandEncoder {
         let mut encoder =
             self.engine
                 .device
@@ -143,6 +153,9 @@ impl Renderer {
 
         self.prepare(&mut encoder, viewport);
         self.render(&mut encoder, target, clear_color, viewport);
+        if let Some(black) = black {
+            self.render(&mut encoder, black, Some(Color::BLACK), viewport);
+        }
 
         self.quad.trim();
         self.triangle.trim();
@@ -677,6 +690,7 @@ impl core::Renderer for Renderer {
             bounds,
             opacity,
             blend,
+            std::mem::take(&mut self.opacity.backdrop_sensitive),
         ));
         self.layers
             .push_transformation(Transformation::translate(-bounds.x, -bounds.y));
@@ -687,9 +701,18 @@ impl core::Renderer for Renderer {
     }
 
     fn end_opacity(&mut self) {
-        let Some((parent, scale, bounds, alpha, blend)) = self.opacity.parents.pop() else {
+        let Some((parent, scale, bounds, alpha, blend, parent_sensitive)) =
+            self.opacity.parents.pop()
+        else {
             return;
         };
+        let blend = if blend == renderer::BlendMode::PassThrough && !self.opacity.backdrop_sensitive
+        {
+            renderer::BlendMode::Normal
+        } else {
+            blend
+        };
+        self.opacity.backdrop_sensitive = parent_sensitive || blend != renderer::BlendMode::Normal;
         let factor = self.scale.unwrap_or_default().total();
         let limit = self.engine.device.limits().max_texture_dimension_2d as f32;
         let factor = factor.min(limit / bounds.width.max(bounds.height).max(1.));
@@ -705,17 +728,21 @@ impl core::Renderer for Renderer {
                 application: factor,
             },
         );
-        let _submission = self.present(
+        let encoder = self.draw_with_backdrop(
             Some(Color::TRANSPARENT),
-            self.engine.format,
             &surface.view,
             &viewport,
+            surface.black.as_ref(),
         );
+        self.finish();
+        let _submission = self.engine.queue.submit([encoder.finish()]);
+        self.recall();
         self.layers = parent;
         self.scale = scale;
         self.layers.push_clip(bounds);
         primitive::Renderer::draw_primitive(self, bounds, surface);
         self.layers.pop_clip();
+        self.layers.split();
     }
 
     fn start_layer(&mut self, bounds: Rectangle) {

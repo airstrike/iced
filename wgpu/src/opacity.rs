@@ -12,7 +12,9 @@ pub(super) struct State {
         Rectangle,
         f32,
         renderer::BlendMode,
+        bool,
     )>,
+    pub backdrop_sensitive: bool,
     pub surfaces: Vec<Surface>,
     pub next: usize,
     compositor: Option<Arc<Compositor>>,
@@ -23,6 +25,9 @@ struct Compositor {
     pipeline: wgpu::RenderPipeline,
     multiply_backdrop: wgpu::RenderPipeline,
     multiply_source: wgpu::RenderPipeline,
+    pass_scale: wgpu::RenderPipeline,
+    pass_black: wgpu::RenderPipeline,
+    pass_uncovered: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
 }
 
@@ -39,17 +44,16 @@ impl Compositor {
             visibility: wgpu::ShaderStages::FRAGMENT,
             count: None,
         };
+        let texture = wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        };
         let bindings = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("iced isolated layer inputs"),
             entries: &[
-                entry(
-                    0,
-                    wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                ),
+                entry(0, texture),
+                entry(3, texture),
                 entry(
                     1,
                     wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
@@ -69,7 +73,7 @@ impl Compositor {
             bind_group_layouts: &[Some(&bindings)],
             immediate_size: 0,
         });
-        let pipeline = |blend, write_mask| {
+        let pipeline = |entry_point, blend, write_mask| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("iced isolated opacity"),
                 layout: Some(&layout),
@@ -81,7 +85,7 @@ impl Compositor {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some("fs_main"),
+                    entry_point: Some(entry_point),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: engine.format,
                         blend: Some(blend),
@@ -104,14 +108,18 @@ impl Compositor {
             },
             alpha: wgpu::BlendComponent::OVER,
         };
-        use wgpu::BlendFactor::{Dst, One, OneMinusDstAlpha, OneMinusSrcAlpha};
+        use wgpu::BlendFactor::{Dst, One, OneMinusDstAlpha, OneMinusSrcAlpha, Src, Zero};
         Self {
             pipeline: pipeline(
+                "fs_main",
                 wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
                 wgpu::ColorWrites::ALL,
             ),
-            multiply_backdrop: pipeline(multiply(Dst, OneMinusSrcAlpha), wgpu::ColorWrites::COLOR),
-            multiply_source: pipeline(multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
+            multiply_backdrop: pipeline("fs_main", multiply(Dst, OneMinusSrcAlpha), wgpu::ColorWrites::COLOR),
+            multiply_source: pipeline("fs_main", multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
+            pass_scale: pipeline("fs_pass_scale", multiply(Zero, Src), wgpu::ColorWrites::COLOR),
+            pass_black: pipeline("fs_pass_black", multiply(One, One), wgpu::ColorWrites::COLOR),
+            pass_uncovered: pipeline("fs_pass_uncovered", multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Linear,
                 min_filter: wgpu::FilterMode::Linear,
@@ -126,6 +134,7 @@ pub(super) struct Surface {
     size: Size<u32>,
     blend: renderer::BlendMode,
     pub view: wgpu::TextureView,
+    pub black: Option<wgpu::TextureView>,
     alpha: wgpu::Buffer,
     bindings: wgpu::BindGroup,
     compositor: Arc<Compositor>,
@@ -142,9 +151,15 @@ impl State {
         let compositor = self
             .compositor
             .get_or_insert_with(|| Arc::new(Compositor::new(engine)));
-        if self.surfaces.get(self.next).is_none_or(|s| s.size != size) {
+        let pass_through = blend == renderer::BlendMode::PassThrough;
+        if self
+            .surfaces
+            .get(self.next)
+            .is_none_or(|s| s.size != size || s.black.is_some() != pass_through)
+        {
             let device = &engine.device;
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
+            let make_view = || {
+                device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("iced opacity group"),
                 size: wgpu::Extent3d {
                     width: size.width,
@@ -158,8 +173,10 @@ impl State {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-            });
-            let view = texture.create_view(&Default::default());
+            }).create_view(&Default::default())
+            };
+            let view = make_view();
+            let black = pass_through.then(make_view);
             let alpha = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("iced group opacity"),
                 size: 16,
@@ -175,6 +192,10 @@ impl State {
                         resource: wgpu::BindingResource::TextureView(&view),
                     },
                     wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(black.as_ref().unwrap_or(&view)),
+                    },
+                    wgpu::BindGroupEntry {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&compositor.sampler),
                     },
@@ -188,6 +209,7 @@ impl State {
                 size,
                 blend,
                 view,
+                black,
                 alpha,
                 bindings,
                 compositor: Arc::clone(compositor),
@@ -232,6 +254,17 @@ impl primitive::Primitive for Surface {
                 pass.set_pipeline(&self.compositor.pipeline);
                 pass.set_bind_group(0, &self.bindings, &[]);
                 pass.draw(0..3, 0..1);
+            }
+            renderer::BlendMode::PassThrough => {
+                pass.set_bind_group(0, &self.bindings, &[]);
+                for pipeline in [
+                    &self.compositor.pass_scale,
+                    &self.compositor.pass_black,
+                    &self.compositor.pass_uncovered,
+                ] {
+                    pass.set_pipeline(pipeline);
+                    pass.draw(0..3, 0..1);
+                }
             }
             renderer::BlendMode::Multiply => {
                 // Premultiplied multiply is Cs*Cb + Cb*(1-As) + Cs*(1-Ab).

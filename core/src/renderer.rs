@@ -20,6 +20,8 @@ pub enum BlendMode {
     Normal,
     /// Multiply source and backdrop colors where their alpha channels overlap.
     Multiply,
+    /// Blend children against their actual backdrop, then apply group opacity.
+    PassThrough,
 }
 
 /// A component that can be used by widgets to draw themselves on a screen.
