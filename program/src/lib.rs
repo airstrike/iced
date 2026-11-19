@@ -10,6 +10,7 @@ mod preset;
 
 pub use preset::Preset;
 
+use crate::core::menu;
 use crate::core::renderer;
 use crate::core::text;
 use crate::core::theme;
@@ -86,6 +87,19 @@ pub trait Program: Sized {
         format!("{title} - Iced")
     }
 
+    /// Produces the native menus for the current key window, or no key window.
+    ///
+    /// `Some(id)` identifies the same window as [`Self::view`]. `None` means no
+    /// iced window currently has focus, including a daemon with no open windows.
+    /// Return the complete set of custom menus; menus from different windows are
+    /// not implicitly merged, and the platform application menu is preserved.
+    ///
+    /// This is evaluated after message batches and window focus changes settle.
+    /// The default contributes no native menus.
+    fn menu(&self, _state: &Self::State, _window: Option<window::Id>) -> menu::Bar<Self::Message> {
+        menu::Bar::default()
+    }
+
     fn subscription(&self, _state: &Self::State) -> Subscription<Self::Message> {
         Subscription::none()
     }
@@ -105,6 +119,109 @@ pub trait Program: Sized {
     fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
         &[]
     }
+}
+
+/// Decorates a [`Program`] with the given native menu function.
+pub fn with_menu<P: Program>(
+    program: P,
+    f: impl Fn(&P::State, Option<window::Id>) -> menu::Bar<P::Message>,
+) -> impl Program<
+    State = P::State,
+    Message = P::Message,
+    Theme = P::Theme,
+    Renderer = P::Renderer,
+    Executor = P::Executor,
+> {
+    struct WithMenu<P, F> {
+        program: P,
+        menu: F,
+    }
+
+    impl<P: Program, F> Program for WithMenu<P, F>
+    where
+        F: Fn(&P::State, Option<window::Id>) -> menu::Bar<P::Message>,
+    {
+        type State = P::State;
+        type Message = P::Message;
+        type Theme = P::Theme;
+        type Renderer = P::Renderer;
+        type Executor = P::Executor;
+
+        #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            (self.menu)(state, window)
+        }
+
+        #[inline]
+        fn name() -> &'static str {
+            P::name()
+        }
+
+        #[inline]
+        fn settings(&self) -> Settings {
+            self.program.settings()
+        }
+
+        #[inline]
+        fn window(&self) -> Option<window::Settings> {
+            self.program.window()
+        }
+
+        #[inline]
+        fn boot(&self) -> (Self::State, Task<Self::Message>) {
+            self.program.boot()
+        }
+
+        #[inline]
+        fn update(&self, state: &mut Self::State, message: Self::Message) -> Task<Self::Message> {
+            self.program.update(state, message)
+        }
+
+        #[inline]
+        fn view<'a>(
+            &self,
+            state: &'a Self::State,
+            window: window::Id,
+        ) -> impl Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
+            self.program.view(state, window)
+        }
+
+        #[inline]
+        fn subscription(&self, state: &Self::State) -> Subscription<Self::Message> {
+            self.program.subscription(state)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
+        }
+
+        #[inline]
+        fn title(&self, state: &Self::State, window: window::Id) -> String {
+            self.program.title(state, window)
+        }
+
+        #[inline]
+        fn theme(&self, state: &Self::State, window: window::Id) -> Option<Self::Theme> {
+            self.program.theme(state, window)
+        }
+
+        #[inline]
+        fn style(&self, state: &Self::State, theme: &Self::Theme) -> theme::Style {
+            self.program.style(state, theme)
+        }
+
+        #[inline]
+        fn scale_factor(&self, state: &Self::State, window: window::Id) -> f32 {
+            self.program.scale_factor(state, window)
+        }
+    }
+
+    WithMenu { program, menu: f }
 }
 
 /// Decorates a [`Program`] with the given subscription function.
@@ -164,6 +281,20 @@ pub fn with_subscription<P: Program>(
             window: window::Id,
         ) -> impl Widget<Self::Message, Self::Theme, Self::Renderer> + 'a {
             self.program.view(state, window)
+        }
+
+        #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
         }
 
         #[inline]
@@ -258,6 +389,20 @@ pub fn with_style<P: Program>(
         }
 
         #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
+        }
+
+        #[inline]
         fn subscription(&self, state: &Self::State) -> Subscription<Self::Message> {
             self.program.subscription(state)
         }
@@ -337,6 +482,20 @@ pub fn with_executor<P: Program, E: Executor>(
         }
 
         #[inline]
+        fn menu(
+            &self,
+            state: &Self::State,
+            window: Option<window::Id>,
+        ) -> menu::Bar<Self::Message> {
+            self.program.menu(state, window)
+        }
+
+        #[inline]
+        fn presets(&self) -> &[Preset<Self::State, Self::Message>] {
+            self.program.presets()
+        }
+
+        #[inline]
         fn subscription(&self, state: &Self::State) -> Subscription<Self::Message> {
             self.program.subscription(state)
         }
@@ -400,6 +559,12 @@ impl<P: Program> Instance<P> {
         self.program.view(&self.state, window)
     }
 
+    /// Produces the native menus for the current key window, if any.
+    #[inline]
+    pub fn menu(&self, window: Option<window::Id>) -> menu::Bar<P::Message> {
+        self.program.menu(&self.state, window)
+    }
+
     /// Returns the current [`Subscription`] of the [`Instance`].
     #[inline]
     pub fn subscription(&self) -> Subscription<P::Message> {
@@ -424,3 +589,6 @@ impl<P: Program> Instance<P> {
         self.program.scale_factor(&self.state, window)
     }
 }
+
+#[cfg(all(test, debug_assertions))]
+mod tests;

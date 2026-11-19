@@ -1,0 +1,38 @@
+//! Native application menus.
+//!
+//! Build a [`Bar`] from menus and return it from your program's menu function.
+//! Menus own their actions and are consumed by the runtime. Menu actions
+//! are evaluated only when the user activates an enabled item.
+//! Native menus are currently supported on macOS; requesting a nonempty bar on
+//! another platform is not yet implemented. An empty bar preserves the platform's
+//! default application menu.
+
+mod action;
+mod bar;
+mod construction;
+pub mod description;
+mod dispatch;
+mod entry;
+mod icon;
+mod item;
+mod map;
+#[expect(
+    clippy::module_inception,
+    reason = "The private leaf holds Menu; this module is its public facade."
+)]
+mod menu;
+mod output;
+mod role;
+pub mod shortcut;
+
+pub use action::Action;
+pub use bar::Bar;
+pub use construction::{bar, edit, item, menu, separator};
+pub use dispatch::Dispatch;
+pub use entry::Entry;
+pub use icon::Icon;
+pub use item::Item;
+pub use menu::Menu;
+pub use output::Output;
+pub use role::Role;
+pub use shortcut::Shortcut;

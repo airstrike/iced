@@ -531,6 +531,7 @@ pub use crate::core::animation;
 pub use crate::core::border;
 pub use crate::core::color;
 pub use crate::core::gradient;
+pub use crate::core::menu;
 pub use crate::core::padding;
 pub use crate::core::theme;
 pub use crate::core::{
@@ -540,6 +541,7 @@ pub use crate::core::{
 };
 pub use crate::program::Preset;
 pub use crate::program::message;
+pub use crate::runtime::edit;
 pub use crate::runtime::exit;
 pub use iced_futures::Subscription;
 

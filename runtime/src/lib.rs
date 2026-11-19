@@ -11,6 +11,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 pub mod backend;
 pub mod clipboard;
+pub mod edit;
 pub mod font;
 pub mod image;
 pub mod keyboard;
