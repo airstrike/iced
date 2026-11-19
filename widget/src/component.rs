@@ -117,7 +117,7 @@ where
     C::State: 'static,
     Message: 'a,
     Theme: 'a,
-    Renderer: 'a,
+    Renderer: crate::core::Renderer + 'a,
 {
     Instance {
         component,
@@ -155,6 +155,7 @@ impl<'a, C, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Instance<'a, C, Message, Theme, Renderer>
 where
     C: Component<'a, Message, Theme, Renderer> + 'a,
+    Renderer: crate::core::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<RefCell<Internal<C::State, C::Event>>>()
