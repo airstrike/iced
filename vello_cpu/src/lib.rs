@@ -271,6 +271,30 @@ impl Renderer {
 
                             renderer.pop_clip();
                         }
+                        Text::RichEditor {
+                            editor,
+                            position,
+                            color,
+                            clip_bounds,
+                            transformation,
+                        } => {
+                            let transformation =
+                                Transformation::scale(viewport.scale_factor()) * *transformation;
+
+                            renderer.push_clip_path(
+                                &into_rect(*clip_bounds * transformation).to_path(ACCURACY),
+                            );
+
+                            self.text.draw_rich_editor(
+                                editor,
+                                *position,
+                                *color,
+                                renderer,
+                                transformation,
+                            );
+
+                            renderer.pop_clip();
+                        }
                         Text::Cached {
                             content,
                             bounds,
@@ -283,6 +307,9 @@ impl Renderer {
                             shaping,
                             wrapping,
                             ellipsis,
+                            letter_spacing,
+                            font_features,
+                            font_variations,
                             clip_bounds,
                         } => {
                             let transformation = Transformation::scale(viewport.scale_factor())
@@ -308,6 +335,9 @@ impl Renderer {
                                 *shaping,
                                 *wrapping,
                                 *ellipsis,
+                                *letter_spacing,
+                                font_features,
+                                font_variations,
                                 renderer,
                                 transformation,
                             );
@@ -378,21 +408,38 @@ fn into_background(background: &Background, bounds: Rectangle) -> vello_cpu::Pai
             Gradient::Linear(gradient) => {
                 let (start, end) = bounds.chord(gradient.angle);
 
-                into_gradient(start, end, &gradient.stops)
+                into_gradient(linear(start, end), &gradient.stops)
+            }
+            Gradient::Radial(gradient) => {
+                let center = Point::new(
+                    bounds.x + bounds.width * gradient.center.x,
+                    bounds.y + bounds.height * gradient.center.y,
+                );
+                let half_diagonal = bounds.width.hypot(bounds.height) / 2.0;
+
+                into_gradient(
+                    radial(center, half_diagonal * gradient.radius),
+                    &gradient.stops,
+                )
+            }
+            Gradient::Conic(gradient) => {
+                let center = Point::new(
+                    bounds.x + bounds.width * gradient.center.x,
+                    bounds.y + bounds.height * gradient.center.y,
+                );
+
+                into_gradient(conic(center, gradient.angle.0), &gradient.stops)
             }
         }),
     }
 }
 
 fn into_gradient(
-    start: Point,
-    end: Point,
+    kind: vello_cpu::peniko::GradientKind,
     stops: &[Option<gradient::ColorStop>],
 ) -> vello_cpu::peniko::Gradient {
     vello_cpu::peniko::Gradient {
-        kind: vello_cpu::peniko::GradientKind::Linear(
-            vello_cpu::peniko::LinearGradientPosition::new((start.x, start.y), (end.x, end.y)),
-        ),
+        kind,
         stops: vello_cpu::peniko::ColorStops(
             stops
                 .iter()
@@ -413,6 +460,32 @@ fn into_gradient(
         ),
         ..vello_cpu::peniko::Gradient::default()
     }
+}
+
+fn linear(start: Point, end: Point) -> vello_cpu::peniko::GradientKind {
+    vello_cpu::peniko::GradientKind::Linear(vello_cpu::peniko::LinearGradientPosition::new(
+        (start.x, start.y),
+        (end.x, end.y),
+    ))
+}
+
+fn radial(center: Point, radius: f32) -> vello_cpu::peniko::GradientKind {
+    vello_cpu::peniko::GradientKind::Radial(vello_cpu::peniko::RadialGradientPosition::new(
+        (center.x, center.y),
+        radius,
+    ))
+}
+
+/// A conic gradient starting at `angle` radians from 12 o'clock, sweeping
+/// clockwise. peniko measures sweeps from the positive X axis instead.
+fn conic(center: Point, angle: f32) -> vello_cpu::peniko::GradientKind {
+    let start = angle - std::f32::consts::FRAC_PI_2;
+
+    vello_cpu::peniko::GradientKind::Sweep(vello_cpu::peniko::SweepGradientPosition::new(
+        (center.x, center.y),
+        start,
+        start + std::f32::consts::TAU,
+    ))
 }
 
 fn into_rect(rectangle: Rectangle) -> vello_cpu::kurbo::Rect {

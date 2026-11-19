@@ -223,6 +223,9 @@ impl geometry::frame::Backend for Frame {
                 shaping: text.shaping,
                 wrapping: text.wrapping,
                 ellipsis: text.ellipsis,
+                letter_spacing: text.letter_spacing,
+                font_features: text.font_features,
+                font_variations: text.font_variations,
                 clip_bounds: self.clip_bounds,
             });
         } else {
@@ -393,9 +396,36 @@ pub fn into_paint(style: Style, transform: kurbo::Affine) -> vello_cpu::PaintTyp
                 let end = transform * crate::into_point(linear.end);
 
                 vello_cpu::PaintType::Gradient(crate::into_gradient(
-                    Point::new(start.x as f32, start.y as f32),
-                    Point::new(end.x as f32, end.y as f32),
+                    crate::linear(
+                        Point::new(start.x as f32, start.y as f32),
+                        Point::new(end.x as f32, end.y as f32),
+                    ),
                     &linear.stops,
+                ))
+            }
+            Gradient::Radial(radial) => {
+                let center = transform * crate::into_point(radial.center);
+                let scale = transform.determinant().abs().sqrt() as f32;
+
+                vello_cpu::PaintType::Gradient(crate::into_gradient(
+                    crate::radial(
+                        Point::new(center.x as f32, center.y as f32),
+                        radial.radius * scale,
+                    ),
+                    &radial.stops,
+                ))
+            }
+            Gradient::Conic(conic) => {
+                let center = transform * crate::into_point(conic.center);
+                let [a, b, ..] = transform.as_coeffs();
+                let rotation = b.atan2(a) as f32;
+
+                vello_cpu::PaintType::Gradient(crate::into_gradient(
+                    crate::conic(
+                        Point::new(center.x as f32, center.y as f32),
+                        conic.angle + rotation,
+                    ),
+                    &conic.stops,
                 ))
             }
         },
