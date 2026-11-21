@@ -1034,10 +1034,13 @@ fn rebase_attrs<'a>(
     if !explicit.contains(Explicit::SIZE) && attrs.metrics_opt == old_defaults.metrics_opt {
         attrs.metrics_opt = new_defaults.metrics_opt;
     }
-    if !explicit.contains(Explicit::TRACKING) && attrs.letter_spacing_opt == old_defaults.letter_spacing_opt {
+    if !explicit.contains(Explicit::TRACKING)
+        && attrs.letter_spacing_opt == old_defaults.letter_spacing_opt
+    {
         attrs.letter_spacing_opt = new_defaults.letter_spacing_opt;
     }
-    if !explicit.contains(Explicit::OPTICAL_SIZE) && attrs.optical_size == old_defaults.optical_size {
+    if !explicit.contains(Explicit::OPTICAL_SIZE) && attrs.optical_size == old_defaults.optical_size
+    {
         attrs.optical_size = new_defaults.optical_size;
     }
     let underline = attrs.text_decoration.underline;
@@ -1184,11 +1187,18 @@ fn attrs_to_style(
     Style {
         bold: (explicit.contains(Explicit::BOLD) || bold != bold_default).then_some(bold),
         italic: (explicit.contains(Explicit::ITALIC) || italic != italic_default).then_some(italic),
-        underline: (explicit.contains(Explicit::UNDERLINE) || underline != underline_default).then_some(underline),
-        strikethrough: (explicit.contains(Explicit::STRIKE) || strikethrough != strikethrough_default).then_some(strikethrough),
-        color: attrs.color_opt.filter(|_| explicit.contains(Explicit::COLOR) || attrs.color_opt != defaults.color_opt)
+        underline: (explicit.contains(Explicit::UNDERLINE) || underline != underline_default)
+            .then_some(underline),
+        strikethrough: (explicit.contains(Explicit::STRIKE)
+            || strikethrough != strikethrough_default)
+            .then_some(strikethrough),
+        color: attrs
+            .color_opt
+            .filter(|_| explicit.contains(Explicit::COLOR) || attrs.color_opt != defaults.color_opt)
             .map(|c| Color::from_rgba8(c.r(), c.g(), c.b(), c.a() as f32 / 255.0)),
-        letter_spacing: if explicit.contains(Explicit::TRACKING) || attrs.letter_spacing_opt != defaults.letter_spacing_opt {
+        letter_spacing: if explicit.contains(Explicit::TRACKING)
+            || attrs.letter_spacing_opt != defaults.letter_spacing_opt
+        {
             attrs.letter_spacing_opt.map(|ls| ls.0)
         } else {
             None
@@ -1202,7 +1212,9 @@ fn attrs_to_style(
             None
         },
         font,
-        optical_size: if explicit.contains(Explicit::OPTICAL_SIZE) || attrs.optical_size != defaults.optical_size {
+        optical_size: if explicit.contains(Explicit::OPTICAL_SIZE)
+            || attrs.optical_size != defaults.optical_size
+        {
             Some(match attrs.optical_size {
                 cosmic_text::OpticalSize::Auto => font::OpticalSize::Auto,
                 cosmic_text::OpticalSize::Fixed(v) => font::OpticalSize::Fixed(v.to_bits()),

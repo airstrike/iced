@@ -44,7 +44,11 @@ impl Compositor {
         let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
             binding,
             ty,
-            visibility: if binding == 2 {wgpu::ShaderStages::VERTEX_FRAGMENT} else {wgpu::ShaderStages::FRAGMENT},
+            visibility: if binding == 2 {
+                wgpu::ShaderStages::VERTEX_FRAGMENT
+            } else {
+                wgpu::ShaderStages::FRAGMENT
+            },
             count: None,
         };
         let texture = wgpu::BindingType::Texture {
@@ -84,7 +88,7 @@ impl Compositor {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     buffers: &[],
-                    compilation_options: Default::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
@@ -94,11 +98,11 @@ impl Compositor {
                         blend: Some(blend),
                         write_mask,
                     })],
-                    compilation_options: Default::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),
-                primitive: Default::default(),
+                primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
-                multisample: Default::default(),
+                multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
                 cache: None,
             })
@@ -118,11 +122,31 @@ impl Compositor {
                 wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
                 wgpu::ColorWrites::ALL,
             ),
-            multiply_backdrop: pipeline("fs_main", multiply(Dst, OneMinusSrcAlpha), wgpu::ColorWrites::COLOR),
-            multiply_source: pipeline("fs_main", multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
-            pass_scale: pipeline("fs_pass_scale", multiply(Zero, Src), wgpu::ColorWrites::COLOR),
-            pass_black: pipeline("fs_pass_black", multiply(One, One), wgpu::ColorWrites::COLOR),
-            pass_uncovered: pipeline("fs_pass_uncovered", multiply(OneMinusDstAlpha, One), wgpu::ColorWrites::ALL),
+            multiply_backdrop: pipeline(
+                "fs_main",
+                multiply(Dst, OneMinusSrcAlpha),
+                wgpu::ColorWrites::COLOR,
+            ),
+            multiply_source: pipeline(
+                "fs_main",
+                multiply(OneMinusDstAlpha, One),
+                wgpu::ColorWrites::ALL,
+            ),
+            pass_scale: pipeline(
+                "fs_pass_scale",
+                multiply(Zero, Src),
+                wgpu::ColorWrites::COLOR,
+            ),
+            pass_black: pipeline(
+                "fs_pass_black",
+                multiply(One, One),
+                wgpu::ColorWrites::COLOR,
+            ),
+            pass_uncovered: pipeline(
+                "fs_pass_uncovered",
+                multiply(OneMinusDstAlpha, One),
+                wgpu::ColorWrites::ALL,
+            ),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Linear,
                 min_filter: wgpu::FilterMode::Linear,
@@ -162,21 +186,23 @@ impl State {
         {
             let device = &engine.device;
             let make_view = || {
-                device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("iced opacity group"),
-                size: wgpu::Extent3d {
-                    width: size.width,
-                    height: size.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: engine.format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            }).create_view(&Default::default())
+                device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some("iced opacity group"),
+                        size: wgpu::Extent3d {
+                            width: size.width,
+                            height: size.height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: engine.format,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                            | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[],
+                    })
+                    .create_view(&wgpu::TextureViewDescriptor::default())
             };
             let view = make_view();
             let black = pass_through.then(make_view);
@@ -196,7 +222,9 @@ impl State {
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
-                        resource: wgpu::BindingResource::TextureView(black.as_ref().unwrap_or(&view)),
+                        resource: wgpu::BindingResource::TextureView(
+                            black.as_ref().unwrap_or(&view),
+                        ),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,

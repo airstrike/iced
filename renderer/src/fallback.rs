@@ -56,8 +56,17 @@ where
     fn start_rotation(&mut self, source: Rectangle, placement: renderer::Rotation) {
         delegate!(self, renderer, renderer.start_rotation(source, placement));
     }
-    fn start_rotated_clip(&mut self, visible: Rectangle, frame: renderer::Rotation, radii:[f32;4]) {
-        delegate!(self, renderer, renderer.start_rotated_clip(visible,frame,radii));
+    fn start_rotated_clip(
+        &mut self,
+        visible: Rectangle,
+        frame: renderer::Rotation,
+        radii: [f32; 4],
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.start_rotated_clip(visible, frame, radii)
+        );
     }
 
     fn start_content_clip(&mut self, visible: Rectangle, frame: Rectangle, radii: [f32; 4]) {
