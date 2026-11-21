@@ -10,6 +10,8 @@ struct Mask {
     radii: vec4<f32>,
     source_matrix: vec4<f32>,
     clip_rotation: vec4<f32>,
+    // The target pixel copied to texel (0, 0) of the backdrop.
+    backdrop: vec4<f32>,
 }
 @group(0) @binding(2) var<uniform> mask: Mask;
 
@@ -30,6 +32,7 @@ fn coverage(uv: vec2<f32>) -> f32 {
 }
 
 @group(0) @binding(3) var black: texture_2d<f32>;
+@group(0) @binding(4) var white: texture_2d<f32>;
 
 @vertex fn vs_main(@builtin(vertex_index) index: u32) -> Vertex {
     let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
@@ -49,6 +52,14 @@ fn coverage(uv: vec2<f32>) -> f32 {
     let t = textureSample(surface, surface_sampler, vertex.uv);
     let b = textureSample(black, surface_sampler, vertex.uv).rgb;
     return vec4<f32>(vec3<f32>(1.) + coverage(vertex.uv) * (t.rgb - b - vec3<f32>(t.a)), 1.);
+}
+// Screen breaks that relation, so the group is also evaluated over opaque
+// white W. Any affine response is T + (W - B) * d - H * a, and only the
+// backdrop scale differs from the two-surface case.
+@fragment fn fs_pass_scale_white(vertex: Vertex) -> @location(0) vec4<f32> {
+    let b = textureSample(black, surface_sampler, vertex.uv).rgb;
+    let w = textureSample(white, surface_sampler, vertex.uv).rgb;
+    return vec4<f32>(vec3<f32>(1.) + coverage(vertex.uv) * (w - b - vec3<f32>(1.)), 1.);
 }
 @fragment fn fs_pass_black(vertex: Vertex) -> @location(0) vec4<f32> {
     return textureSample(black, surface_sampler, vertex.uv) * coverage(vertex.uv);

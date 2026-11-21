@@ -13,6 +13,8 @@ pub struct Compositor {
     adapter: wgpu::Adapter,
     format: wgpu::TextureFormat,
     alpha_mode: wgpu::CompositeAlphaMode,
+    /// Window surfaces are copied from when a blend mode reads its backdrop.
+    usage: wgpu::TextureUsages,
     engine: Engine,
     settings: Settings,
 }
@@ -102,7 +104,7 @@ impl Compositor {
 
         log::info!("Selected: {:#?}", adapter.get_info());
 
-        let (format, alpha_mode) = compatible_surface
+        let (format, alpha_mode, usage) = compatible_surface
             .as_ref()
             .and_then(|surface| {
                 let capabilities = surface.get_capabilities(&adapter);
@@ -145,7 +147,10 @@ impl Compositor {
                         wgpu::CompositeAlphaMode::Auto
                     };
 
-                format.zip(Some(preferred_alpha))
+                let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | (capabilities.usages & wgpu::TextureUsages::COPY_SRC);
+
+                format.map(|format| (format, preferred_alpha, usage))
             })
             .ok_or(Error::IncompatibleSurface)?;
 
@@ -202,6 +207,7 @@ impl Compositor {
                         adapter,
                         format,
                         alpha_mode,
+                        usage,
                         engine,
                         settings,
                     });
@@ -309,7 +315,7 @@ impl graphics::Compositor for Compositor {
         surface.configure(
             &self.engine.device,
             &wgpu::SurfaceConfiguration {
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                usage: self.usage,
                 format: self.format,
                 present_mode: self.settings.present_mode,
                 width,

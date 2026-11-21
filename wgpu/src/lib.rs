@@ -134,15 +134,18 @@ impl Renderer {
         target: &wgpu::TextureView,
         viewport: &Viewport,
     ) -> wgpu::CommandEncoder {
-        self.draw_with_backdrop(clear_color, target, viewport, None)
+        self.draw_with_backdrop(clear_color, target, viewport, None, None)
     }
 
+    /// Like [`draw`](Self::draw), also drawing the primitives over opaque
+    /// black and opaque white targets for pass-through groups.
     fn draw_with_backdrop(
         &mut self,
         clear_color: Option<Color>,
         target: &wgpu::TextureView,
         viewport: &Viewport,
         black: Option<&wgpu::TextureView>,
+        white: Option<&wgpu::TextureView>,
     ) -> wgpu::CommandEncoder {
         let mut encoder =
             self.engine
@@ -155,6 +158,9 @@ impl Renderer {
         self.render(&mut encoder, target, clear_color, viewport);
         if let Some(black) = black {
             self.render(&mut encoder, black, Some(Color::BLACK), viewport);
+        }
+        if let Some(white) = white {
+            self.render(&mut encoder, white, Some(Color::WHITE), viewport);
         }
 
         self.quad.trim();
@@ -528,8 +534,6 @@ impl Renderer {
                     .read()
                     .expect("Read primitive storage");
 
-                let mut need_render = Vec::new();
-
                 for instance in &layer.primitives {
                     let bounds = instance.bounds * scale;
 
@@ -557,8 +561,37 @@ impl Renderer {
                             .primitive
                             .draw(&primitive_storage, &mut render_pass);
 
+                        // Render in paint order: a later primitive may blend
+                        // with what this one renders, like a backdrop blend
+                        // reading the pixels under it.
                         if !drawn {
-                            need_render.push((instance, clip_bounds));
+                            let _ = ManuallyDrop::into_inner(render_pass);
+
+                            instance.primitive.render(
+                                &primitive_storage,
+                                encoder,
+                                frame,
+                                &clip_bounds,
+                            );
+
+                            render_pass = ManuallyDrop::new(encoder.begin_render_pass(
+                                &wgpu::RenderPassDescriptor {
+                                    label: Some("iced_wgpu render pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: frame,
+                                        depth_slice: None,
+                                        resolve_target: None,
+                                        ops: wgpu::Operations {
+                                            load: wgpu::LoadOp::Load,
+                                            store: wgpu::StoreOp::Store,
+                                        },
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    timestamp_writes: None,
+                                    occlusion_query_set: None,
+                                    multiview_mask: None,
+                                },
+                            ));
                         }
                     }
                 }
@@ -578,34 +611,6 @@ impl Renderer {
                     viewport.physical_width(),
                     viewport.physical_height(),
                 );
-
-                if !need_render.is_empty() {
-                    let _ = ManuallyDrop::into_inner(render_pass);
-
-                    for (instance, clip_bounds) in need_render {
-                        instance
-                            .primitive
-                            .render(&primitive_storage, encoder, frame, &clip_bounds);
-                    }
-
-                    render_pass =
-                        ManuallyDrop::new(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("iced_wgpu render pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: frame,
-                                depth_slice: None,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                            multiview_mask: None,
-                        }));
-                }
 
                 render_span.finish();
             }
@@ -690,7 +695,7 @@ impl core::Renderer for Renderer {
             bounds,
             opacity,
             blend,
-            std::mem::take(&mut self.opacity.backdrop_sensitive),
+            std::mem::take(&mut self.opacity.response),
             None,
             None,
         ));
@@ -703,18 +708,13 @@ impl core::Renderer for Renderer {
     }
 
     fn end_opacity(&mut self) {
-        let Some((parent, scale, bounds, alpha, blend, parent_sensitive, mask, placement)) =
+        let Some((parent, scale, bounds, alpha, blend, parent_response, mask, placement)) =
             self.opacity.parents.pop()
         else {
             return;
         };
-        let blend = if blend == renderer::BlendMode::PassThrough && !self.opacity.backdrop_sensitive
-        {
-            renderer::BlendMode::Normal
-        } else {
-            blend
-        };
-        self.opacity.backdrop_sensitive = parent_sensitive || blend != renderer::BlendMode::Normal;
+        let (blend, response) = self.opacity.response.group(blend);
+        self.opacity.response = parent_response.max(response);
         let factor = self.scale.unwrap_or_default().total();
         let limit = self.engine.device.limits().max_texture_dimension_2d as f32;
         let factor = factor.min(limit / bounds.width.max(bounds.height).max(1.));
@@ -745,7 +745,9 @@ impl core::Renderer for Renderer {
             ]);
             parameters[8..12].copy_from_slice(&radii.map(|r| r * factor));
         }
-        let surface = self.opacity.surface(&self.engine, size, parameters, blend);
+        let surface = self
+            .opacity
+            .surface(&self.engine, size, parameters, blend, response);
         let viewport = Viewport::with_physical_size(
             size,
             renderer::Scale {
@@ -758,6 +760,7 @@ impl core::Renderer for Renderer {
             &surface.view,
             &viewport,
             surface.black.as_ref(),
+            surface.white.as_ref(),
         );
         self.finish();
         let _submission = self.engine.queue.submit([encoder.finish()]);

@@ -15,15 +15,40 @@ use crate::{
 pub const CRISP: bool = cfg!(feature = "crisp");
 
 /// How an isolated group combines with the content already behind it.
+///
+/// Every mode other than [`PassThrough`](Self::PassThrough) is a separable
+/// blend function `B(Cb, Cs)` from the W3C Compositing and Blending Level 1
+/// specification, applied where the source and backdrop alpha overlap and
+/// composited source-over elsewhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BlendMode {
     /// Composite the source over its backdrop.
     #[default]
     Normal,
-    /// Multiply source and backdrop colors where their alpha channels overlap.
-    Multiply,
     /// Blend children against their actual backdrop, then apply group opacity.
     PassThrough,
+    /// Keep the darker of the source and backdrop colors, per channel.
+    Darken,
+    /// Multiply source and backdrop colors where their alpha channels overlap.
+    Multiply,
+    /// Darken the backdrop to reflect the source, by dividing its inverse.
+    ColorBurn,
+    /// Keep the lighter of the source and backdrop colors, per channel.
+    Lighten,
+    /// Multiply the inverses of the source and backdrop colors.
+    Screen,
+    /// Brighten the backdrop to reflect the source, by dividing by its inverse.
+    ColorDodge,
+    /// Multiply or screen the source, depending on the backdrop color.
+    Overlay,
+    /// Darken or lighten the backdrop, depending on the source color.
+    SoftLight,
+    /// Multiply or screen the backdrop, depending on the source color.
+    HardLight,
+    /// Subtract the darker of the source and backdrop colors from the lighter one.
+    Difference,
+    /// Like [`Difference`](Self::Difference), with lower contrast.
+    Exclusion,
 }
 
 /// A component that can be used by widgets to draw themselves on a screen.
