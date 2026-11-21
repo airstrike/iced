@@ -164,7 +164,9 @@ fn a_later_sibling_draws_over_a_backdrop_blend_with_the_same_bounds() {
 }
 
 /// D115: a fractional pass-through frame mixes its backdrop with the result
-/// of compositing its children directly onto that backdrop.
+/// of compositing its children directly onto that backdrop. The second
+/// child's green takes Hard Light's screen branch and its red and blue take
+/// the multiply branch.
 #[test]
 fn fractional_pass_through_preserves_the_backdrop_of_affine_children() {
     let Some(mut renderer) = headless() else {
@@ -174,7 +176,7 @@ fn fractional_pass_through_preserves_the_backdrop_of_affine_children() {
     let first = rgba([0.9, 0.2, 0.2], 1.);
     let second = rgba([0.2, 0.8, 0.3], 0.8);
 
-    for mode in [BlendMode::Multiply, BlendMode::Screen] {
+    for mode in [BlendMode::Multiply, BlendMode::Screen, BlendMode::HardLight] {
         let actual = pass_through_scene(&mut renderer, backdrop, first, second, mode);
         let d = premultiplied(backdrop);
         let a = premultiplied(first);

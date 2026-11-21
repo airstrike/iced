@@ -18,12 +18,15 @@ pub(super) enum Response {
     /// Affine, and like source-over on opaque white (Normal and Multiply).
     /// The transparent and black evaluations recover it.
     Multiply,
-    /// Affine with nonnegative coefficients (Screen). This also needs an
-    /// evaluation over opaque white.
+    /// Affine, scaling the backdrop by a factor in `[0, 1]` and offsetting it
+    /// by a nonpositive multiple of its alpha (Screen and Hard Light). This
+    /// also needs an evaluation over opaque white.
     Affine,
-    /// Not affine in the backdrop, or affine with a negative coefficient that
-    /// the fixed-function recovery would clamp (Exclusion). No evaluation set
-    /// recovers it, so a pass-through ancestor isolates its children.
+    /// Not affine in the backdrop (Darken, Lighten, Overlay, Soft Light,
+    /// Color Dodge, Color Burn and Difference), or affine with a backdrop
+    /// factor below zero that the fixed-function recovery would clamp
+    /// (Exclusion, `1 - 2cs`). No evaluation set recovers it, so a
+    /// pass-through ancestor isolates its children.
     Nonlinear,
 }
 
@@ -42,14 +45,13 @@ impl Response {
             },
             BlendMode::Normal => (blend, Self::Over),
             BlendMode::Multiply => (blend, Self::Multiply),
-            BlendMode::Screen => (blend, Self::Affine),
+            BlendMode::Screen | BlendMode::HardLight => (blend, Self::Affine),
             BlendMode::Darken
             | BlendMode::ColorBurn
             | BlendMode::Lighten
             | BlendMode::ColorDodge
             | BlendMode::Overlay
             | BlendMode::SoftLight
-            | BlendMode::HardLight
             | BlendMode::Difference
             | BlendMode::Exclusion => (blend, Self::Nonlinear),
         }
@@ -423,14 +425,16 @@ impl primitive::Primitive for Surface {
         if backdrop_operator(self.blend).is_none() {
             return;
         }
+        let Ok(mut backdrop) = self.backdrop.lock() else {
+            return;
+        };
         let bounds = *bounds * viewport.scale_factor();
         let Some(region) = Rectangle::<f32>::from(Rectangle::with_size(viewport.physical_size()))
             .intersection(&bounds)
             .and_then(nudge::snap)
         else {
-            return;
-        };
-        let Ok(mut backdrop) = self.backdrop.lock() else {
+            // A placement from an earlier frame must not be blended with.
+            *backdrop = None;
             return;
         };
         let reusable = backdrop.as_ref().filter(|backdrop| {

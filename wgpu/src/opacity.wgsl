@@ -53,9 +53,9 @@ fn coverage(uv: vec2<f32>) -> f32 {
     let b = textureSample(black, surface_sampler, vertex.uv).rgb;
     return vec4<f32>(vec3<f32>(1.) + coverage(vertex.uv) * (t.rgb - b - vec3<f32>(t.a)), 1.);
 }
-// Screen breaks that relation, so the group is also evaluated over opaque
-// white W. Any affine response is T + (W - B) * d - H * a, and only the
-// backdrop scale differs from the two-surface case.
+// Screen and Hard Light break that relation, so the group is also evaluated
+// over opaque white W. Any affine response is T + (W - B) * d - H * a, and
+// only the backdrop scale differs from the two-surface case.
 @fragment fn fs_pass_scale_white(vertex: Vertex) -> @location(0) vec4<f32> {
     let b = textureSample(black, surface_sampler, vertex.uv).rgb;
     let w = textureSample(white, surface_sampler, vertex.uv).rgb;
