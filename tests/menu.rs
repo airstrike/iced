@@ -146,7 +146,7 @@ fn devtools_disable_semantic_edits_and_discard_messages_while_rewinding() {
     };
     assert!(matches!(
         item.action(),
-        Some(menu::description::Action::Edit(iced::edit::Command::Cut))
+        Some(menu::description::Action::Edit(iced::edit::Command::Undo))
     ));
     let _ = program.update(
         &mut state,

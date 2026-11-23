@@ -49,3 +49,13 @@ pub fn paste<T>(window: window::Id) -> Task<T> {
 pub fn select_all<T>(window: window::Id) -> Task<T> {
     perform(window, Command::SelectAll)
 }
+
+/// Undoes the last edit in the focused widget of `window`.
+pub fn undo<T>(window: window::Id) -> Task<T> {
+    perform(window, Command::Undo)
+}
+
+/// Redoes the last undone edit in the focused widget of `window`.
+pub fn redo<T>(window: window::Id) -> Task<T> {
+    perform(window, Command::Redo)
+}

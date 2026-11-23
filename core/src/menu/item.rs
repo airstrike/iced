@@ -29,18 +29,20 @@ impl<Message> Item<Message> {
 
     /// Creates a semantic editing item with its conventional title and shortcut.
     pub fn edit(command: edit::Command) -> Self {
-        let (title, key) = match command {
-            edit::Command::Cut => ("Cut", 'x'),
-            edit::Command::Copy => ("Copy", 'c'),
-            edit::Command::Paste => ("Paste", 'v'),
-            edit::Command::SelectAll => ("Select All", 'a'),
+        let (title, modifiers, key) = match command {
+            edit::Command::Cut => ("Cut", Modifiers::COMMAND, 'x'),
+            edit::Command::Copy => ("Copy", Modifiers::COMMAND, 'c'),
+            edit::Command::Paste => ("Paste", Modifiers::COMMAND, 'v'),
+            edit::Command::SelectAll => ("Select All", Modifiers::COMMAND, 'a'),
+            edit::Command::Undo => ("Undo", Modifiers::COMMAND, 'z'),
+            edit::Command::Redo => ("Redo", Modifiers::COMMAND | Modifiers::SHIFT, 'z'),
         };
 
         Self {
             action: Some(Action::Edit(command)),
             ..Self::new(title)
         }
-        .shortcut(Modifiers::COMMAND, key)
+        .shortcut(modifiers, key)
     }
 
     /// Emits a clone of the given message when this item is activated.

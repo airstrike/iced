@@ -9,11 +9,13 @@ fn helpers_preserve_the_target_window_and_command() {
     use iced_runtime::futures::futures::executor;
 
     let window = window::Id::unique();
-    let tasks: [(Command, Task<()>); 4] = [
+    let tasks: [(Command, Task<()>); 6] = [
         (Command::Copy, edit::copy(window)),
         (Command::Cut, edit::cut(window)),
         (Command::Paste, edit::paste(window)),
         (Command::SelectAll, edit::select_all(window)),
+        (Command::Undo, edit::undo(window)),
+        (Command::Redo, edit::redo(window)),
     ];
 
     for (command, task) in tasks {

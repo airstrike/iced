@@ -159,7 +159,8 @@ fn inherited_then_first_enabled_shortcuts_win_and_disabled_ancestors_are_inert()
 
 #[test]
 fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
-    use crate::core::{edit, menu, window};
+    use crate::core::keyboard::Modifiers;
+    use crate::core::{Event, edit, menu, window};
     use crate::runtime::Action;
     use std::cell::RefCell;
 
@@ -173,27 +174,44 @@ fn native_edit_keeps_the_captured_window_and_is_disabled_without_one() {
         }
     });
     let window = window::Id::unique();
-    let menu = || menu::Menu::new("Edit").push(menu::Item::edit(edit::Command::Paste));
+    let menu = || {
+        menu::Menu::new("Edit")
+            .push(menu::Item::edit(edit::Command::Undo))
+            .push(menu::Item::edit(edit::Command::Redo))
+    };
     let scope = Rc::new(Scope {
         window: Some(window),
         is_current: Box::new(|| true),
     });
     let branch = lower(menu(), true, &scope, &send);
-    let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
-        panic!("the Edit menu contains an item");
-    };
-    item.callback.as_ref().unwrap().invoke();
-    assert!(
-        matches!(&output.borrow()[..], [(id, crate::core::Event::Edit(edit::Command::Paste))] if *id == window)
+    for (entry, modifiers) in branch
+        .entries
+        .iter()
+        .zip([Modifiers::COMMAND, Modifiers::COMMAND | Modifiers::SHIFT])
+    {
+        let crate::menu::branch::Entry::Item(item) = entry else {
+            panic!("the Edit menu contains an item");
+        };
+        assert_eq!(item.shortcut, Some(menu::Shortcut::new(modifiers, 'z').unwrap()));
+        item.callback.as_ref().unwrap().invoke();
+    }
+    assert_eq!(
+        &output.borrow()[..],
+        &[
+            (window, Event::Edit(edit::Command::Undo)),
+            (window, Event::Edit(edit::Command::Redo)),
+        ]
     );
 
     let scope = Rc::new(Scope::capture(None, crate::window::Focus::default()));
     let branch = lower(menu(), true, &scope, &send);
-    let crate::menu::branch::Entry::Item(item) = &branch.entries[0] else {
-        panic!("the Edit menu contains an item");
-    };
-    assert!(!item.enabled);
-    assert!(item.callback.is_none());
+    for entry in &branch.entries {
+        let crate::menu::branch::Entry::Item(item) = entry else {
+            panic!("the Edit menu contains an item");
+        };
+        assert!(!item.enabled);
+        assert!(item.callback.is_none());
+    }
 }
 
 #[test]

@@ -14,4 +14,8 @@ pub enum Command {
     Paste,
     /// Select all the text in the focused widget.
     SelectAll,
+    /// Undo the focused widget's last edit.
+    Undo,
+    /// Redo the focused widget's last undone edit.
+    Redo,
 }

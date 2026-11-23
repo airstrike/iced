@@ -559,6 +559,8 @@ impl State {
                     edit::Command::Cut => Binding::Cut,
                     edit::Command::Paste => Binding::Paste,
                     edit::Command::SelectAll => Binding::SelectAll,
+                    edit::Command::Undo => Binding::Undo,
+                    edit::Command::Redo => Binding::Redo,
                 };
 
                 self.apply_binding(editor, binding)

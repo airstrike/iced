@@ -67,10 +67,14 @@ pub fn separator<Message>() -> Entry<Message> {
     Entry::Separator
 }
 
-/// Creates an Edit menu with Cut, Copy, Paste, and Select All commands.
+/// Creates an Edit menu with Undo, Redo, Cut, Copy, Paste, and Select All
+/// commands.
 pub fn edit<Message>() -> Menu<Message> {
     crate::menu![
         "Edit",
+        Item::edit(edit::Command::Undo),
+        Item::edit(edit::Command::Redo),
+        separator(),
         Item::edit(edit::Command::Cut),
         Item::edit(edit::Command::Copy),
         Item::edit(edit::Command::Paste),

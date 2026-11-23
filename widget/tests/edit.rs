@@ -28,7 +28,7 @@ struct Harness<'a, Message> {
 impl<'a, Message: 'a> Harness<'a, Message> {
     fn new(widget: impl Widget<Message, Theme, Renderer> + 'a) -> Self {
         let mut renderer = iced_runtime::futures::futures::executor::block_on(
-            <Renderer as renderer::Headless>::new(renderer::Settings::default(), Some("tiny-skia")),
+            <Renderer as renderer::Headless>::new(renderer::Settings::default(), Some("vello-cpu")),
         )
         .expect("create headless renderer");
         let interface = UserInterface::build(
@@ -122,6 +122,24 @@ fn input_commands_preserve_messages_clipboard_and_single_line_filtering() {
 }
 
 #[test]
+fn input_undo_and_redo_take_back_and_restore_its_own_edit() {
+    let mut harness = Harness::new(
+        iced_widget::text_input("", "original")
+            .id(INPUT)
+            .on_input(Message::Input),
+    );
+    harness.focus();
+    let _ = harness.edit(edit::Command::SelectAll);
+    let _ = harness.edit(edit::Command::Cut);
+    assert_eq!(harness.drain(), [Message::Input(String::new())]);
+
+    let _ = harness.edit(edit::Command::Undo);
+    assert_eq!(harness.drain(), [Message::Input("original".into())]);
+    let _ = harness.edit(edit::Command::Redo);
+    assert_eq!(harness.drain(), [Message::Input(String::new())]);
+}
+
+#[test]
 fn input_paste_uses_on_input_when_no_on_paste_is_set() {
     let mut harness = Harness::new(
         iced_widget::text_input("", "")
@@ -212,6 +230,8 @@ fn assert_ignored<'a, Message: 'a>(harness: &mut Harness<'a, Message>) {
         edit::Command::Cut,
         edit::Command::Paste,
         edit::Command::SelectAll,
+        edit::Command::Undo,
+        edit::Command::Redo,
     ] {
         let (clipboard, status) = harness.send(Event::Edit(command));
         assert_eq!(status, event::Status::Ignored);

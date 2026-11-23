@@ -185,6 +185,9 @@ mod tests {
         assert!(!no_action.is_enabled());
         assert!(no_action.action().is_none());
         for (entry, command) in menus[1].entries().iter().zip([
+            Some(edit::Command::Undo),
+            Some(edit::Command::Redo),
+            None,
             Some(edit::Command::Cut),
             Some(edit::Command::Copy),
             Some(edit::Command::Paste),
