@@ -155,6 +155,19 @@ pub fn window_event(
     use winit::event::Ime;
     use winit::event::WindowEvent;
 
+    // The web clipboard sends these keys to the canvas for the browser's
+    // Edit menu, and needs their iced turn to run its edit.
+    #[cfg(target_arch = "wasm32")]
+    if let WindowEvent::KeyboardInput {
+        event,
+        is_synthetic: false,
+        ..
+    } = &event
+        && let Some(command) = edit_command(event)
+    {
+        return Some(Event::Edit(command));
+    }
+
     match event {
         WindowEvent::Resized(new_size) => {
             let logical_size = new_size.to_logical(f64::from(scale_factor));
@@ -552,6 +565,24 @@ pub fn touch_event(touch: winit::event::Touch, scale_factor: f32) -> touch::Even
             position,
             timestamp,
         },
+    }
+}
+
+/// The editing command of a press of the Copy, Cut or Paste key.
+#[cfg(target_arch = "wasm32")]
+fn edit_command(event: &winit::event::KeyEvent) -> Option<crate::core::edit::Command> {
+    use crate::core::edit::Command;
+    use winit::keyboard::{Key, NamedKey};
+
+    if event.state != winit::event::ElementState::Pressed {
+        return None;
+    }
+
+    match event.logical_key {
+        Key::Named(NamedKey::Copy) => Some(Command::Copy),
+        Key::Named(NamedKey::Cut) => Some(Command::Cut),
+        Key::Named(NamedKey::Paste) => Some(Command::Paste),
+        _ => None,
     }
 }
 

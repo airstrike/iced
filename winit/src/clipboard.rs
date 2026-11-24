@@ -2,7 +2,16 @@
 use crate::core::clipboard::{Content, Error, Kind};
 
 #[cfg(any(target_arch = "wasm32", test))]
+mod capture;
+#[cfg(target_arch = "wasm32")]
+mod owner;
+#[cfg(any(target_arch = "wasm32", test))]
 mod paste;
+#[cfg(any(target_arch = "wasm32", test))]
+mod target;
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) use owner::Owner;
 
 pub use platform::*;
 
@@ -202,7 +211,12 @@ mod platform {
 mod platform {
     use super::*;
 
-    use super::paste::{self, Paste, Read};
+    use super::capture::{self, Capture, Sink};
+    use super::owner::{Owner, Registry};
+    use super::paste::{self, Outcome, Paste, Read};
+    use super::target::Target;
+
+    use crate::core::window;
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -219,9 +233,14 @@ mod platform {
     /// Reading through `navigator.clipboard` asks the user for permission in
     /// most browsers, so a paste shortcut is fulfilled by the `paste` event
     /// the browser fires for it instead, which carries the text for free.
+    ///
+    /// The browser's Edit menu reaches the focused widget through a Copy, Cut
+    /// or Paste key press sent to the canvas while its clipboard event runs.
     pub struct Clipboard {
         state: State,
         paste: Rc<RefCell<Paste>>,
+        sink: Rc<RefCell<Sink>>,
+        owners: Rc<RefCell<Registry>>,
         listeners: Vec<Listener>,
     }
 
@@ -233,6 +252,15 @@ mod platform {
     struct Listener {
         kind: &'static str,
         closure: Closure<dyn FnMut(web_sys::Event)>,
+    }
+
+    /// An editing command of the browser's Edit menu, sent to the canvas as a
+    /// key press that winit turns into an iced turn on the same stack.
+    #[derive(Debug, Clone, Copy)]
+    enum Command {
+        Copy,
+        Cut,
+        Paste,
     }
 
     impl Clipboard {
@@ -253,14 +281,17 @@ mod platform {
             };
 
             let paste = Rc::new(RefCell::new(Paste::default()));
+            let sink = Rc::new(RefCell::new(Sink::default()));
+            let owners = Rc::new(RefCell::new(Registry::default()));
             let mut listeners = Vec::new();
 
             if let Some(window) = window {
                 listeners.push(Listener::new(&window, "keydown", {
                     let paste = paste.clone();
+                    let owners = owners.clone();
                     let clipboard = state.clipboard();
 
-                    move |event| on_key_down(event, &paste, clipboard.as_ref())
+                    move |event| on_key_down(event, &paste, &owners, clipboard.as_ref())
                 }));
 
                 listeners.push(Listener::new(&window, "pointerdown", {
@@ -275,14 +306,40 @@ mod platform {
 
                 listeners.push(Listener::new(&window, "paste", {
                     let paste = paste.clone();
+                    let owners = owners.clone();
 
-                    move |event| on_paste(event, &paste)
+                    move |event| on_paste(event, &paste, &owners)
                 }));
+
+                for (kind, command) in [("copy", Command::Copy), ("cut", Command::Cut)] {
+                    listeners.push(Listener::new(&window, kind, {
+                        let sink = sink.clone();
+                        let owners = owners.clone();
+
+                        move |event| on_copy(event, command, &sink, &owners)
+                    }));
+                }
+
+                // Safari greys out Cut and Copy without a DOM selection, unless
+                // these events are cancelled. Firefox fires none of them.
+                for kind in ["beforecopy", "beforecut", "beforepaste"] {
+                    listeners.push(Listener::new(&window, kind, {
+                        let owners = owners.clone();
+
+                        move |event| {
+                            if owners.borrow().target(&event).into_canvas().is_some() {
+                                event.prevent_default();
+                            }
+                        }
+                    }));
+                }
             }
 
             Clipboard {
                 state,
                 paste,
+                sink,
+                owners,
                 listeners,
             }
         }
@@ -316,32 +373,56 @@ mod platform {
         pub fn write_primary(&mut self, _text: String) {}
 
         /// Writes the given text contents to the [`Clipboard`].
+        ///
+        /// During the `copy` or `cut` event of the browser's Edit menu, the
+        /// text goes to the event instead.
         pub fn write(
             &mut self,
             content: Content,
             callback: impl FnOnce(Result<(), Error>) + 'static,
         ) {
+            let text = match content {
+                Content::Text(text) => text,
+                content => {
+                    log::warn!("unsupported clipboard content: {content:?}");
+
+                    callback(Err(Error::ClipboardUnavailable));
+                    return;
+                }
+            };
+
+            let write = self.sink.borrow_mut().write(text);
+
+            let text = match write {
+                capture::Write::Captured => {
+                    callback(Ok(()));
+                    return;
+                }
+                capture::Write::Passed(text) => text,
+            };
+
             let State::Connected { clipboard } = &self.state else {
                 callback(Err(Error::ClipboardUnavailable));
                 return;
             };
 
-            match content {
-                Content::Text(text) => {
-                    let write = JsFuture::from(clipboard.write_text(&text));
+            let write = JsFuture::from(clipboard.write_text(&text));
 
-                    wasm_bindgen_futures::spawn_local(async move {
-                        let result = write.await.map(|_| ()).map_err(to_error);
+            wasm_bindgen_futures::spawn_local(async move {
+                let result = write.await.map(|_| ()).map_err(to_error);
 
-                        callback(result);
-                    });
-                }
-                content => {
-                    log::warn!("unsupported clipboard content: {content:?}");
+                callback(result);
+            });
+        }
 
-                    callback(Err(Error::ClipboardUnavailable));
-                }
-            }
+        /// Answers the clipboard events of the elements of the window `id`.
+        pub(crate) fn own(&mut self, id: window::Id, owner: Owner) {
+            self.owners.borrow_mut().insert(id, owner);
+        }
+
+        /// Leaves the clipboard events of the closed window `id` to the page.
+        pub(crate) fn disown(&mut self, id: window::Id) {
+            self.owners.borrow_mut().remove(id);
         }
     }
 
@@ -390,12 +471,39 @@ mod platform {
         }
     }
 
+    impl Command {
+        /// The key whose press winit turns into this command.
+        fn key(self) -> &'static str {
+            match self {
+                Command::Copy => "Copy",
+                Command::Cut => "Cut",
+                Command::Paste => "Paste",
+            }
+        }
+
+        /// Sends the key press of the command to `canvas`. winit runs the iced
+        /// turn for it before this returns, unless its loop is busy.
+        fn send(self, canvas: &web_sys::HtmlCanvasElement) {
+            let init = web_sys::KeyboardEventInit::new();
+            init.set_bubbles(true);
+            init.set_cancelable(true);
+            init.set_key(self.key());
+
+            if let Ok(press) =
+                web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)
+            {
+                let _ = canvas.dispatch_event(&press);
+            }
+        }
+    }
+
     fn on_key_down(
         event: web_sys::Event,
         paste: &Rc<RefCell<Paste>>,
+        owners: &Rc<RefCell<Registry>>,
         clipboard: Option<&web_sys::Clipboard>,
     ) {
-        // The copy handed to winit below comes back through here.
+        // The key presses sent to winit below come back through here.
         if !event.is_trusted() {
             return;
         }
@@ -416,10 +524,7 @@ mod platform {
 
         // An element over the canvas (an input method's text field) forwards
         // its key presses to winit and lets the browser paste on its own.
-        let Some(canvas) = event
-            .target()
-            .and_then(|target| target.dyn_into::<web_sys::HtmlCanvasElement>().ok())
-        else {
+        let Target::Canvas(canvas) = owners.borrow().target(&event) else {
             return;
         };
 
@@ -478,14 +583,12 @@ mod platform {
         }
     }
 
-    fn on_paste(event: web_sys::Event, paste: &Rc<RefCell<Paste>>) {
+    fn on_paste(event: web_sys::Event, paste: &Rc<RefCell<Paste>>, owners: &Rc<RefCell<Registry>>) {
         let Some(clipboard_event) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
             return;
         };
 
-        let is_canvas = event
-            .target()
-            .is_some_and(|target| target.has_type::<web_sys::HtmlCanvasElement>());
+        let target = owners.borrow().target(&event);
 
         let text = clipboard_event
             .clipboard_data()
@@ -493,18 +596,63 @@ mod platform {
 
         // A paste into an element of the page belongs to it, unless iced read
         // the clipboard for the key press that pasted.
-        let Some(reads) = paste.borrow_mut().paste(text.as_deref(), is_canvas) else {
+        let outcome = paste.borrow_mut().paste(text.as_deref(), target);
+
+        match outcome {
+            Outcome::Element => {}
+            Outcome::Shortcut(reads) => {
+                event.prevent_default();
+
+                for read in reads {
+                    read(
+                        text.clone()
+                            .map(Content::Text)
+                            .ok_or(Error::ContentNotAvailable),
+                    );
+                }
+            }
+            Outcome::Menu(canvas) => {
+                event.prevent_default();
+
+                Command::Paste.send(&canvas);
+            }
+        }
+    }
+
+    /// Answers the `copy` or `cut` event of the browser's Edit menu with the
+    /// focused widget's own copy or cut.
+    fn on_copy(
+        event: web_sys::Event,
+        command: Command,
+        sink: &Rc<RefCell<Sink>>,
+        owners: &Rc<RefCell<Registry>>,
+    ) {
+        let Some(clipboard_event) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
             return;
         };
 
-        event.prevent_default();
+        let Some(canvas) = owners.borrow().target(&event).into_canvas() else {
+            return;
+        };
 
-        for read in reads {
-            read(
-                text.clone()
-                    .map(Content::Text)
-                    .ok_or(Error::ContentNotAvailable),
-            );
+        let Some(data) = clipboard_event.clipboard_data() else {
+            return;
+        };
+
+        let capture = match Capture::open(sink) {
+            Ok(capture) => capture,
+            Err(error) => {
+                log::warn!("{error}");
+                return;
+            }
+        };
+
+        command.send(&canvas);
+
+        // Nothing captured leaves the browser's own copy, of an empty
+        // selection, in place.
+        if let Some(captured) = capture.close() {
+            captured.deliver(&event, &data);
         }
     }
 

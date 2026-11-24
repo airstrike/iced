@@ -49,6 +49,7 @@ web-sys.features = [
     "ClipboardEvent",
     "DataTransfer",
     "Document",
+    "Element",
     "HtmlCanvasElement",
     "KeyboardEvent",
     "KeyboardEventInit",

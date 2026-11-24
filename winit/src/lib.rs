@@ -642,6 +642,11 @@ async fn run_instance<P>(
                     .raw
                     .set_theme(conversion::window_theme(window.state.theme_mode()));
 
+                #[cfg(target_arch = "wasm32")]
+                if let Some(owner) = window.clipboard_owner() {
+                    clipboard.own(id, owner);
+                }
+
                 debug::theme_changed(|| {
                     if is_first {
                         theme::Base::seed(window.state.theme())
@@ -1400,6 +1405,9 @@ fn run_action<'a, P, C>(
                 if window_manager.remove(id).is_some() {
                     events.push((id, core::Event::Window(core::window::Event::Closed)));
                 }
+
+                #[cfg(target_arch = "wasm32")]
+                clipboard.disown(id);
 
                 if window_manager.is_empty() {
                     *compositor = None;

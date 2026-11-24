@@ -313,6 +313,14 @@ where
             })
     }
 
+    /// The elements of the page whose clipboard events belong to the window.
+    #[cfg(target_arch = "wasm32")]
+    pub fn clipboard_owner(&self) -> Option<crate::clipboard::Owner> {
+        use winit::platform::web::WindowExtWebSys;
+
+        self.raw.canvas().map(crate::clipboard::Owner::new)
+    }
+
     pub fn configure_surface(&mut self, compositor: &mut C) {
         let physical_size = self.state.physical_size();
 
