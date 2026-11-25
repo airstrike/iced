@@ -23,11 +23,7 @@ fn coverage(uv: vec2<f32>) -> f32 {
     let c = mask.clip_rotation.x;
     let s = mask.clip_rotation.y;
     let p = vec2<f32>(c*offset.x - s*offset.y, s*offset.x + c*offset.y);
-    let left = p.x < 0.;
-    let top = p.y < 0.;
-    let r = select(select(mask.radii.z, mask.radii.w, left), select(mask.radii.y, mask.radii.x, left), top);
-    let d = abs(p) - half_size + vec2<f32>(r);
-    let distance = length(max(d, vec2<f32>(0.))) + min(max(d.x,d.y),0.) - r;
+    let distance = rounded_frame_distance(p, half_size, mask.radii);
     return mask.metadata.x * clamp(0.5-distance,0.,1.);
 }
 

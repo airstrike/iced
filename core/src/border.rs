@@ -75,6 +75,39 @@ impl Border {
     }
 }
 
+/// Fit circular corners to a rectangle in clockwise order from the top left.
+/// A crowded edge scales its adjacent radii proportionally. Each corner
+/// takes the smaller of its two edge factors, leaving independent corners
+/// unchanged. A negative or non-finite radius draws as zero.
+#[must_use]
+pub fn fitted_radii(size: crate::Size, radii: [f32; 4]) -> [f32; 4] {
+    let radii = radii.map(|r| if r.is_finite() { r.max(0.) } else { 0. });
+    let [tl, tr, br, bl] = radii;
+    if tl + tr <= size.width
+        && bl + br <= size.width
+        && tl + bl <= size.height
+        && tr + br <= size.height
+    {
+        return radii;
+    }
+    // A pair of finite f32 radii can overflow when added in f32.
+    let [tl, tr, br, bl] = radii.map(f64::from);
+    let fit = |length: f32, sum: f64| {
+        let length = f64::from(length.max(0.));
+        if sum > length { length / sum } else { 1. }
+    };
+    let top = fit(size.width, tl + tr);
+    let right = fit(size.height, tr + br);
+    let bottom = fit(size.width, bl + br);
+    let left = fit(size.height, tl + bl);
+    [
+        (tl * top.min(left)) as f32,
+        (tr * top.min(right)) as f32,
+        (br * bottom.min(right)) as f32,
+        (bl * bottom.min(left)) as f32,
+    ]
+}
+
 /// The border radii for the corners of a graphics primitive in the order:
 /// top-left, top-right, bottom-right, bottom-left.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -274,5 +307,27 @@ impl std::ops::Mul<f32> for Radius {
             bottom_right: self.bottom_right * scale,
             bottom_left: self.bottom_left * scale,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fitted_radii;
+    use crate::Size;
+
+    #[test]
+    fn corner_fit_preserves_independent_edges_and_finite_outputs() {
+        let size = Size::new(100., 400.);
+        assert_eq!(fitted_radii(size, [200., 0., 50., 0.]), [100., 0., 50., 0.]);
+        assert_eq!(
+            fitted_radii(size, [80., 40., 0., 0.]),
+            [200. / 3., 100. / 3., 0., 0.]
+        );
+        assert_eq!(fitted_radii(size, [f32::MAX; 4]), [50.; 4]);
+        assert_eq!(
+            fitted_radii(size, [f32::NAN, -5., f32::INFINITY, 9.]),
+            [0., 0., 0., 9.]
+        );
+        assert_eq!(fitted_radii(Size::ZERO, [0., 1., 0., 1.]), [0.; 4]);
     }
 }

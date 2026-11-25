@@ -296,6 +296,82 @@ fn pass_through_scene(
     [pixels[1], pixels[3], pixels[5]]
 }
 
+/// The same corner can cut pixels across the frame's centreline. The image
+/// sampler and a clipped group must agree away from the antialiasing band.
+#[cfg(feature = "image")]
+#[test]
+fn rounded_images_and_clips_fit_each_incident_edge() {
+    use iced_wgpu::core::image::{self, Renderer as _};
+
+    let Some(mut renderer) = headless() else {
+        return;
+    };
+    let white = image::Handle::from_rgba(1, 1, vec![255; 4]);
+    for (width, height, radii, fitted) in [
+        (100, 400, [100., 0., 0., 0.], [100., 0., 0., 0.]),
+        (100, 400, [200., 0., 0., 0.], [100., 0., 0., 0.]),
+        (100, 400, [80., 40., 0., 0.], [200. / 3., 100. / 3., 0., 0.]),
+        (
+            100,
+            400,
+            [200. / 3., 100. / 3., 0., 0.],
+            [200. / 3., 100. / 3., 0., 0.],
+        ),
+        (100, 400, [0., 0., 200., 0.], [0., 0., 100., 0.]),
+        (400, 100, [0., 200., 0., 50.], [0., 100., 0., 50.]),
+        (100, 100, [100., 0., 100., 0.], [100., 0., 100., 0.]),
+        (24, 40, [3., 4., 5., 7.], [3., 4., 5., 7.]),
+        (24, 40, [0.; 4], [0.; 4]),
+        (24, 40, [40.; 4], [12.; 4]),
+    ] {
+        let size = Size::new(width, height);
+        let bounds = Rectangle::with_size(Size::new(width as f32, height as f32));
+        let raster = draw(&mut renderer, size, |renderer| {
+            let mut source = image::Image::new(white.clone());
+            let [top_left, top_right, bottom_right, bottom_left] = radii;
+            source.border_radius = iced_wgpu::core::border::Radius {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            };
+            renderer.draw_image(source, bounds, bounds);
+        });
+        let clipped = draw(&mut renderer, size, |renderer| {
+            renderer.start_content_clip(bounds, bounds, radii);
+            fill(renderer, bounds, Color::WHITE);
+            renderer.end_content_clip();
+        });
+
+        for (i, (image, clip)) in raster.iter().zip(clipped).enumerate() {
+            let x = (i % width as usize) as f32 + 0.5;
+            let y = (i / width as usize) as f32 + 0.5;
+            let right = width as f32 - x;
+            let bottom = height as f32 - y;
+            let mut inside = true;
+            let mut near_arc = false;
+            for ((dx, dy), r) in [(x, y), (right, y), (right, bottom), (x, bottom)]
+                .into_iter()
+                .zip(fitted)
+            {
+                if dx < r && dy < r {
+                    let distance = (dx - r).hypot(dy - r) - r;
+                    inside &= distance <= 0.;
+                    near_arc |= distance.abs() <= 1.5;
+                }
+            }
+            if !near_arc {
+                let alpha = if inside { 255 } else { 0 };
+                assert_eq!(
+                    (image[3], clip[3]),
+                    (alpha, alpha),
+                    "radii {radii:?} at ({x}, {y})"
+                );
+            }
+        }
+    }
+}
+
 fn headless() -> Option<Renderer> {
     let renderer = block_on(<Renderer as Headless>::new(
         renderer::Settings::default(),
