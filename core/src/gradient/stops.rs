@@ -48,7 +48,7 @@ impl Stops {
 }
 
 impl Extend<ColorStop> for Stops {
-    fn extend(&mut self, stops: impl IntoIterator<Item = ColorStop>) {
+    fn extend<T: IntoIterator<Item = ColorStop>>(&mut self, stops: T) {
         let mut incoming = stops.into_iter().filter(|stop| valid_offset(stop.offset));
         let Some(first) = incoming.next() else {
             return;

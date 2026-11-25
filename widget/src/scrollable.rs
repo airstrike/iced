@@ -3442,7 +3442,7 @@ pub(super) mod internals {
     }
 
     /// The handle of a [`Scrollbar`].
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Copy)]
     pub struct Scroller {
         /// The bounds of the [`Scroller`].
         pub bounds: Rectangle,
@@ -3510,7 +3510,7 @@ pub struct Rail {
 }
 
 /// The appearance of the scroller of a scrollable.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Scroller {
     /// The [`Background`] of the scroller.
     pub background: Background,
