@@ -105,6 +105,8 @@ impl Pipeline {
                 "\n",
                 include_str!("../shader/color.wgsl"),
                 "\n",
+                include_str!("../shader/rounded.wgsl"),
+                "\n",
                 include_str!("../shader/image.wgsl"),
             ))),
         });
@@ -599,14 +601,13 @@ fn add_instances(
         bounds.y + bounds.height / 2.0,
     ];
 
+    let border_radius = border::fitted_radii(clip_bounds.size(), border_radius.into());
     let clip_bounds = [
         clip_bounds.x,
         clip_bounds.y,
         clip_bounds.width,
         clip_bounds.height,
     ];
-
-    let border_radius = border_radius.into();
 
     match entry {
         atlas::Entry::Contiguous(allocation) => {

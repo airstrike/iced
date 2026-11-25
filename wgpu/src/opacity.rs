@@ -119,6 +119,8 @@ impl Compositor {
             label: Some("iced opacity"),
             source: wgpu::ShaderSource::Wgsl(
                 concat!(
+                    include_str!("shader/rounded.wgsl"),
+                    "\n",
                     include_str!("opacity.wgsl"),
                     "\n",
                     include_str!("shader/backdrop.wgsl"),

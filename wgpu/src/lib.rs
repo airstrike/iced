@@ -743,6 +743,7 @@ impl core::Renderer for Renderer {
                 frame.width * factor,
                 frame.height * factor,
             ]);
+            let radii = core::border::fitted_radii(frame.size(), radii);
             parameters[8..12].copy_from_slice(&radii.map(|r| r * factor));
         }
         let surface = self

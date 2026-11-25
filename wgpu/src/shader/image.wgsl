@@ -84,7 +84,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     out.uv = vec2<f32>(d.x * cos_r - d.y * sin_r, d.x * sin_r + d.y * cos_r) + uv_center;
 
     out.position = globals.transform * out.position;
-    out.border_radius = min(input.border_radius, vec4(min(input.clip_bounds.z, input.clip_bounds.w) / 2.0));
+    out.border_radius = input.border_radius;
     out.atlas = vec4(input.atlas_pos, input.atlas_pos + input.atlas_scale);
     out.layer = input.layer;
     out.opacity = input.opacity;
@@ -98,22 +98,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let position = input.clip_bounds.xy;
     let scale = input.clip_bounds.zw;
 
-    let d = rounded_box_sdf(
-        -2.0 * (fragment - position - scale / 2.0),
-        scale,
-        input.border_radius * 2.0,
-    ) / 2.0;
+    let half_size = scale * 0.5;
+    let d = rounded_frame_distance(fragment - position - half_size, half_size, input.border_radius);
 
     let antialias: f32 = clamp(1.0 - d, 0.0, 1.0);
     let inside = all(input.uv >= input.atlas.xy) && all(input.uv <= input.atlas.zw);
 
     let sample = textureSample(u_texture, u_sampler, input.uv, input.layer) * vec4<f32>(1.0, 1.0, 1.0, antialias * input.opacity * f32(inside));
     return premultiply(sample);
-}
-
-fn rounded_box_sdf(p: vec2<f32>, size: vec2<f32>, corners: vec4<f32>) -> f32 {
-    let box_half = select(corners.yz, corners.xw, p.x > 0.0);
-    let corner = select(box_half.y, box_half.x, p.y > 0.0);
-    let q = abs(p) - size + corner;
-    return min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - corner;
 }
