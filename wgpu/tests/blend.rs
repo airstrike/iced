@@ -11,6 +11,10 @@ use iced_wgpu::graphics::color;
 use std::pin::pin;
 use std::task::{Context, Poll, Waker};
 
+#[cfg(feature = "geometry")]
+#[path = "blend/gradient.rs"]
+mod gradient;
+
 /// A premultiplied color in the renderer's working space.
 type Pixel = [f64; 4];
 

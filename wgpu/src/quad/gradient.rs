@@ -89,7 +89,7 @@ impl Pipeline {
                 "\n",
                 include_str!("../shader/color.wgsl"),
                 "\n",
-                include_str!("../shader/color/linear_rgb.wgsl")
+                include_str!("../shader/gradient.wgsl")
             ))),
         });
 
