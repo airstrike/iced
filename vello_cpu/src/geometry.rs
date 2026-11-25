@@ -164,8 +164,8 @@ impl geometry::frame::Backend for Frame {
 
         self.primitives.push(Primitive::Stroke {
             path,
-            paint: into_paint(stroke.style, self.transform),
             stroke: into_stroke(&stroke),
+            paint: into_paint(stroke.style, self.transform),
         });
     }
 
@@ -237,7 +237,7 @@ impl geometry::frame::Backend for Frame {
         let text = text.into();
         let stroke = stroke.into();
 
-        text.draw_with(|path, _color| self.stroke(&path, stroke));
+        text.draw_with(|path, _color| self.stroke(&path, stroke.clone()));
     }
 
     fn push_transform(&mut self) {
