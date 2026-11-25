@@ -35,6 +35,15 @@ pub trait Renderer: core::Renderer {
 
     /// Draws the given [`Self::Geometry`].
     fn draw_geometry(&mut self, geometry: Self::Geometry);
+
+    /// Opens an antialiased path clip for subsequent draws in the current logical
+    /// coordinate system. `visible` bounds the work, independently of the path.
+    /// Close a successful scope with [`core::Renderer::end_content_clip`].
+    /// Returns false without opening a scope if this renderer cannot clip paths.
+    #[must_use]
+    fn start_path_clip(&mut self, _visible: Rectangle, _path: &Path, _rule: fill::Rule) -> bool {
+        false
+    }
 }
 
 #[cfg(debug_assertions)]

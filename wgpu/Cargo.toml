@@ -19,7 +19,7 @@ all-features = true
 
 [features]
 default = ["wgpu/default"]
-geometry = ["iced_graphics/geometry", "lyon"]
+geometry = ["iced_graphics/geometry", "lyon", "dep:tiny-skia"]
 image = ["iced_graphics/image", "guillotiere"]
 svg = ["iced_graphics/svg", "resvg", "guillotiere"]
 svg-text = ["svg", "resvg/text", "resvg/system-fonts", "resvg/memmap-fonts"]
@@ -43,6 +43,9 @@ wgpu.workspace = true
 
 lyon.workspace = true
 lyon.optional = true
+
+tiny-skia.workspace = true
+tiny-skia.optional = true
 
 guillotiere.workspace = true
 guillotiere.optional = true

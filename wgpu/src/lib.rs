@@ -734,7 +734,7 @@ impl core::Renderer for Renderer {
             c * target.height / bounds.height,
         ]);
         parameters[0] = alpha;
-        if let Some((rotation, radii)) = mask {
+        if let Some(opacity::Clip::Rounded(rotation, radii)) = &mask {
             let frame = rotation.frame;
             let (s, c) = rotation.radians.sin_cos();
             parameters[16..20].copy_from_slice(&[c, s, 1., 0.]);
@@ -744,12 +744,24 @@ impl core::Renderer for Renderer {
                 frame.width * factor,
                 frame.height * factor,
             ]);
-            let radii = core::border::fitted_radii(frame.size(), radii);
+            let radii = core::border::fitted_radii(frame.size(), *radii);
             parameters[8..12].copy_from_slice(&radii.map(|r| r * factor));
         }
-        let surface = self
-            .opacity
-            .surface(&self.engine, size, parameters, blend, response);
+        let coverage = match mask {
+            #[cfg(feature = "geometry")]
+            Some(opacity::Clip::Path(path, rule)) => {
+                parameters[18] = 2.;
+                // Offscreen dimensions round up to whole texels. Sample only
+                // the actual logical extent, including its fractional last texel.
+                parameters[4] = bounds.width * factor / size.width as f32;
+                parameters[5] = bounds.height * factor / size.height as f32;
+                Some(opacity::Coverage::new(&path, rule, bounds, factor))
+            }
+            _ => None,
+        };
+        let surface =
+            self.opacity
+                .surface(&self.engine, size, parameters, blend, response, coverage);
         let viewport = Viewport::with_physical_size(
             size,
             renderer::Scale {
@@ -788,20 +800,23 @@ impl core::Renderer for Renderer {
         frame: renderer::Rotation,
         radii: [f32; 4],
     ) {
-        self.opacity.rounded_clips.push(true);
+        self.opacity.isolated_clips.push(true);
         self.start_composite(visible, 1., renderer::BlendMode::PassThrough);
         if let Some(parent) = self.opacity.parents.last_mut() {
-            parent.6 = Some((frame, radii));
+            parent.6 = Some(opacity::Clip::Rounded(frame, radii));
         }
     }
 
     fn start_content_clip(&mut self, visible: Rectangle, frame: Rectangle, radii: [f32; 4]) {
         let rounded = radii.iter().any(|r| *r > 0.);
-        self.opacity.rounded_clips.push(rounded);
+        self.opacity.isolated_clips.push(rounded);
         if rounded {
             self.start_composite(visible, 1., core::renderer::BlendMode::PassThrough);
             if let Some(parent) = self.opacity.parents.last_mut() {
-                parent.6 = Some((renderer::Rotation { frame, radians: 0. }, radii));
+                parent.6 = Some(opacity::Clip::Rounded(
+                    renderer::Rotation { frame, radians: 0. },
+                    radii,
+                ));
             }
         } else {
             self.layers.push_content_clip(visible);
@@ -809,7 +824,7 @@ impl core::Renderer for Renderer {
     }
 
     fn end_content_clip(&mut self) {
-        if self.opacity.rounded_clips.pop() == Some(true) {
+        if self.opacity.isolated_clips.pop() == Some(true) {
             self.end_opacity();
         } else {
             self.layers.pop_content_clip();
@@ -1008,6 +1023,30 @@ impl graphics::mesh::Renderer for Renderer {
 impl graphics::geometry::Renderer for Renderer {
     type Geometry = Geometry;
     type Frame = geometry::Frame;
+
+    fn start_path_clip(
+        &mut self,
+        visible: Rectangle,
+        path: &graphics::geometry::Path,
+        rule: graphics::geometry::fill::Rule,
+    ) -> bool {
+        if visible.width <= 0.
+            || visible.height <= 0.
+            || ![visible.x, visible.y, visible.width, visible.height]
+                .into_iter()
+                .all(f32::is_finite)
+        {
+            let empty = Rectangle::default();
+            core::Renderer::start_content_clip(self, empty, empty, [0.; 4]);
+            return true;
+        }
+        self.opacity.isolated_clips.push(true);
+        core::Renderer::start_composite(self, visible, 1., renderer::BlendMode::PassThrough);
+        if let Some(parent) = self.opacity.parents.last_mut() {
+            parent.6 = Some(opacity::Clip::Path(path.clone(), rule));
+        }
+        true
+    }
 
     fn new_frame(&self, bounds: Rectangle) -> Self::Frame {
         geometry::Frame::new(bounds)

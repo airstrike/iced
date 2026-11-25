@@ -4,6 +4,23 @@ use crate::core::{Rectangle, Size, renderer};
 use crate::graphics::Viewport;
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "geometry")]
+mod coverage;
+#[cfg(feature = "geometry")]
+pub(super) use coverage::Coverage;
+#[cfg(not(feature = "geometry"))]
+#[derive(Debug, PartialEq)]
+pub(super) enum Coverage {}
+
+pub(super) enum Clip {
+    Rounded(renderer::Rotation, [f32; 4]),
+    #[cfg(feature = "geometry")]
+    Path(
+        crate::graphics::geometry::Path,
+        crate::graphics::geometry::fill::Rule,
+    ),
+}
+
 /// How the color a composited subtree produces depends on its backdrop.
 ///
 /// A pass-through group evaluates its children over fixed backdrops and
@@ -86,11 +103,12 @@ pub(super) struct State {
         f32,
         renderer::BlendMode,
         Response,
-        Option<(renderer::Rotation, [f32; 4])>,
+        Option<Clip>,
         Option<renderer::Rotation>,
     )>,
     pub response: Response,
-    pub rounded_clips: Vec<bool>,
+    /// A true entry closes an isolated surface; a false one closes a rectangular scissor.
+    pub isolated_clips: Vec<bool>,
     pub surfaces: Vec<Surface>,
     pub next: usize,
     compositor: Option<Arc<Compositor>>,
@@ -149,6 +167,7 @@ impl Compositor {
                 entry(0, texture),
                 entry(3, texture),
                 entry(4, texture),
+                entry(5, texture),
                 entry(
                     1,
                     wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
@@ -282,6 +301,9 @@ pub(super) struct Surface {
     pub view: wgpu::TextureView,
     pub black: Option<wgpu::TextureView>,
     pub white: Option<wgpu::TextureView>,
+    coverage_texture: Option<wgpu::Texture>,
+    #[cfg(feature = "geometry")]
+    coverage_key: Option<Arc<Coverage>>,
     alpha: wgpu::Buffer,
     bindings: wgpu::BindGroup,
     backdrop: Arc<Mutex<Option<Backdrop>>>,
@@ -310,6 +332,7 @@ impl State {
         mut parameters: [f32; 20],
         blend: renderer::BlendMode,
         response: Response,
+        coverage: Option<Coverage>,
     ) -> Surface {
         let compositor = self
             .compositor
@@ -317,7 +340,10 @@ impl State {
         let pass_through = blend == renderer::BlendMode::PassThrough;
         let white = pass_through && response == Response::Affine;
         if self.surfaces.get(self.next).is_none_or(|s| {
-            s.size != size || s.black.is_some() != pass_through || s.white.is_some() != white
+            s.size != size
+                || s.black.is_some() != pass_through
+                || s.white.is_some() != white
+                || s.coverage_texture.is_some() != coverage.is_some()
         }) {
             let device = &engine.device;
             let make_view = || {
@@ -343,6 +369,25 @@ impl State {
             let view = make_view();
             let black = pass_through.then(make_view);
             let white = white.then(make_view);
+            let coverage_texture = coverage.as_ref().map(|_| {
+                device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("iced path clip coverage"),
+                    size: wgpu::Extent3d {
+                        width: size.width,
+                        height: size.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::R8Unorm,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                })
+            });
+            let coverage_view = coverage_texture
+                .as_ref()
+                .map(|texture| texture.create_view(&Default::default()));
             let alpha = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("iced group opacity"),
                 size: 96,
@@ -353,6 +398,12 @@ impl State {
                 label: Some("iced opacity bindings"),
                 layout: &compositor.pipeline.get_bind_group_layout(0),
                 entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::TextureView(
+                            coverage_view.as_ref().unwrap_or(&view),
+                        ),
+                    },
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(&view),
@@ -385,6 +436,9 @@ impl State {
                 view,
                 black,
                 white,
+                coverage_texture,
+                #[cfg(feature = "geometry")]
+                coverage_key: None,
                 alpha,
                 bindings,
                 backdrop: Arc::new(Mutex::new(None)),
@@ -396,7 +450,20 @@ impl State {
                 self.surfaces.push(surface);
             }
         }
-        let mut surface = self.surfaces[self.next].clone();
+        let slot = &mut self.surfaces[self.next];
+        #[cfg(feature = "geometry")]
+        if let (Some(key), Some(texture)) = (coverage, &slot.coverage_texture)
+            && slot.coverage_key.as_deref() != Some(&key)
+        {
+            if key.upload(texture, &engine.queue, size) {
+                slot.coverage_key = Some(Arc::new(key));
+            } else {
+                // Reject a mask that could not be allocated. A reused texture may
+                // contain an earlier clip, so never composite this group's pixels.
+                parameters[0] = 0.;
+            }
+        }
+        let mut surface = slot.clone();
         surface.blend = blend;
         self.next += 1;
         parameters[1] = backdrop_operator(blend).map_or(0., |operator| operator as f32);

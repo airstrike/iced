@@ -14,10 +14,14 @@ struct Mask {
     backdrop: vec4<f32>,
 }
 @group(0) @binding(2) var<uniform> mask: Mask;
+@group(0) @binding(5) var path_coverage: texture_2d<f32>;
 
 fn coverage(uv: vec2<f32>) -> f32 {
     if any(uv < vec2<f32>(0.)) || any(uv > vec2<f32>(1.)) { return 0.; }
     if mask.clip_rotation.z == 0. { return mask.metadata.x; }
+    if mask.clip_rotation.z == 2. {
+        return mask.metadata.x * textureSampleLevel(path_coverage, surface_sampler, uv, 0.).r;
+    }
     let half_size = mask.frame.zw * 0.5;
     let offset = uv * vec2<f32>(textureDimensions(surface)) - mask.frame.xy - half_size;
     let c = mask.clip_rotation.x;
@@ -33,7 +37,8 @@ fn coverage(uv: vec2<f32>) -> f32 {
 @vertex fn vs_main(@builtin(vertex_index) index: u32) -> Vertex {
     let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
     let local = uv - vec2<f32>(0.5);
-    let source_uv = vec2<f32>(dot(mask.source_matrix.xy,local),dot(mask.source_matrix.zw,local))+vec2<f32>(0.5);
+    var source_uv = vec2<f32>(dot(mask.source_matrix.xy,local),dot(mask.source_matrix.zw,local))+vec2<f32>(0.5);
+    if mask.clip_rotation.z == 2. { source_uv *= mask.frame.xy; }
     return Vertex(vec4<f32>(uv * vec2<f32>(2., -2.) + vec2<f32>(-1., 1.), 0., 1.), source_uv);
 }
 @fragment fn fs_main(vertex: Vertex) -> @location(0) vec4<f32> {

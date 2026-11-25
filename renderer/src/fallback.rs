@@ -472,6 +472,19 @@ mod geometry {
         type Geometry = Geometry<A::Geometry, B::Geometry>;
         type Frame = Frame<A::Frame, B::Frame>;
 
+        fn start_path_clip(
+            &mut self,
+            visible: Rectangle,
+            path: &Path,
+            rule: geometry::fill::Rule,
+        ) -> bool {
+            delegate!(
+                self,
+                renderer,
+                renderer.start_path_clip(visible, path, rule)
+            )
+        }
+
         fn new_frame(&self, bounds: Rectangle) -> Self::Frame {
             match self {
                 Self::Primary(renderer) => Frame::Primary(renderer.new_frame(bounds)),

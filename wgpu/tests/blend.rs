@@ -15,6 +15,84 @@ use std::task::{Context, Poll, Waker};
 #[path = "blend/gradient.rs"]
 mod gradient;
 
+#[cfg(feature = "geometry")]
+#[test]
+fn path_coverage_clips_once_across_nested_translation_multiply_and_later_siblings() {
+    use iced_wgpu::core::{Point, Vector};
+    use iced_wgpu::graphics::geometry::{Path, Renderer as _, fill::Rule};
+
+    let mut renderer = headless().expect("wgpu adapter required for path coverage");
+    let size = Size::new(52, 44);
+    let path = Path::new(|p| {
+        p.move_to(Point::new(8., 8.));
+        p.line_to(Point::new(30., 8.));
+        p.line_to(Point::new(8., 30.));
+        p.close();
+    });
+    let clip = |renderer: &mut Renderer, children: &dyn Fn(&mut Renderer)| {
+        let outer = Rectangle::new(Point::new(4., 3.), Size::new(42., 36.));
+        renderer.start_content_clip(outer, outer, [3.; 4]);
+        renderer.with_translation(Vector::new(3., 4.), |renderer| {
+            // Only a portion of the triangle is visible. This offscreen surface
+            // has a different origin from its path, its parent and the target.
+            let visible = Rectangle::new(Point::new(12., 10.), Size::new(20., 22.));
+            assert!(renderer.start_path_clip(visible, &path, Rule::NonZero));
+            children(renderer);
+            renderer.end_content_clip();
+        });
+        renderer.end_content_clip();
+    };
+    let mask = draw(&mut renderer, size, |renderer| {
+        clip(renderer, &|renderer| {
+            fill(renderer, square(44.), Color::WHITE)
+        });
+    });
+    let index = |x: usize, y: usize| y * 52 + x;
+    assert_eq!(mask[index(20, 16)][3], 255);
+    assert_eq!(mask[index(13, 18)][3], 0, "the cropped viewport");
+    assert_eq!(mask[index(32, 26)][3], 0, "outside the triangle");
+    let boundary = mask[index(22, 22)][3];
+    assert!(
+        (25..=230).contains(&boundary),
+        "antialiased diagonal: {boundary}"
+    );
+
+    let backdrop = rgb8([73, 126, 205], 160);
+    let first = rgb8([128, 211, 66], 128);
+    let second = rgb8([195, 111, 89], 190);
+    let pixels = draw(&mut renderer, size, |renderer| {
+        fill(renderer, square(52.), backdrop);
+        clip(renderer, &|renderer| {
+            fill(renderer, square(44.), first);
+            group(
+                renderer,
+                [0., 0., 44., 44.],
+                1.,
+                BlendMode::Multiply,
+                |renderer| fill(renderer, square(44.), second),
+            );
+        });
+        fill(
+            renderer,
+            Rectangle::new(Point::new(17., 15.), Size::new(2., 2.)),
+            Color::BLACK,
+        );
+    });
+    let d = store(premultiplied(backdrop));
+    let a = composite(BlendMode::Normal, store(premultiplied(first)), d);
+    let b = composite(BlendMode::Multiply, store(premultiplied(second)), a);
+    for (x, y) in [(20, 16), (13, 18), (32, 26), (22, 22)] {
+        let i = index(x, y);
+        let expected = encode(mix(d, b, f64::from(mask[i][3]) / 255.));
+        assert!(
+            close(pixels[i], expected, 4),
+            "({x},{y}): {:?} vs {expected:?}",
+            pixels[i]
+        );
+    }
+    assert_eq!(pixels[index(18, 16)], [0, 0, 0, 255], "later sibling");
+}
+
 /// A premultiplied color in the renderer's working space.
 type Pixel = [f64; 4];
 
