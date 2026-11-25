@@ -465,7 +465,7 @@ pub enum Status {
 ///
 /// If not specified with [`Button::style`]
 /// the theme will provide the style.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     /// The [`Background`] of the button.
     pub background: Option<Background>,

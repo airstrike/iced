@@ -2,7 +2,7 @@ use crate::Color;
 use crate::gradient::{self, Gradient};
 
 /// The background of some element.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Background {
     /// A solid color.
     Color(Color),

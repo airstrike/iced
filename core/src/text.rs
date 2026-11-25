@@ -471,7 +471,7 @@ pub struct Span<'a, Link = ()> {
 }
 
 /// A text highlight.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Highlight {
     /// The [`Background`] of the highlight.
     pub background: Background,

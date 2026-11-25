@@ -5,30 +5,31 @@ use crate::quad::{self, Quad};
 use bytemuck::{Pod, Zeroable};
 use std::ops::Range;
 
-/// A quad filled with interpolated colors.
-#[derive(Clone, Copy, Debug)]
-#[repr(C)]
+/// CPU-side gradient quad, retaining the source stops until the layer is prepared.
+#[derive(Clone, Debug)]
 pub struct Gradient {
-    /// The background gradient data of the quad.
-    pub gradient: gradient::Packed,
+    pub instance: Instance,
+    pub stops: Option<crate::core::gradient::Stops>,
+}
 
-    /// The [`Quad`] data of the [`Gradient`].
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[repr(C)]
+pub struct Instance {
+    pub gradient: gradient::Packed,
     pub quad: Quad,
 }
 
-#[allow(unsafe_code)]
-unsafe impl Pod for Gradient {}
-
-#[allow(unsafe_code)]
-unsafe impl Zeroable for Gradient {}
-
 #[derive(Debug)]
 pub struct Layer {
-    instances: Buffer<Gradient>,
-    instance_count: usize,
+    instances: Buffer<Instance>,
+    runs: Vec<(Range<usize>, std::sync::Arc<crate::gradient::Pages>)>,
 }
 
 impl Layer {
+    pub fn clear_tables(&mut self) {
+        self.runs.clear();
+    }
+
     pub fn new(device: &wgpu::Device) -> Self {
         let instances = Buffer::new(
             device,
@@ -39,7 +40,7 @@ impl Layer {
 
         Self {
             instances,
-            instance_count: 0,
+            runs: Vec::new(),
         }
     }
 
@@ -49,17 +50,32 @@ impl Layer {
         encoder: &mut wgpu::CommandEncoder,
         belt: &mut wgpu::util::StagingBelt,
         instances: &[Gradient],
+        tables: &crate::gradient::Tables,
     ) {
         let _ = self.instances.resize(device, instances.len());
-        let _ = self.instances.write(encoder, belt, 0, instances);
-
-        self.instance_count = instances.len();
+        let mut vertices = Vec::with_capacity(instances.len());
+        let mut runs: Vec<(Range<usize>, std::sync::Arc<crate::gradient::Pages>)> = Vec::new();
+        for (index, gradient) in instances.iter().enumerate() {
+            vertices.push(gradient.instance);
+            let pages = tables.get(gradient.stops.as_ref());
+            if let Some((range, last)) = runs.last_mut()
+                && std::sync::Arc::ptr_eq(last, &pages)
+                && pages.groups.len() == 1
+            {
+                range.end += 1;
+            } else {
+                runs.push((index..index + 1, pages));
+            }
+        }
+        let _ = self.instances.write(encoder, belt, 0, &vertices);
+        self.runs = runs;
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
+    pub tables: crate::gradient::Tables,
 }
 
 impl Pipeline {
@@ -67,10 +83,11 @@ impl Pipeline {
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         constants_layout: &wgpu::BindGroupLayout,
+        tables: crate::gradient::Tables,
     ) -> Self {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("iced_wgpu.quad.gradient.pipeline"),
-            bind_group_layouts: &[Some(constants_layout)],
+            bind_group_layouts: &[Some(constants_layout), Some(tables.layout())],
             immediate_size: 0,
         });
 
@@ -100,39 +117,22 @@ impl Pipeline {
                 module: &shader,
                 entry_point: Some("gradient_vs_main"),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Gradient>() as u64,
+                    array_stride: std::mem::size_of::<Instance>() as u64,
                     step_mode: wgpu::VertexStepMode::Instance,
                     attributes: &wgpu::vertex_attr_array!(
-                        // Colors 1-2
-                        0 => Uint32x4,
-                        // Colors 3-4
-                        1 => Uint32x4,
-                        // Colors 5-6
-                        2 => Uint32x4,
-                        // Colors 7-8
-                        3 => Uint32x4,
-                        // Offsets 1-8
-                        4 => Uint32x4,
-                        // Direction
-                        5 => Float32x4,
-                        // Gradient type
-                        6 => Uint32,
-                        // Position & Scale
-                        7 => Float32x4,
-                        // Border color
-                        8 => Float32x4,
-                        // Border radius
-                        9 => Float32x4,
-                        // Border width
-                        10 => Float32,
-                        // Shadow color
-                        11 => Float32x4,
-                        // Shadow offset
-                        12 => Float32x2,
-                        // Shadow blur radius
-                        13 => Float32,
-                        // Snap
-                        14 => Uint32,
+                        0 => Float32x4, // first two straight linear colors
+                        1 => Float32x4,
+                        2 => Float32x2, // offsets
+                        3 => Float32x4, // gradient direction
+                        4 => Uint32x3,  // kind, base, count
+                        5 => Float32x4, // position and size
+                        6 => Float32x4, // border color
+                        7 => Float32x4, // border radius
+                        8 => Float32,   // border width
+                        9 => Float32x4, // shadow color
+                        10 => Float32x2, // shadow offset
+                        11 => Float32,  // shadow blur
+                        12 => Uint32,   // snap
                     ),
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -141,7 +141,7 @@ impl Pipeline {
                 module: &shader,
                 entry_point: Some("gradient_fs_main"),
                 targets: &quad::color_target_state(format),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: crate::gradient::fragment_options(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -158,7 +158,7 @@ impl Pipeline {
             cache: None,
         });
 
-        Self { pipeline }
+        Self { pipeline, tables }
     }
 
     pub fn render<'a>(
@@ -172,6 +172,19 @@ impl Pipeline {
         render_pass.set_bind_group(0, constants, &[]);
         render_pass.set_vertex_buffer(0, layer.instances.slice(..));
 
-        render_pass.draw(0..6, range.start as u32..range.end as u32);
+        let first = layer
+            .runs
+            .partition_point(|(run, _)| run.end <= range.start);
+        for (run, pages) in &layer.runs[first..] {
+            if run.start >= range.end {
+                break;
+            }
+            let start = range.start.max(run.start) as u32;
+            let end = range.end.min(run.end) as u32;
+            for group in &pages.groups {
+                render_pass.set_bind_group(1, group, &[]);
+                render_pass.draw(0..6, start..end);
+            }
+        }
     }
 }

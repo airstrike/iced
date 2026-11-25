@@ -266,7 +266,7 @@ impl geometry::frame::Backend for Frame {
         let text = text.into();
         let stroke = stroke.into();
 
-        text.draw_with(|glyph, _color| self.stroke(&glyph, stroke));
+        text.draw_with(|glyph, _color| self.stroke(&glyph, stroke.clone()));
     }
 
     fn fill_text(&mut self, text: impl Into<geometry::Text>) {
@@ -418,7 +418,10 @@ impl geometry::frame::Backend for Frame {
 
 enum Buffer {
     Solid(tessellation::VertexBuffers<mesh::SolidVertex2D, u32>),
-    Gradient(tessellation::VertexBuffers<mesh::GradientVertex2D, u32>),
+    Gradient(
+        tessellation::VertexBuffers<mesh::GradientVertex2D, u32>,
+        Option<crate::core::gradient::Stops>,
+    ),
 }
 
 struct BufferStack {
@@ -439,13 +442,18 @@ impl BufferStack {
                         .push(Buffer::Solid(tessellation::VertexBuffers::new()));
                 }
             },
-            Style::Gradient(_) => match self.stack.last() {
-                Some(Buffer::Gradient(_)) => {}
-                _ => {
-                    self.stack
-                        .push(Buffer::Gradient(tessellation::VertexBuffers::new()));
+            Style::Gradient(gradient) => {
+                let stops = gradient.stops();
+                let inline = stops.as_slice().len() <= gradient::Packed::INLINE;
+                // A long gradient may need several texture pages. Isolate its
+                // path so drawing these pages cannot reorder overlapping fills.
+                if !inline || !matches!(self.stack.last(), Some(Buffer::Gradient(_, None))) {
+                    self.stack.push(Buffer::Gradient(
+                        tessellation::VertexBuffers::new(),
+                        (!inline).then(|| stops.clone()),
+                    ));
                 }
-            },
+            }
         }
 
         self.stack.last_mut().unwrap()
@@ -462,7 +470,7 @@ impl BufferStack {
                     TriangleVertex2DBuilder(color::pack(*color)),
                 ))
             }
-            (Style::Gradient(gradient), Buffer::Gradient(buffer)) => {
+            (Style::Gradient(gradient), Buffer::Gradient(buffer, _)) => {
                 Box::new(tessellation::BuffersBuilder::new(
                     buffer,
                     GradientVertex2DBuilder {
@@ -485,7 +493,7 @@ impl BufferStack {
                     TriangleVertex2DBuilder(color::pack(*color)),
                 ))
             }
-            (Style::Gradient(gradient), Buffer::Gradient(buffer)) => {
+            (Style::Gradient(gradient), Buffer::Gradient(buffer, _)) => {
                 Box::new(tessellation::BuffersBuilder::new(
                     buffer,
                     GradientVertex2DBuilder {
@@ -509,14 +517,17 @@ impl BufferStack {
                     clip_bounds,
                     transformation: Transformation::IDENTITY,
                 }),
-                Buffer::Gradient(buffer) if !buffer.indices.is_empty() => Some(Mesh::Gradient {
-                    buffers: mesh::Indexed {
-                        vertices: buffer.vertices,
-                        indices: buffer.indices,
-                    },
-                    clip_bounds,
-                    transformation: Transformation::IDENTITY,
-                }),
+                Buffer::Gradient(buffer, stops) if !buffer.indices.is_empty() => {
+                    Some(Mesh::Gradient {
+                        stops,
+                        buffers: mesh::Indexed {
+                            vertices: buffer.vertices,
+                            indices: buffer.indices,
+                        },
+                        clip_bounds,
+                        transformation: Transformation::IDENTITY,
+                    })
+                }
                 _ => None,
             })
     }

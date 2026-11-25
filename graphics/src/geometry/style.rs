@@ -2,7 +2,7 @@ use crate::core::Color;
 use crate::geometry::Gradient;
 
 /// The coloring style of some drawing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Style {
     /// A solid [`Color`].
     Solid(Color),

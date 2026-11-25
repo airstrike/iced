@@ -27,6 +27,9 @@ pub enum Mesh {
         /// The vertices and indices of the mesh.
         buffers: Indexed<GradientVertex2D>,
 
+        /// The shared authored stops for a long gradient, absent for inline gradients.
+        stops: Option<crate::core::gradient::Stops>,
+
         /// The [`Transformation`] for the vertices of the [`Mesh`].
         transformation: Transformation,
 

@@ -816,7 +816,7 @@ where
                                 border: style.hovered_region.border,
                                 ..renderer::Quad::default()
                             },
-                            style.hovered_region.background,
+                            style.hovered_region.background.clone(),
                         );
                     }
                 }
@@ -1211,7 +1211,7 @@ fn hovered_split<'a>(
 }
 
 /// The appearance of a [`PaneGrid`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     /// The appearance of a hovered region highlight.
     pub hovered_region: Highlight,
@@ -1222,7 +1222,7 @@ pub struct Style {
 }
 
 /// The appearance of a highlight of the [`PaneGrid`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Highlight {
     /// The [`Background`] of the pane region.
     pub background: Background,

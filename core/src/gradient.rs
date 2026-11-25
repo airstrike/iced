@@ -1,9 +1,11 @@
 //! Colors that transition progressively.
 use crate::{Color, Point, Radians};
 
-use std::cmp::Ordering;
+mod stops;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+pub use stops::Stops;
+
+#[derive(Debug, Clone, PartialEq)]
 /// A fill which transitions colors progressively along a direction, either linearly, radially,
 /// or conically.
 pub enum Gradient {
@@ -16,6 +18,15 @@ pub enum Gradient {
 }
 
 impl Gradient {
+    /// The stops of this gradient in painting order.
+    pub fn stops(&self) -> &Stops {
+        match self {
+            Self::Linear(linear) => &linear.stops,
+            Self::Radial(radial) => &radial.stops,
+            Self::Conic(conic) => &conic.stops,
+        }
+    }
+
     /// Scales the alpha channel of the [`Gradient`] by the given factor.
     pub fn scale_alpha(self, factor: f32) -> Self {
         match self {
@@ -59,12 +70,12 @@ pub struct ColorStop {
 }
 
 /// A linear gradient.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Linear {
     /// How the [`Gradient`] is angled within its bounds.
     pub angle: Radians,
     /// [`ColorStop`]s along the linear gradient path.
-    pub stops: [Option<ColorStop>; 8],
+    pub stops: Stops,
 }
 
 impl Linear {
@@ -72,56 +83,35 @@ impl Linear {
     pub fn new(angle: impl Into<Radians>) -> Self {
         Self {
             angle: angle.into(),
-            stops: [None; 8],
+            stops: Stops::default(),
         }
     }
 
     /// Adds a new [`ColorStop`], defined by an offset and a color, to the gradient.
     ///
-    /// Any `offset` that is not within `0.0..=1.0` will be silently ignored.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
+    /// Invalid offsets are ignored. Stops with the same offset keep their insertion order.
     pub fn add_stop(mut self, offset: f32, color: Color) -> Self {
-        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
-            let (Ok(index) | Err(index)) = self.stops.binary_search_by(|stop| match stop {
-                None => Ordering::Greater,
-                Some(stop) => stop.offset.partial_cmp(&offset).unwrap(),
-            });
-
-            if index < 8 {
-                self.stops[index] = Some(ColorStop { offset, color });
-            }
-        } else {
-            log::warn!("Gradient color stop must be within 0.0..=1.0 range.");
-        };
-
+        self.stops.add(offset, color);
         self
     }
 
     /// Adds multiple [`ColorStop`]s to the gradient.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
     pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
-        for stop in stops {
-            self = self.add_stop(stop.offset, stop.color);
-        }
-
+        self.stops.extend(stops);
         self
     }
 
     /// Scales the alpha channel of the [`Linear`] gradient by the given
     /// factor.
     pub fn scale_alpha(mut self, factor: f32) -> Self {
-        for stop in self.stops.iter_mut().flatten() {
-            stop.color.a *= factor;
-        }
+        self.stops.scale_alpha(factor);
 
         self
     }
 }
 
 /// A radial gradient.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Radial {
     /// The center of the gradient, as a ratio of the bounding box.
     ///
@@ -133,7 +123,7 @@ pub struct Radial {
     /// `1.0` means the gradient extends to the half-diagonal length.
     pub radius: f32,
     /// [`ColorStop`]s along the radial gradient.
-    pub stops: [Option<ColorStop>; 8],
+    pub stops: Stops,
 }
 
 impl Default for Radial {
@@ -141,7 +131,7 @@ impl Default for Radial {
         Self {
             center: Point::new(0.5, 0.5),
             radius: 1.0,
-            stops: [None; 8],
+            stops: Stops::default(),
         }
     }
 }
@@ -154,50 +144,29 @@ impl Radial {
 
     /// Adds a new [`ColorStop`], defined by an offset and a color, to the gradient.
     ///
-    /// Any `offset` that is not within `0.0..=1.0` will be silently ignored.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
+    /// Invalid offsets are ignored. Stops with the same offset keep their insertion order.
     pub fn add_stop(mut self, offset: f32, color: Color) -> Self {
-        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
-            let (Ok(index) | Err(index)) = self.stops.binary_search_by(|stop| match stop {
-                None => Ordering::Greater,
-                Some(stop) => stop.offset.partial_cmp(&offset).unwrap(),
-            });
-
-            if index < 8 {
-                self.stops[index] = Some(ColorStop { offset, color });
-            }
-        } else {
-            log::warn!("Gradient color stop must be within 0.0..=1.0 range.");
-        };
-
+        self.stops.add(offset, color);
         self
     }
 
     /// Adds multiple [`ColorStop`]s to the gradient.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
     pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
-        for stop in stops {
-            self = self.add_stop(stop.offset, stop.color);
-        }
-
+        self.stops.extend(stops);
         self
     }
 
     /// Scales the alpha channel of the [`Radial`] gradient by the given
     /// factor.
     pub fn scale_alpha(mut self, factor: f32) -> Self {
-        for stop in self.stops.iter_mut().flatten() {
-            stop.color.a *= factor;
-        }
+        self.stops.scale_alpha(factor);
 
         self
     }
 }
 
 /// A conic gradient.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Conic {
     /// The center of the gradient, as a ratio of the bounding box.
     ///
@@ -208,7 +177,7 @@ pub struct Conic {
     /// `0.0` means the top (12 o'clock), matching CSS `from` semantics.
     pub angle: Radians,
     /// [`ColorStop`]s along the conic gradient.
-    pub stops: [Option<ColorStop>; 8],
+    pub stops: Stops,
 }
 
 impl Default for Conic {
@@ -216,7 +185,7 @@ impl Default for Conic {
         Self {
             center: Point::new(0.5, 0.5),
             angle: Radians(0.0),
-            stops: [None; 8],
+            stops: Stops::default(),
         }
     }
 }
@@ -229,43 +198,22 @@ impl Conic {
 
     /// Adds a new [`ColorStop`], defined by an offset and a color, to the gradient.
     ///
-    /// Any `offset` that is not within `0.0..=1.0` will be silently ignored.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
+    /// Invalid offsets are ignored. Stops with the same offset keep their insertion order.
     pub fn add_stop(mut self, offset: f32, color: Color) -> Self {
-        if offset.is_finite() && (0.0..=1.0).contains(&offset) {
-            let (Ok(index) | Err(index)) = self.stops.binary_search_by(|stop| match stop {
-                None => Ordering::Greater,
-                Some(stop) => stop.offset.partial_cmp(&offset).unwrap(),
-            });
-
-            if index < 8 {
-                self.stops[index] = Some(ColorStop { offset, color });
-            }
-        } else {
-            log::warn!("Gradient color stop must be within 0.0..=1.0 range.");
-        };
-
+        self.stops.add(offset, color);
         self
     }
 
     /// Adds multiple [`ColorStop`]s to the gradient.
-    ///
-    /// Any stop added after the 8th will be silently ignored.
     pub fn add_stops(mut self, stops: impl IntoIterator<Item = ColorStop>) -> Self {
-        for stop in stops {
-            self = self.add_stop(stop.offset, stop.color);
-        }
-
+        self.stops.extend(stops);
         self
     }
 
     /// Scales the alpha channel of the [`Conic`] gradient by the given
     /// factor.
     pub fn scale_alpha(mut self, factor: f32) -> Self {
-        for stop in self.stops.iter_mut().flatten() {
-            stop.color.a *= factor;
-        }
+        self.stops.scale_alpha(factor);
 
         self
     }

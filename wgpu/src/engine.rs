@@ -30,12 +30,13 @@ impl Engine {
         antialiasing: Option<Antialiasing>, // TODO: Initialize AA pipelines lazily
         shell: Shell,
     ) -> Self {
+        let gradients = crate::gradient::Tables::new(&device, &queue);
         Self {
             format,
 
-            quad_pipeline: quad::Pipeline::new(&device, format),
+            quad_pipeline: quad::Pipeline::new(&device, format, gradients.clone()),
             text_pipeline: text::Pipeline::new(&device, &queue, format),
-            triangle_pipeline: triangle::Pipeline::new(&device, format, antialiasing),
+            triangle_pipeline: triangle::Pipeline::new(&device, format, antialiasing, gradients),
 
             #[cfg(any(feature = "image", feature = "svg"))]
             image_pipeline: {
@@ -60,6 +61,7 @@ impl Engine {
 
     pub fn trim(&mut self) {
         self.text_pipeline.trim();
+        self.quad_pipeline.trim_gradients();
 
         self.primitive_storage
             .write()

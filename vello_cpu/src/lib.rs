@@ -436,25 +436,20 @@ fn into_background(background: &Background, bounds: Rectangle) -> vello_cpu::Pai
 
 fn into_gradient(
     kind: vello_cpu::peniko::GradientKind,
-    stops: &[Option<gradient::ColorStop>],
+    stops: &gradient::Stops,
 ) -> vello_cpu::peniko::Gradient {
     vello_cpu::peniko::Gradient {
         kind,
         stops: vello_cpu::peniko::ColorStops(
             stops
                 .iter()
-                .copied()
-                .filter_map(|stop| {
-                    let stop = stop?;
-
-                    Some(vello_cpu::peniko::ColorStop {
-                        offset: stop.offset,
-                        color: vello_cpu::color::DynamicColor {
-                            cs: vello_cpu::color::ColorSpaceTag::Srgb,
-                            flags: vello_cpu::color::Flags::default(),
-                            components: [stop.color.b, stop.color.g, stop.color.r, stop.color.a],
-                        },
-                    })
+                .map(|stop| vello_cpu::peniko::ColorStop {
+                    offset: stop.offset,
+                    color: vello_cpu::color::DynamicColor {
+                        cs: vello_cpu::color::ColorSpaceTag::Srgb,
+                        flags: vello_cpu::color::Flags::default(),
+                        components: [stop.color.b, stop.color.g, stop.color.r, stop.color.a],
+                    },
                 })
                 .collect(),
         ),

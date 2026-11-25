@@ -638,7 +638,7 @@ where
                         border: border::rounded(style.border.radius),
                         ..renderer::Quad::default()
                     },
-                    style.selected_background,
+                    style.selected_background.clone(),
                 );
             }
 
@@ -673,7 +673,7 @@ where
 }
 
 /// The appearance of a [`Menu`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     /// The [`Background`] of the menu.
     pub background: Background,

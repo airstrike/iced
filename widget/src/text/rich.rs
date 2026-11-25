@@ -322,7 +322,7 @@ where
         let mut has_decorations = self.hovered_link.is_some();
 
         for (index, span) in self.spans.as_ref().as_ref().iter().enumerate() {
-            if let Some(highlight) = span.highlight {
+            if let Some(highlight) = &span.highlight {
                 let regions = state.paragraph.span_bounds(index);
 
                 for (i, bounds) in regions.iter().enumerate() {
@@ -355,7 +355,7 @@ where
                             },
                             ..Default::default()
                         },
-                        highlight.background,
+                        highlight.background.clone(),
                     );
                 }
             }

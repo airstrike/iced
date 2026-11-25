@@ -80,7 +80,15 @@ impl State {
         }
 
         let layer = &mut self.layers[self.prepare_layer];
-        layer.prepare(device, encoder, belt, quads, transformation, scale);
+        layer.prepare(
+            device,
+            encoder,
+            belt,
+            quads,
+            transformation,
+            scale,
+            &pipeline.gradient.tables,
+        );
 
         self.prepare_layer += 1;
     }
@@ -127,12 +135,23 @@ impl State {
     }
 
     pub fn trim(&mut self) {
+        for layer in &mut self.layers[self.prepare_layer..] {
+            layer.gradient.clear_tables();
+        }
         self.prepare_layer = 0;
     }
 }
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Pipeline {
+    pub(crate) fn trim_gradients(&self) {
+        self.gradient.tables.trim();
+    }
+
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        tables: crate::gradient::Tables,
+    ) -> Pipeline {
         let constant_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("iced_wgpu::quad uniforms layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -151,7 +170,7 @@ impl Pipeline {
 
         Self {
             solid: solid::Pipeline::new(device, format, &constant_layout),
-            gradient: gradient::Pipeline::new(device, format, &constant_layout),
+            gradient: gradient::Pipeline::new(device, format, &constant_layout, tables),
             constant_layout,
         }
     }
@@ -199,6 +218,7 @@ impl Layer {
         quads: &Batch,
         transformation: Transformation,
         scale: f32,
+        tables: &crate::gradient::Tables,
     ) {
         self.update(encoder, belt, transformation, scale);
 
@@ -208,7 +228,9 @@ impl Layer {
 
         if !quads.gradients.is_empty() {
             self.gradient
-                .prepare(device, encoder, belt, &quads.gradients);
+                .prepare(device, encoder, belt, &quads.gradients, tables);
+        } else {
+            self.gradient.clear_tables();
         }
     }
 
@@ -267,11 +289,15 @@ impl Batch {
             }
             Background::Gradient(gradient) => {
                 self.gradients.push(Gradient {
-                    gradient: graphics::gradient::pack(
-                        gradient,
-                        Rectangle::new(quad.position.into(), quad.size.into()),
-                    ),
-                    quad,
+                    instance: self::gradient::Instance {
+                        gradient: graphics::gradient::pack(
+                            gradient,
+                            Rectangle::new(quad.position.into(), quad.size.into()),
+                        ),
+                        quad,
+                    },
+                    stops: (gradient.stops().as_slice().len() > graphics::gradient::Packed::INLINE)
+                        .then(|| gradient.stops().clone()),
                 });
 
                 Kind::Gradient

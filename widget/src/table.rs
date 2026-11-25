@@ -581,7 +581,7 @@ where
                         snap: true,
                         ..renderer::Quad::default()
                     },
-                    style.separator_x,
+                    style.separator_x.clone(),
                 );
 
                 x += self.separator_x + self.padding_x;
@@ -605,7 +605,7 @@ where
                         snap: true,
                         ..renderer::Quad::default()
                     },
-                    style.separator_y,
+                    style.separator_y.clone(),
                 );
 
                 y += self.separator_y + self.padding_y;
@@ -699,7 +699,7 @@ impl<'a, 'b, T, Message, Theme, Renderer> Column<'a, 'b, T, Message, Theme, Rend
 }
 
 /// The appearance of a [`Table`].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Style {
     /// The background color of the horizontal line separator between cells.
     pub separator_x: Background,
@@ -724,7 +724,7 @@ pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme) -> Style + 'a>;
 
 impl<Theme> From<Style> for StyleFn<'_, Theme> {
     fn from(style: Style) -> Self {
-        Box::new(move |_theme| style)
+        Box::new(move |_theme| style.clone())
     }
 }
 

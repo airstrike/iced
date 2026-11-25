@@ -2335,7 +2335,7 @@ pub trait Catalog:
 }
 
 /// The style of some inline code.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InlineCode {
     /// The [`Padding`] to apply around the code.
     pub padding: Padding,

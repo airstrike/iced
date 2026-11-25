@@ -3442,7 +3442,7 @@ pub(super) mod internals {
     }
 
     /// The handle of a [`Scrollbar`].
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone)]
     pub struct Scroller {
         /// The bounds of the [`Scroller`].
         pub bounds: Rectangle,
@@ -3484,7 +3484,7 @@ pub enum Status {
 }
 
 /// The appearance of a scrollable.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     /// The [`container::Style`] of a scrollable.
     pub container: container::Style,
@@ -3499,7 +3499,7 @@ pub struct Style {
 }
 
 /// The appearance of the scrollbar of a scrollable.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rail {
     /// The [`Background`] of a scrollbar.
     pub background: Option<Background>,
@@ -3519,7 +3519,7 @@ pub struct Scroller {
 }
 
 /// The appearance of the autoscroll overlay of a scrollable.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AutoScroll {
     /// The [`Background`] of the [`AutoScroll`] overlay.
     pub background: Background,
@@ -3587,7 +3587,7 @@ pub fn default(theme: &Theme, status: Status) -> Style {
     match status {
         Status::Active { .. } => Style {
             container: container::Style::default(),
-            vertical_rail: scrollbar,
+            vertical_rail: scrollbar.clone(),
             horizontal_rail: scrollbar,
             gap: None,
             auto_scroll,
@@ -3602,15 +3602,15 @@ pub fn default(theme: &Theme, status: Status) -> Style {
                     background: palette.primary.strong.color.into(),
                     ..scrollbar.scroller
                 },
-                ..scrollbar
+                ..scrollbar.clone()
             };
 
             Style {
                 container: container::Style::default(),
                 vertical_rail: if is_vertical_scrollbar_hovered {
-                    hovered_scrollbar
+                    hovered_scrollbar.clone()
                 } else {
-                    scrollbar
+                    scrollbar.clone()
                 },
                 horizontal_rail: if is_horizontal_scrollbar_hovered {
                     hovered_scrollbar
@@ -3631,15 +3631,15 @@ pub fn default(theme: &Theme, status: Status) -> Style {
                     background: palette.primary.base.color.into(),
                     ..scrollbar.scroller
                 },
-                ..scrollbar
+                ..scrollbar.clone()
             };
 
             Style {
                 container: container::Style::default(),
                 vertical_rail: if is_vertical_scrollbar_dragged {
-                    dragged_scrollbar
+                    dragged_scrollbar.clone()
                 } else {
-                    scrollbar
+                    scrollbar.clone()
                 },
                 horizontal_rail: if is_horizontal_scrollbar_dragged {
                     dragged_scrollbar

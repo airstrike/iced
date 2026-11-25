@@ -263,7 +263,9 @@ impl State {
 
     pub fn trim(&mut self) {
         self.storage.trim();
-
+        for layer in &mut self.layers[self.prepare_layer..] {
+            layer.gradient.pages.clear();
+        }
         self.prepare_layer = 0;
     }
 }
@@ -273,11 +275,12 @@ impl Pipeline {
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         antialiasing: Option<Antialiasing>,
+        tables: crate::gradient::Tables,
     ) -> Pipeline {
         Pipeline {
             msaa: antialiasing.map(|a| msaa::Pipeline::new(device, format, a)),
             solid: solid::Pipeline::new(device, format, antialiasing),
-            gradient: gradient::Pipeline::new(device, format, antialiasing),
+            gradient: gradient::Pipeline::new(device, format, antialiasing, tables),
         }
     }
 }
@@ -396,6 +399,7 @@ impl Layer {
         let mut solid_uniform_offset = 0;
         let mut gradient_vertex_offset = 0;
         let mut gradient_uniform_offset = 0;
+        let mut pages = Vec::with_capacity(count.gradients);
         let mut index_offset = 0;
 
         for mesh in meshes {
@@ -433,7 +437,8 @@ impl Layer {
                             .uniforms
                             .write(encoder, belt, solid_uniform_offset, &[uniforms]);
                 }
-                Mesh::Gradient { buffers, .. } => {
+                Mesh::Gradient { buffers, stops, .. } => {
+                    pages.push(gradient.tables.get(stops.as_ref()));
                     gradient_vertex_offset += self.gradient.vertices.write(
                         encoder,
                         belt,
@@ -450,6 +455,7 @@ impl Layer {
                 }
             }
         }
+        self.gradient.pages = pages;
     }
 
     fn render<'a>(
@@ -494,7 +500,7 @@ impl Layer {
                 clip_bounds.height,
             );
 
-            match mesh {
+            let pages = match mesh {
                 Mesh::Solid { buffers, .. } => {
                     if !last_is_solid.unwrap_or(false) {
                         render_pass.set_pipeline(&solid.pipeline);
@@ -517,6 +523,7 @@ impl Layer {
 
                     num_solids += 1;
                     solid_offset += buffers.vertices.len();
+                    None
                 }
                 Mesh::Gradient { buffers, .. } => {
                     if last_is_solid.unwrap_or(true) {
@@ -540,6 +547,7 @@ impl Layer {
 
                     num_gradients += 1;
                     gradient_offset += buffers.vertices.len();
+                    Some(&self.gradient.pages[num_gradients - 1])
                 }
             };
 
@@ -549,7 +557,15 @@ impl Layer {
                 wgpu::IndexFormat::Uint32,
             );
 
-            render_pass.draw_indexed(0..mesh.indices().len() as u32, 0, 0..1);
+            let indices = 0..mesh.indices().len() as u32;
+            if let Some(pages) = pages {
+                for group in &pages.groups {
+                    render_pass.set_bind_group(1, group, &[]);
+                    render_pass.draw_indexed(indices.clone(), 0, 0..1);
+                }
+            } else {
+                render_pass.draw_indexed(indices, 0, 0..1);
+            }
 
             index_offset += mesh.indices().len();
         }
@@ -756,12 +772,14 @@ mod gradient {
     #[derive(Debug, Clone)]
     pub struct Pipeline {
         pub pipeline: wgpu::RenderPipeline,
+        pub tables: crate::gradient::Tables,
         pub constants_layout: wgpu::BindGroupLayout,
     }
 
     #[derive(Debug)]
     pub struct Layer {
         pub vertices: Buffer<mesh::GradientVertex2D>,
+        pub pages: Vec<std::sync::Arc<crate::gradient::Pages>>,
         pub uniforms: Buffer<triangle::Uniforms>,
         pub constants: wgpu::BindGroup,
     }
@@ -786,6 +804,7 @@ mod gradient {
 
             Self {
                 vertices,
+                pages: Vec::new(),
                 uniforms,
                 constants,
             }
@@ -816,6 +835,7 @@ mod gradient {
             device: &wgpu::Device,
             format: wgpu::TextureFormat,
             antialiasing: Option<Antialiasing>,
+            tables: crate::gradient::Tables,
         ) -> Self {
             let constants_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -825,7 +845,7 @@ mod gradient {
 
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("iced_wgpu.triangle.gradient.pipeline_layout"),
-                bind_group_layouts: &[Some(&constants_layout)],
+                bind_group_layouts: &[Some(&constants_layout), Some(tables.layout())],
                 immediate_size: 0,
             });
 
@@ -852,22 +872,12 @@ mod gradient {
                         array_stride: std::mem::size_of::<mesh::GradientVertex2D>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &wgpu::vertex_attr_array!(
-                            // Position
-                            0 => Float32x2,
-                            // Colors 1-2
-                            1 => Uint32x4,
-                            // Colors 3-4
-                            2 => Uint32x4,
-                            // Colors 5-6
-                            3 => Uint32x4,
-                            // Colors 7-8
-                            4 => Uint32x4,
-                            // Offsets
-                            5 => Uint32x4,
-                            // Direction
-                            6 => Float32x4,
-                            // Gradient type
-                            7 => Uint32
+                            0 => Float32x2, // position
+                            1 => Float32x4, // first two straight linear colors
+                            2 => Float32x4,
+                            3 => Float32x2, // offsets
+                            4 => Float32x4, // direction
+                            5 => Uint32x3   // kind, base, count
                         ),
                     })],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -876,7 +886,7 @@ mod gradient {
                     module: &shader,
                     entry_point: Some("gradient_fs_main"),
                     targets: &[Some(triangle::fragment_target(format))],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    compilation_options: crate::gradient::fragment_options(),
                 }),
                 primitive: triangle::primitive_state(),
                 depth_stencil: None,
@@ -887,6 +897,7 @@ mod gradient {
 
             Self {
                 pipeline,
+                tables,
                 constants_layout,
             }
         }

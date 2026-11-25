@@ -545,7 +545,7 @@ pub enum Status {
 }
 
 /// The appearance of a slider.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     /// The colors of the rail of the slider.
     pub rail: Rail,
@@ -565,7 +565,7 @@ impl Style {
 }
 
 /// The appearance of a slider rail
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rail {
     /// The backgrounds of the rail of the slider.
     pub backgrounds: (Background, Background),
@@ -576,7 +576,7 @@ pub struct Rail {
 }
 
 /// The appearance of the handle of a slider.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Handle {
     /// The shape of the handle.
     pub shape: HandleShape,
