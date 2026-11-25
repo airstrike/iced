@@ -119,6 +119,29 @@ fn every_authored_stop_and_right_hand_edge_reaches_both_pipelines() {
 }
 
 #[test]
+fn texture_pages_share_a_hard_edge_without_losing_or_doubling_opacity() {
+    let Some(mut renderer) = headless() else {
+        return;
+    };
+    let red = Color { a: 0.5, ..RED };
+    let blue = Color { a: 0.5, ..BLUE };
+    let edge = 128.5 / SIDE as f32;
+    // The first page ends at index 65,535. A later blue stop at that same exact
+    // offset owns the pixel on the boundary. Drawing both pages would raise its alpha.
+    let ramp = linear(
+        (0..65_534)
+            .map(|i| (0.49 * i as f32 / 65_534., red))
+            .chain([(edge, red), (edge, GREEN), (edge, blue), (1., blue)]),
+    );
+    for surface in SURFACES {
+        let bytes = pixels(&mut renderer, surface, ramp.clone(), 1);
+        for (x, color) in [(7, red), (127, red), (128, blue), (129, blue), (248, blue)] {
+            check(&bytes, 1, surface, x, 93, color);
+        }
+    }
+}
+
+#[test]
 fn straight_color_and_opacity_interpolate_independently_and_short_ramps_have_defined_ends() {
     let Some(mut renderer) = headless() else {
         return;
