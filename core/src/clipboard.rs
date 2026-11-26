@@ -56,6 +56,15 @@ pub enum Event {
 pub enum Content {
     Text(String),
     Html(String),
+    /// HTML with a plain-text alternative, written as one clipboard entry.
+    ///
+    /// An app that reads HTML pastes `html`, and any other app pastes
+    /// `text`. Reading [`Kind::Html`] or [`Kind::Text`] back yields one of
+    /// the two.
+    Rich {
+        html: String,
+        text: String,
+    },
     #[cfg(feature = "image")]
     Image(Image),
     Files(Vec<PathBuf>),

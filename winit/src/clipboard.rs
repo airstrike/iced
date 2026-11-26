@@ -138,6 +138,7 @@ mod platform {
                 let result = match content {
                     Content::Text(text) => set.text(text),
                     Content::Html(html) => set.html(html, None),
+                    Content::Rich { html, text } => set.html(html, Some(text)),
                     #[cfg(feature = "image")]
                     Content::Image(image) => set.image(arboard::ImageData {
                         bytes: image.rgba.as_ref().into(),
@@ -206,6 +207,9 @@ mod platform {
         }
     }
 }
+
+#[cfg(all(test, target_os = "macos"))]
+mod rich_tests;
 
 #[cfg(target_arch = "wasm32")]
 mod platform {
@@ -372,7 +376,8 @@ mod platform {
         /// The web has no primary selection: does nothing.
         pub fn write_primary(&mut self, _text: String) {}
 
-        /// Writes the given text contents to the [`Clipboard`].
+        /// Writes the given text contents to the [`Clipboard`]. Of
+        /// [`Content::Rich`], only the plain text is written.
         ///
         /// During the `copy` or `cut` event of the browser's Edit menu, the
         /// text goes to the event instead.
@@ -382,7 +387,7 @@ mod platform {
             callback: impl FnOnce(Result<(), Error>) + 'static,
         ) {
             let text = match content {
-                Content::Text(text) => text,
+                Content::Text(text) | Content::Rich { text, .. } => text,
                 content => {
                     log::warn!("unsupported clipboard content: {content:?}");
 
